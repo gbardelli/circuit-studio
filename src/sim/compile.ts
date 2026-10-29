@@ -1,9 +1,11 @@
+import { sessionToken } from '../cloud';
+
 export interface CompileResult {
   ok: boolean;
   hex?: string;
   stdout: string;
   stderr: string;
-  /** El servidor no tiene toolchain: se puede simular, pero sin programa. */
+  /** No hay compilador disponible: se puede simular, pero sin programa. */
   missingToolchain?: boolean;
 }
 
@@ -12,15 +14,21 @@ const cache = new Map<string, CompileResult>();
 export async function compileSketch(source: string): Promise<CompileResult> {
   const hit = cache.get(source);
   if (hit) return hit;
+  const token = await sessionToken();
   let res: Response;
   try {
-    res = await fetch('/api/compile', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ source }) });
+    res = await fetch('/api/compile', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify({ source }),
+    });
   } catch {
-    return { ok: false, stdout: '', stderr: 'No se pudo contactar con el servidor de compilación.' };
+    return { ok: false, stdout: '', stderr: 'No se pudo contactar con el compilador.', missingToolchain: true };
   }
-  if (!res.ok) return { ok: false, stdout: '', stderr: `El servidor respondió ${res.status}.` };
-  const result = (await res.json()) as CompileResult;
-  result.missingToolchain = !result.ok && /no está instalado/.test(result.stderr);
+  const result = (await res.json().catch(() => null)) as CompileResult | null;
+  if (!result) return { ok: false, stdout: '', stderr: `El compilador respondió ${res.status}.`, missingToolchain: true };
+  // Fallo del servicio (no del código): se deja simular con la placa sin programa.
+  result.missingToolchain = !result.ok && (res.status >= 500 || res.status === 404 || /no está instalado/.test(result.stderr));
   if (result.ok) cache.set(source, result);
   return result;
 }

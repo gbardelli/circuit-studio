@@ -7,6 +7,7 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import type { CircuitSnapshot, PartData, Props, Rotation, Vec, WireData, WireEnd } from '../core/types';
 import { PARTS } from '../parts';
 import { DEFAULT_SKETCH } from './sketch';
+import { CLOUD, colorFor, sessionToken, sessionUser, type Role } from '../cloud';
 
 export const LOCAL_ORIGIN = { local: true };
 
@@ -14,6 +15,7 @@ export interface UserInfo {
   id: string;
   name: string;
   color: string;
+  image?: string | null;
 }
 
 export interface Presence {
@@ -31,6 +33,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'loc
 function collabUrl(): string | null {
   const env = import.meta.env.VITE_COLLAB_URL as string | undefined;
   if (env) return env;
+  if (CLOUD) return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/api/ws`;
   if (import.meta.env.DEV) return `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
   return null;
 }
@@ -39,6 +42,8 @@ const NAMES = ['Ada', 'Nikola', 'Hedy', 'Alan', 'Grace', 'Marie', 'Georg', 'Rosa
 export const PEER_COLORS = ['#b48cff', '#f2a65a', '#4cc38a', '#ff6b8a', '#5ab0ff', '#f2d14a', '#45d0c0', '#ff8f5a'];
 
 export function localUser(): UserInfo {
+  const signed = sessionUser();
+  if (signed) return { id: signed.id, name: signed.name, image: signed.image, color: colorFor(signed.id) };
   try {
     const saved = localStorage.getItem('cs-user');
     if (saved) return JSON.parse(saved) as UserInfo;
@@ -73,6 +78,9 @@ export class Project {
   readonly user: UserInfo;
   connection: ConnectionState = 'connecting';
   synced = false;
+  /** Quien solo puede ver no escribe en el documento (el servidor también lo impide). */
+  readonly readOnly: boolean;
+  private tokenTimer: ReturnType<typeof setInterval> | undefined;
 
   private cache = new Map<string, { json: string; data: PartData }>();
   private wireCache = new Map<string, { json: string; data: WireData }>();
@@ -81,11 +89,23 @@ export class Project {
   private listeners = new Set<() => void>();
   private scheduled = false;
 
-  constructor(readonly room: string) {
+  constructor(readonly room: string, readonly role: Role = 'owner') {
     this.user = localUser();
+    this.readOnly = role === 'viewer';
     this.persistence = new IndexeddbPersistence(`circuit-studio:${room}`, this.doc);
     const url = collabUrl();
-    this.provider = url ? new WebsocketProvider(url, room, this.doc, { maxBackoffTime: 4000 }) : null;
+    this.provider = url ? new WebsocketProvider(url, room, this.doc, { maxBackoffTime: 4000, connect: !CLOUD }) : null;
+    if (this.provider && CLOUD) {
+      // El token de sesión dura un minuto: se renueva antes de cada reconexión y cada 45 s.
+      const provider = this.provider;
+      const refresh = async () => {
+        const token = await sessionToken();
+        if (token) provider.params = { ...provider.params, token };
+      };
+      void refresh().then(() => provider.connect());
+      provider.on('connection-close', () => void refresh());
+      this.tokenTimer = setInterval(() => void refresh(), 45_000);
+    }
     this.awareness = this.provider?.awareness ?? new awarenessProtocol.Awareness(this.doc);
     if (this.provider) {
       this.provider.on('status', ({ status }: { status: ConnectionState }) => {
@@ -114,6 +134,7 @@ export class Project {
   }
 
   destroy() {
+    clearInterval(this.tokenTimer);
     this.awareness.setLocalState(null);
     this.provider?.destroy();
     if (!this.provider) this.awareness.destroy();
@@ -215,6 +236,7 @@ export class Project {
 
   // ── Escritura (siempre con origen local para el deshacer individual) ─────────
   private tx(fn: () => void) {
+    if (this.readOnly) return;
     this.doc.transact(fn, LOCAL_ORIGIN);
   }
 

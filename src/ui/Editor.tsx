@@ -10,23 +10,48 @@ import { Library } from './Library';
 import { StatusBar, TopBar } from './TopBar';
 import { useUi } from './store';
 import { rememberProject } from './Home';
+import { CLOUD, api, type ProjectDetail } from '../cloud';
+import { Logo } from './Logo';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
 
 export function Editor({ room, template }: { room: string; template: string | null }) {
   const [ctx, setCtx] = useState<EditorCtx | null>(null);
+  const [error, setError] = useState<string | null>(null);
   // El proyecto (WebSocket + IndexedDB) nace y muere con el efecto: seguro ante StrictMode y recarga en caliente.
   useEffect(() => {
-    const project = new Project(room);
+    let cancelled = false;
+    let dispose = () => {};
+    (async () => {
+      let detail: ProjectDetail | null = null;
+      if (CLOUD) {
+        try {
+          detail = await api<ProjectDetail>(`/api/projects/${room}`);
+        } catch (e) {
+          if (!cancelled) setError((e as Error).message);
+          return;
+        }
+      }
+      if (cancelled) return;
+      dispose = open(detail);
+    })();
+    return () => {
+      cancelled = true;
+      dispose();
+    };
+  }, [room, template]);
+
+  function open(detail: ProjectDetail | null) {
+    const project = new Project(room, detail?.role ?? 'owner');
     const engine = new SimEngine();
-    setCtx({ project, engine });
+    setCtx({ project, engine, detail });
     let seeded = false;
     const seed = (synced: boolean) => {
       const t = findTemplate(template);
       if (!synced || seeded) return;
       seeded = true;
-      if (t && project.parts.size === 0) {
+      if (t && project.parts.size === 0 && !project.readOnly) {
         applyTemplate(project, t);
         project.undo.clear();
       }
@@ -45,8 +70,22 @@ export function Editor({ room, template }: { room: string; template: string | nu
       setCtx(null);
       useUi.getState().setSim(false);
     };
-  }, [room, template]);
+  }
 
+  if (error) {
+    return (
+      <div className="splash">
+        <div className="gate">
+          <Logo size={36} />
+          <h1>No puedes abrir este circuito</h1>
+          <p>{error}. Pide a quien lo creó que comparta el enlace con acceso.</p>
+          <a className="btn primary" href="/">
+            Volver a mis circuitos
+          </a>
+        </div>
+      </div>
+    );
+  }
   if (!ctx) return null;
   return (
     <EditorContext.Provider value={ctx}>
@@ -64,7 +103,13 @@ function EditorShell() {
   useEffect(() => engine.update(snapshot), [engine, snapshot]);
 
   useEffect(() => {
-    const t = setTimeout(() => rememberProject(project.room, project.name, snapshot), 600);
+    const t = setTimeout(() => {
+      rememberProject(project.room, project.name, snapshot);
+      // Miniatura y nombre para el panel de circuitos (solo quien puede editar).
+      if (CLOUD && !project.readOnly && project.synced) {
+        void api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ name: project.name, preview: snapshot }) }).catch(() => {});
+      }
+    }, CLOUD ? 2500 : 600);
     return () => clearTimeout(t);
   }, [project, snapshot]);
 

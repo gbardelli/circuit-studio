@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Code2, Cpu, HardDrive, Keyboard, Link2, Loader2, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
+import { UserButton } from '@clerk/react';
+import { CLOUD, api, type LinkAccess } from '../cloud';
+import { AlertTriangle, Check, Code2, Copy, Cpu, Eye, Globe, HardDrive, Lock, Keyboard, Link2, Loader2, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
 import { compileSketch } from '../sim/compile';
 import { useConnection, useEditor, usePeers, useSimStatus, useSnapshot } from './context';
 import { Logo, Wordmark } from './Logo';
@@ -16,6 +18,7 @@ export function TopBar() {
   const showToast = useUi((s) => s.showToast);
   const status = useSimStatus();
   const [starting, setStarting] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const [name, setName] = useState(project.name);
   const [, force] = useState(0);
 
@@ -81,6 +84,7 @@ export function TopBar() {
           value={name}
           size={Math.max(8, name.length)}
           onChange={(e) => setName(e.target.value)}
+          readOnly={project.readOnly}
           onBlur={() => name.trim() && name !== project.name && project.setName(name.trim())}
           onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
           aria-label="Nombre del circuito"
@@ -114,19 +118,24 @@ export function TopBar() {
       </div>
 
       <div className="tb-right">
+        {project.readOnly && (
+          <span className="pill" title="Puedes mirar y simular, pero no modificar el circuito">
+            <Eye size={12} /> Solo lectura
+          </span>
+        )}
         <div className="avatars" aria-label={`${peers.length + 1} personas en el circuito`}>
           {peers.slice(0, 5).map((p) => (
-            <span key={p.clientId} className="avatar" style={{ background: p.user.color }} title={p.user.name}>
-              {p.user.name.slice(0, 2).toUpperCase()}
-            </span>
+            <Avatar key={p.clientId} name={p.user.name} color={p.user.color} image={p.user.image} />
           ))}
-          <span className="avatar me" style={{ background: project.user.color }} title={`${project.user.name} (tú)`}>
-            {project.user.name.slice(0, 2).toUpperCase()}
-          </span>
+          <Avatar name={`${project.user.name} (tú)`} color={project.user.color} image={project.user.image} me />
         </div>
-        <button className="btn primary sm" onClick={share}>
-          <Link2 size={14} /> Compartir
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button className="btn primary sm" onClick={() => (CLOUD ? setShareOpen((o) => !o) : share())} aria-expanded={shareOpen}>
+            <Link2 size={14} /> Compartir
+          </button>
+          {shareOpen && <SharePopover onClose={() => setShareOpen(false)} onCopy={share} />}
+        </div>
+        {CLOUD && <UserButton />}
       </div>
     </header>
   );
@@ -224,5 +233,83 @@ function FragmentRow({ label, combo }: { label: string; combo: string[] }) {
         ))}
       </span>
     </>
+  );
+}
+
+function Avatar({ name, color, image, me = false }: { name: string; color: string; image?: string | null; me?: boolean }) {
+  return (
+    <span className={`avatar ${me ? 'me' : ''}`} style={{ background: color }} title={name}>
+      {image ? <img src={image} alt="" /> : name.slice(0, 2).toUpperCase()}
+    </span>
+  );
+}
+
+const ACCESS: { value: LinkAccess; label: string; hint: string }[] = [
+  { value: 'edit', label: 'Pueden editar', hint: 'Cualquiera con cuenta y el enlace entra como editor.' },
+  { value: 'view', label: 'Pueden ver', hint: 'Con el enlace se mira y se simula, sin cambiar nada.' },
+  { value: 'none', label: 'Restringido', hint: 'Solo quienes ya son miembros.' },
+];
+
+function SharePopover({ onClose, onCopy }: { onClose: () => void; onCopy: () => void }) {
+  const { project, detail } = useEditor();
+  const [access, setAccess] = useState<LinkAccess>(detail?.link_access ?? 'edit');
+  const [copied, setCopied] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const owner = detail?.role === 'owner';
+
+  useEffect(() => {
+    const close = (e: PointerEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
+    window.addEventListener('pointerdown', close);
+    return () => window.removeEventListener('pointerdown', close);
+  }, [onClose]);
+
+  const change = (value: LinkAccess) => {
+    setAccess(value);
+    void api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: value }) });
+  };
+
+  return (
+    <div ref={ref} className="share-pop" role="dialog" aria-label="Compartir circuito">
+      <div className="share-head">
+        <strong>Compartir</strong>
+        <span className="faint">{detail?.members.length ?? 1} miembros</span>
+      </div>
+      <div className="share-access">
+        {access === 'none' ? <Lock size={15} /> : <Globe size={15} />}
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontWeight: 500 }}>Con el enlace</div>
+          <div className="faint" style={{ fontSize: 12 }}>{ACCESS.find((a) => a.value === access)!.hint}</div>
+        </div>
+      </div>
+      {owner && (
+        <div className="segmented" role="group" aria-label="Acceso con el enlace">
+          {ACCESS.map((a) => (
+            <button key={a.value} aria-pressed={access === a.value} onClick={() => change(a.value)}>
+              {a.label}
+            </button>
+          ))}
+        </div>
+      )}
+      <ul className="share-members">
+        {detail?.members.map((m) => (
+          <li key={m.id}>
+            <span className="avatar">{m.image ? <img src={m.image} alt="" /> : m.name.slice(0, 2).toUpperCase()}</span>
+            <span className="name">{m.name}</span>
+            <span className="faint">{m.role === 'owner' ? 'Propietario' : m.role === 'editor' ? 'Editor' : 'Lector'}</span>
+          </li>
+        ))}
+      </ul>
+      <button
+        className="btn accent"
+        style={{ width: '100%' }}
+        onClick={() => {
+          onCopy();
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1600);
+        }}
+      >
+        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Copiar enlace'}
+      </button>
+    </div>
   );
 }

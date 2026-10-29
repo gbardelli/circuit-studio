@@ -2,10 +2,13 @@ import { createContext, useCallback, useContext, useSyncExternalStore } from 're
 import type { Presence, Project } from '../collab/project';
 import type { SimEngine, SimStatus } from '../sim/engine';
 import type { Visual } from '../parts/types';
+import type { ProjectDetail } from '../cloud';
 
 export interface EditorCtx {
   project: Project;
   engine: SimEngine;
+  /** Datos del proyecto en la nube (rol, miembros, acceso por enlace); null en local. */
+  detail?: ProjectDetail | null;
 }
 
 export const EditorContext = createContext<EditorCtx | null>(null);
