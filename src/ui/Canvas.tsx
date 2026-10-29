@@ -21,6 +21,10 @@ interface PinHit {
   desc?: string;
 }
 
+/** Último color de cable usado: el siguiente cable nace con él. Sin uso previo, se sugiere uno por el pin. */
+let lastWireColor: string | null = null;
+const nextWireColor = (pinId: string) => lastWireColor ?? suggestWireColor(pinId);
+
 type Drag =
   | { kind: 'parts'; ids: string[]; start: Vec; dx: number; dy: number; moved: boolean }
   | { kind: 'pan'; sx: number; sy: number; vx: number; vy: number }
@@ -339,6 +343,13 @@ export function Canvas() {
       if (!nearEnd) {
         if (e.shiftKey) select(selection, toggle(wireSelection, wireId));
         else select([], [wireId]);
+        // Si se agarra un codo que ya existe, se mueve ese; arrastrar el tramo crearía otro codo al lado.
+        const grab = Math.max(pinRadius, 9 / z);
+        const bend = wire.points.findIndex((p) => Math.hypot(p.x - w.x, p.y - w.y) <= grab);
+        if (bend >= 0) {
+          setDrag({ kind: 'bend', wire: wireId, index: bend, points: [...wire.points] });
+          return;
+        }
         let seg = 0;
         let best = Infinity;
         for (let i = 0; i < pts.length - 1; i++) {
@@ -354,7 +365,7 @@ export function Canvas() {
     }
 
     if (pin) {
-      setDraft({ from: { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, label: pin.label, points: [], color: suggestWireColor(pin.pin) });
+      setDraft({ from: { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, label: pin.label, points: [], color: nextWireColor(pin.pin) });
       return;
     }
 
@@ -558,6 +569,7 @@ export function Canvas() {
     if (!draft) return;
     // Los quiebros del esquema no son puntos de la protoboard: el cable del esquema va sin ellos.
     const id = project.addWire(draft.from, { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, sch ? [] : draft.points, draft.color, !!sch);
+    lastWireColor = draft.color;
     setDraft(null);
     setPicker(null);
     select([], [id]);
@@ -987,7 +999,10 @@ export function Canvas() {
                     aria-label={c.label}
                     title={c.label}
                     aria-pressed={wireSelection.every((id) => wiresById.get(id)?.color === c.value)}
-                    onClick={() => wireSelection.forEach((id) => project.updateWire(id, { color: c.value }))}
+                    onClick={() => {
+                      lastWireColor = c.value;
+                      wireSelection.forEach((id) => project.updateWire(id, { color: c.value }));
+                    }}
                   />
                 ))}
                 <span className="sep" />
@@ -1063,7 +1078,7 @@ export function Canvas() {
         const pos = sch?.pinPos.get(pinKey(picker.part, pin.id)) ?? picker.at;
         if (draft) finishWire({ part: picker.part, pin: pin.id, pos, label: pin.label ?? pin.id });
         else {
-          setDraft({ from: { part: picker.part, pin: pin.id, ...pos }, label: pin.label ?? pin.id, points: [], color: suggestWireColor(pin.id) });
+          setDraft({ from: { part: picker.part, pin: pin.id, ...pos }, label: pin.label ?? pin.id, points: [], color: nextWireColor(pin.id) });
           setPicker(null);
         }
       }} onClose={() => setPicker(null)} />}
