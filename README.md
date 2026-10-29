@@ -37,6 +37,15 @@ Upstash para sincronización y Vercel Sandbox para compilar firmware. Las claves
 configuran como variables de entorno y no se guardan en Git. Sin la clave pública de
 Clerk, el desarrollo local utiliza salas WebSocket e IndexedDB.
 
+Para tu propio despliegue copia `.env.example` a `.env.local` y rellena las claves de tus
+cuentas de Clerk, Neon y Upstash. Nunca subas valores reales; consulta `SECURITY.md`.
+
+## Contribuir y licencia
+
+Código abierto bajo licencia [MIT](LICENSE). Las issues y los pull requests son bienvenidos:
+haz un fork, crea una rama y ejecuta `npm run typecheck && npm test` antes de abrir el PR.
+Los cambios llegan a `main` solo por revisión del mantenedor.
+
 ## Cómo está hecho
 
 | Capa | Archivos | Notas |
