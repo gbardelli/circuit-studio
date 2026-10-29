@@ -5,3 +5,6 @@ tools
 *.log
 .vercel
 .env*
+
+.vercel
+.env*
