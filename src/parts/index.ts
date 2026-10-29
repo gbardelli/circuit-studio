@@ -11,6 +11,7 @@ import { CHIPS } from './chips';
 import { oscilloscope } from './scope';
 import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
 import { lcdI2c, pcf8574, pcf8574a } from './i2c';
+import { nextion } from './nextion';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -27,6 +28,7 @@ export const PART_LIST: PartDef[] = [
   sevenSegment,
   lcd1602,
   lcdI2c,
+  nextion,
   relay,
   buzzer,
   servo,

@@ -3,6 +3,8 @@
 // f–j = 120–160; rieles + = 10 / 190, − = 20 / 200 (sin orificio en las columnas 6, 12, 18…).
 import type { Props, Rotation, Vec } from '../core/types';
 import { SEQUENTIAL } from './sequential';
+import { elevatorTemplate } from './elevator';
+import { TOUCHSCREEN } from './touchscreen';
 
 export interface TemplatePart {
   key: string;
@@ -257,4 +259,4 @@ void loop() {
   },
 ];
 
-export const TEMPLATES: Template[] = [...SIMPLE, ...SEQUENTIAL];
+export const TEMPLATES: Template[] = [...SIMPLE, ...SEQUENTIAL, TOUCHSCREEN, elevatorTemplate()];

@@ -65,7 +65,7 @@ type Sort = 'recent' | 'name';
 
 const CATEGORIES: { id: Template['category']; title: string; blurb: string }[] = [
   { id: 'Lógica secuencial', title: 'Lógica secuencial', blurb: 'Contadores, divisores de frecuencia y luces, repartidos en varias protoboards encadenadas.' },
-  { id: 'Arduino', title: 'Con Arduino', blurb: 'Una placa Uno sobre la protoboard y el código que la gobierna.' },
+  { id: 'Arduino', title: 'Con Arduino', blurb: 'Placas programables y circuitos con el código listo para simular.' },
   { id: 'Fundamentos', title: 'Fundamentos', blurb: 'Circuitos sin código para medir y entender qué pasa.' },
 ];
 

@@ -141,6 +141,10 @@ export class AvrRunner {
   private ports = new Map<Port, AVRIOPort>();
   readonly adc: AVRADC;
   readonly usart: AVRUSART;
+  readonly uarts: AVRUSART[];
+  readonly uartPins: [number, number][];
+  private rxQueues: number[][] = [];
+  onUart: ((port: number, value: number) => void) | null = null;
   readonly twi: AVRTWI;
   i2c: I2cMasterPort | null = null;
   /** Se activa cuando cambia la salida de algún pin; el motor resuelve el circuito entonces. */
@@ -160,11 +164,29 @@ export class AvrRunner {
       this.ports.set(port, io);
     }
     this.adc = new AVRADC(this.cpu, board.adc);
-    this.usart = new AVRUSART(this.cpu, board.usart, CLOCK_HZ);
-    this.usart.onByteTransmit = (b) => {
-      this.txActivity = 1;
-      this.onSerial?.(String.fromCharCode(b));
-    };
+    const configs = board === BOARDS.mega ? [board.usart,
+      { UCSRA:0xc8, UCSRB:0xc9, UCSRC:0xca, UBRRL:0xcc, UBRRH:0xcd, UDR:0xce, rxCompleteInterrupt:0x48, dataRegisterEmptyInterrupt:0x4a, txCompleteInterrupt:0x4c },
+      { UCSRA:0xd0, UCSRB:0xd1, UCSRC:0xd2, UBRRL:0xd4, UBRRH:0xd5, UDR:0xd6, rxCompleteInterrupt:0x66, dataRegisterEmptyInterrupt:0x68, txCompleteInterrupt:0x6a },
+      { UCSRA:0x130, UCSRB:0x131, UCSRC:0x132, UBRRL:0x134, UBRRH:0x135, UDR:0x136, rxCompleteInterrupt:0x6c, dataRegisterEmptyInterrupt:0x6e, txCompleteInterrupt:0x70 },
+    ] : [board.usart];
+    this.uartPins = board === BOARDS.mega ? [[0,1],[19,18],[17,16],[15,14]] : [[0,1]];
+    this.uarts = configs.map((config, port) => {
+      const uart = new AVRUSART(this.cpu, config, CLOCK_HZ);
+      this.rxQueues[port] = [];
+      const pump = () => {
+        const queue = this.rxQueues[port];
+        if (queue.length && !uart.rxBusy && uart.rxEnable && uart.writeByte(queue[0])) queue.shift();
+      };
+      uart.onRxComplete = pump;
+      uart.onConfigurationChange = pump;
+      uart.onByteTransmit = (b) => {
+        this.txActivity = 1;
+        if (port === 0) this.onSerial?.(String.fromCharCode(b));
+        this.onUart?.(port,b);
+      };
+      return uart;
+    });
+    this.usart = this.uarts[0];
     this.twi = new AVRTWI(this.cpu, board.twi, CLOCK_HZ);
     const finish = (bits: number, operation: () => void) => {
       this.cpu.addClockEvent(() => { operation(); this.pinsChanged = true; }, Math.max(1, Math.round(bits * CLOCK_HZ / this.twi.sclFrequency)));
@@ -212,7 +234,14 @@ export class AvrRunner {
   }
 
   serialWrite(text: string) {
-    for (const ch of text) this.usart.writeByte(ch.charCodeAt(0));
+    this.receiveUart(0,Array.from(text,ch => ch.charCodeAt(0)));
+  }
+
+  receiveUart(port: number, bytes: number[]) {
+    const uart = this.uarts[port], queue = this.rxQueues[port];
+    if (!uart?.rxEnable) return;
+    queue.push(...bytes.slice(0,Math.max(0,4096-queue.length)).map(b => b & 255));
+    if (queue.length && !uart.rxBusy && uart.writeByte(queue[0])) queue.shift();
   }
 
   /** Ejecuta hasta `untilCycle` o hasta que cambie un pin. Devuelve true si paró por un cambio. */

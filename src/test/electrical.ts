@@ -25,10 +25,12 @@ export function fixture(type: string, inputs: Record<string, number>, loads: Rec
     Object.assign(inputs, patch);
     for (let i = 0; i < 12; i++) {
       expect(circuit.solve(1e-6).converged).toBe(true);
+      model.afterSolve?.(circuit.v);
       model.tracker?.sample(circuit.v, 1e-6);
       model.changed?.();
     }
     circuit.solve(1e-6);
+    model.afterSolve?.(circuit.v);
   };
   settle();
   return { settle, volts: (pin: string) => node(pin) < 0 ? 0 : circuit.v[node(pin)], props, model, circuit };

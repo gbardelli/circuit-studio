@@ -29,6 +29,7 @@ function pcfDef(variantA: boolean): PartDef {
       const gnd = ctx.net('GND'), vcc = ctx.net('VCC');
       const nodes = PORTS.map((pin) => ctx.net(pin));
       let latch = 0xff, powered = false, interrupt = false, previous = 0xff, dirty = false;
+      let rebaseline = true;
       const sample = (v: Float64Array) => nodes.reduce((value, node, i) => value | (at(v, node) - at(v, gnd) > (at(v, vcc) - at(v, gnd)) * .5 ? 1 << i : 0), 0);
       const isPowered = (v: Float64Array) => at(v, vcc) - at(v, gnd) >= 2.5;
       const elements: Element[] = [new Resistor(vcc, gnd, () => 500_000), {
@@ -46,16 +47,17 @@ function pcfDef(variantA: boolean): PartDef {
       const i2c: I2cSlave = {
         pins: { sda: 'SDA', scl: 'SCL', ground: 'GND', supply: 'VCC' }, powered: isPowered,
         address: (v) => (variantA ? 0x38 : 0x20) | [0, 1, 2].reduce((value, i) => value | (at(v, ctx.net(`A${i}`)) - at(v, gnd) > (at(v, vcc) - at(v, gnd)) * .5 ? 1 << i : 0), 0),
-        write(value, v) { latch = value; interrupt = false; previous = sample(v); dirty = true; return true; },
+        write(value, v) { latch = value; interrupt = false; previous = sample(v); rebaseline = true; dirty = true; return true; },
         read(v) { const value = sample(v) & latch; interrupt = false; previous = sample(v); dirty = true; return value; },
       };
       return {
         elements, i2c,
+        afterSolve(v) { if (rebaseline) { previous = sample(v); rebaseline = false; } },
         changed() { const changed = dirty; dirty = false; return changed; },
         tracker: {
           sample(v) {
             const next = isPowered(v);
-            if (next !== powered) { powered = next; latch = 0xff; interrupt = false; previous = sample(v); dirty = true; }
+            if (next !== powered) { powered = next; latch = 0xff; interrupt = false; rebaseline = true; dirty = true; return; }
             if (!powered) return;
             const value = sample(v);
             if ((value ^ previous) & latch) { interrupt = true; dirty = true; }

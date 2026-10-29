@@ -42,6 +42,10 @@ export interface SimContext {
 export interface PartSim {
   elements: Element[];
   i2c?: I2cSlave;
+  uart?: UartDevice;
+  onInput?(key: string, value: number | boolean): void;
+  /** Reconcile a device's own output changes before detecting new external input edges. */
+  afterSolve?(v: Float64Array): void;
   /** Muestra instantánea; el motor promedia en el tiempo cada valor numérico. */
   probe?(v: Float64Array): Record<string, number>;
   /** Para lo que no es un promedio (anchura de pulso de un servo, frecuencia de un zumbador). */
@@ -57,6 +61,15 @@ export interface PartSim {
   mcuNodes?: number[];
   /** Nodo de cada entrada analógica (A0, A1…), para el ADC. */
   analogNodes?: number[];
+}
+
+/** Byte-level UART peripheral. Frames are routed over connected TX/RX nets. */
+export interface UartDevice {
+  pins: { rx: string; tx: string; ground: string; supply: string };
+  powered(v: Float64Array): boolean;
+  baud(): number;
+  receive(value: number): void;
+  drain(): number[];
 }
 
 /** Byte-level device on the physical SDA/SCL nets. Electrical waveforms are not synthesized. */

@@ -9,8 +9,11 @@ describe('course diagram packages', () => {
     expect(h.model.tracker!.read().interrupt).toBe(false);
     h.model.i2c!.write(0, h.circuit.v); h.settle();
     for (let i = 0; i < 8; i++) expect(h.volts(`P${i}`)).toBeLessThan(.1);
+    h.model.i2c!.write(255, h.circuit.v); h.settle();
+    expect(h.model.tracker!.read().interrupt).toBe(false);
     h.settle({ VCC: 0 }); h.settle({ VCC: 5 });
     expect(h.model.tracker!.read().value).toBe(255);
+    expect(h.model.tracker!.read().interrupt).toBe(false);
     for (let i = 0; i < 8; i++) expect(h.volts(`P${i}`)).toBeGreaterThan(4.5);
   });
   it.each([

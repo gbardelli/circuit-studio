@@ -127,6 +127,7 @@ export class SimEngine {
 
   setInput(partId: string, key: string, value: number | boolean) {
     this.inputs.set(`${partId}.${key}`, value);
+    this.parts.get(partId)?.sim.onInput?.(key,value);
     this.dirty = true;
   }
 
@@ -348,7 +349,41 @@ export class SimEngine {
   private createRunner(partId: string, hex: string, board: BoardId) {
     const runner = AvrRunner.fromHex(hex, board);
     runner.onSerial = (ch) => this.serialListeners.forEach((l) => l(partId, ch));
+    runner.onUart = (port,value) => {
+      const devices = this.uartPeers(partId,runner,port,'tx');
+      if (devices.length === 1) devices[0].sim.uart!.receive(value);
+    };
     return runner;
+  }
+
+  private uartPeers(partId: string, runner: AvrRunner, port: number, direction: 'rx'|'tx') {
+    const mcu = this.parts.get(partId), uart = runner.uarts[port];
+    if (!mcu || !this.circuit || !uart || uart.bitsPerChar !== 8 || uart.stopBits !== 1 || uart.parityEnabled) return [];
+    const def = PARTS[mcu.type];
+    const net = (part: string,pin: string) => this.netlist?.netOf.get(pinKey(part,pin));
+    const signal = net(partId,def.mcu!.pinIds[runner.uartPins[port][direction === 'rx' ? 0 : 1]]);
+    const ground = net(partId,def.ground![0]);
+    if (signal === undefined || ground === undefined || signal === ground) return [];
+    return [...this.parts.values()].filter(part => {
+      const device = part.sim.uart;
+      return device && net(part.id,device.pins[direction === 'tx' ? 'rx' : 'tx']) === signal
+        && net(part.id,device.pins.ground) === ground && net(part.id,device.pins.supply) !== signal
+        && device.powered(this.circuit!.v) && Math.abs(uart.baudRate/device.baud()-1) < .03;
+    });
+  }
+
+  private receiveUart() {
+    for (const part of this.parts.values()) {
+      const bytes = part.sim.uart?.drain();
+      if (!bytes?.length) continue;
+      for (const mcu of this.mcus) {
+        if (!mcu.runner) continue;
+        mcu.runner.uarts.forEach((uart,port) => {
+          const peers = this.uartPeers(mcu.partId,mcu.runner!,port,'rx');
+          if (uart.rxEnable && peers.length === 1 && peers[0] === part) mcu.runner!.receiveUart(port,bytes);
+        });
+      }
+    }
   }
 
   // ── Bucle ──────────────────────────────────────────────────────────────────
@@ -376,6 +411,7 @@ export class SimEngine {
     const active = this.mcus.filter((m) => m.runner);
 
     while (this.simTime < target - 1e-9) {
+      this.receiveUart();
       let segEnd = Math.min(target, this.simTime + MAX_SEGMENT);
       // Eventos programados por piezas (eco de un HC-SR04…): el segmento termina justo ahí.
       for (const rt of this.parts.values()) {
@@ -414,6 +450,7 @@ export class SimEngine {
 
   private syncMcuInputs() {
     const v = this.circuit!.v;
+    for (const part of this.parts.values()) part.sim.afterSolve?.(v);
     for (const m of this.mcus) {
       if (!m.runner) continue;
       m.nodes.forEach((node, i) => {
