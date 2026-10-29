@@ -5,9 +5,11 @@ tools
 *.log
 .vercel
 .env*
+!.env.example
 
 .vercel
 .env*
+!.env.example
 
 # Skills de agentes que instalan las integraciones del Marketplace
 .agents/
