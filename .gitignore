@@ -1,0 +1,7 @@
+node_modules
+dist
+data
+tools
+*.log
+.vercel
+.env*
