@@ -12,13 +12,14 @@ A quiet editing workspace surrounding tangible electronic hardware. Depth belong
 - Standard controls share `--control-fill` and `--control-shadow`. Stop uses a neutral control with a small red icon.
 - Keep canvas navigation, view switching and circuit actions in stable locations. Narrow windows use explicit panel toggles instead of stacking the panels above and below a tiny canvas.
 - Respect keyboard focus and reduced motion. Pin information includes function and polarity, not color alone.
-- Library pills retain 8px horizontal padding and a 21px minimum height. Color indicates an actionable capability, with quiet neutral reference tags.
+- The library starts with six visible sections. Section pages expose functional groups; integrated circuits also have a family selector. Search covers the whole catalog and clearing it restores the current section. Favorites and recent parts stay available without duplicates.
+- Component cards have no capability pills. IC references are primary plain text with their function below; other components keep their descriptive name.
 
 ## Brand and startup
 
-The PWM signal stands freely without a containing tile. Instrument Sans gives the wordmark its own rhythm; green marks the signal's terminal and the wordmark's period. The startup composition uses static tiled grain, faint routed conductors and a restrained green light field.
+The PWM signal stands freely beside the wordmark. A single 440ms connection trace reaches its green terminal; the wordmark stays legible from the first frame. The charcoal field has only a barely visible static grain. There are no slogans, blueprint scenery, glow fields, blur reveals or display punctuation.
 
-The first session entry reveals the signal and brings the wordmark into focus over 1.2 seconds. Authentication and project loading continue concurrently. Any pointer or keyboard input skips the decorative introduction. Later document navigations skip it, and reduced motion removes it entirely. The same composition appears before the JavaScript bundle loads and while real authentication or project requests remain pending. There are no fabricated percentages or progress steps.
+The first-session introduction lasts 520ms, followed by a 140ms fade. Actual authentication and project loading run concurrently and determine when the loading screen can leave. Input skips the decorative introduction. Returning visitors and reduced-motion users get no decorative delay. The pre-JavaScript document shares the same composition, typography and mark geometry.
 
 ## Hardware materials
 

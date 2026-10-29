@@ -42,9 +42,9 @@ describe('startup lifecycle', () => {
     act(() => { renderer = create(<Startup cloud={false}><main>Editor ready</main></Startup>); });
     expect(renderer!.root.findByType('main').children).toContain('Editor ready');
     expect(screen()).toHaveLength(1);
-    advance(1200);
+    advance(520);
     expect(screen()[0].props.className).toContain('leaving');
-    advance(220);
+    advance(140);
     expect(screen()).toHaveLength(0);
     expect(seen).toBe(true);
   });
@@ -52,7 +52,7 @@ describe('startup lifecycle', () => {
   it.each(['keydown', 'pointerdown'])('lets %s skip the introduction', (event) => {
     act(() => { renderer = create(<Startup cloud={false}><main /></Startup>); });
     act(() => { browser.dispatchEvent(new Event(event)); });
-    advance(220);
+    advance(140);
     expect(screen()).toHaveLength(0);
   });
 
@@ -65,7 +65,7 @@ describe('startup lifecycle', () => {
     act(() => { renderer!.update(app(false, true)); });
     expect(screen()[0].props['aria-label']).toBe('Cargando CircuitStudio');
     act(() => { renderer!.update(app(false, false)); });
-    advance(220);
+    advance(140);
     expect(screen()).toHaveLength(0);
   });
 
