@@ -2,7 +2,7 @@ import { memo, useRef } from 'react';
 import { Capacitor, Resistor } from '../core/solver';
 import { formatSI, resistorBands } from '../core/units';
 import type { PartDef, RenderProps } from './types';
-import { Leg, WarningBadge } from './common';
+import { Leg } from './common';
 
 const num = (v: unknown, d: number) => {
   const n = Number(v);
@@ -31,7 +31,6 @@ const ResistorRender = memo(function ResistorRender({ part, visual }: RenderProp
       <rect x={21} y={-5} width={2.2} height={10} fill={bands[2]} />
       <rect x={26.4} y={-6.6} width={2.2} height={13.2} fill={bands[3]} />
       <path d="M11 -4.5 H29" stroke="#fff" strokeOpacity={0.35} strokeWidth={1.2} />
-      {hot && <WarningBadge x={36} y={-10} label={`Disipa ${formatSI(power, 'W')} (máx. ${formatSI(rating, 'W')})`} />}
     </g>
   );
 });
@@ -78,14 +77,13 @@ export const resistor: PartDef = {
 };
 
 // ── Condensador electrolítico ─────────────────────────────────────────────────
-const CapacitorRender = memo(function CapacitorRender({ part, visual }: RenderProps) {
+const CapacitorRender = memo(function CapacitorRender({ part }: RenderProps) {
   const c = num(part.props.capacitance, 100e-6);
-  const v = Number(visual?.v ?? 0);
-  const rated = num(part.props.voltage, 16);
   return (
     <g>
       <Leg x={0} y0={-8} y1={0} />
       <Leg x={10} y0={-8} y1={0} />
+      <g className="cap-can">
       <rect x={-4} y={-36} width={18} height={29} rx={3} fill="url(#g-cap)" />
       <path d="M-2 -32v22M12 -32v22" stroke="#14283e" strokeWidth="0.7" opacity="0.65" />
       <path d="M-2.8 -30v18" stroke="#d1e1ff" strokeWidth="0.6" opacity="0.35" />
@@ -97,13 +95,14 @@ const CapacitorRender = memo(function CapacitorRender({ part, visual }: RenderPr
       <text x={-1.5} y={-15} fontSize="5" fill="#1d3b7a" textAnchor="middle" fontWeight="700">
         −
       </text>
-      <ellipse cx={5} cy={-36} rx={9} ry={2.4} fill="url(#g-metal)" stroke="#77848d" strokeWidth="0.4" />
-      <path d="M1 -36 L9 -36 M5 -39 L5 -33" stroke="#7f8894" strokeWidth={0.6} />
+      </g>
+      <g className="cap-vent">
+        <ellipse cx={5} cy={-36} rx={9} ry={2.4} fill="url(#g-metal)" stroke="#77848d" strokeWidth="0.4" />
+        <path d="M1 -36 L9 -36 M5 -39 L5 -33" stroke="#7f8894" strokeWidth={0.6} />
+      </g>
       <text x={8} y={-20} fontSize="4.2" fill="#e8eefc" textAnchor="middle" transform="rotate(-90 8 -20)">
         {formatSI(c, 'F', 3)}
       </text>
-      {v > rated && <WarningBadge x={18} y={-36} label={`Tensión ${v.toFixed(1)} V supera ${rated} V`} />}
-      {v < -0.5 && <WarningBadge x={18} y={-36} label="Polaridad invertida" />}
     </g>
   );
 });

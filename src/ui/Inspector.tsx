@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Code2, Copy, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
+import { Code2, Copy, Flame, TriangleAlert, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
 import { formatSI, parseSI } from '../core/units';
 import { PARTS } from '../parts';
 import { schematicPlacement } from './schematic';
@@ -7,6 +7,7 @@ import { LED_COLORS } from '../parts/outputs';
 import type { Field } from '../parts/types';
 import type { PartData } from '../core/types';
 import { useEditor, usePeers, useSnapshot, useVisual } from './context';
+import { damageOf, type Damage } from '../sim/damage';
 import { WIRE_COLORS } from './geometry';
 import { Thumb } from './Library';
 import { useUi } from './store';
@@ -250,6 +251,7 @@ function PartInspector({ part }: { part: PartData }) {
             <p className="insp-desc" title={def.description}>{def.description}</p>
           </div>
         </div>
+        {simRunning && damageOf(part.id) && <DamageNote damage={damageOf(part.id)!} />}
         {peers.length > 0 && (
           <div className="insp-section" style={{ paddingTop: 8, paddingBottom: 8 }}>
             <span className="peer-note" style={{ margin: 0 }}>
@@ -423,6 +425,21 @@ function SiField({ id, field, value, onChange }: { id: string; field: Field; val
         aria-invalid={!valid}
       />
       {focused && <span className={`help ${valid ? '' : 'error'}`}>{valid ? `= ${formatSI(parsed!, field.unit, 4)}` : 'Prueba 220, 4k7 o 10u'}</span>}
+    </div>
+  );
+}
+
+function DamageNote({ damage }: { damage: Damage }) {
+  const Icon = damage.level === 'broken' ? Flame : TriangleAlert;
+  return (
+    <div className={`damage-note ${damage.level}`} role="status">
+      <Icon size={15} aria-hidden="true" />
+      <div>
+        <strong>{damage.title}</strong>
+        <p>{damage.reason}</p>
+        {damage.fix && <p className="fix">{damage.fix}</p>}
+        {damage.level === 'broken' && <p className="fix">Detén la simulación para sustituirlo.</p>}
+      </div>
     </div>
   );
 }

@@ -1,8 +1,7 @@
 import { memo } from "react";
 import { Diode, Resistor, VT } from "../core/solver";
-import { formatSI } from "../core/units";
 import type { PartDef, RenderProps, Visual } from "./types";
-import { Glow, Leg, Screw, WarningBadge, ledIntensity } from "./common";
+import { Glow, Leg, Screw, ledIntensity } from "./common";
 
 // Tensión directa a 20 mA y color de emisión por color de LED.
 export const LED_COLORS: Record<
@@ -106,13 +105,6 @@ const LedRender = memo(function LedRender({ part, visual }: RenderProps) {
           />
         )}
       </g>
-      {i > 0.03 && (
-        <WarningBadge
-          x={part.props.flip ? -6 : 16}
-          y={-35}
-          label={`Corriente ${formatSI(i, "A")} (máx. 20 mA)${burnt ? ": LED dañado" : ""}`}
-        />
-      )}
     </g>
   );
 });

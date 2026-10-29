@@ -8,6 +8,7 @@ import { SCH_PREFIX } from '../parts/symbols';
 import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
 import { useUi } from './store';
+import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath } from './wires';
 import { buildSchematic, withFrozenPlacement, type SchNet } from './schematic';
 
@@ -863,6 +864,10 @@ export function Canvas() {
         ) : null,
       )}
 
+      {!hoverPin && hoverPart && cursor && simRunning && !drag && damageOf(hoverPart) && (
+        <DamageTip damage={damageOf(hoverPart)!} left={cursor.x * z + viewport.x + 16} top={cursor.y * z + viewport.y + 18} />
+      )}
+
       {hoverPin && cursor && (!drag || drag.kind === 'end') && (
         <div className="pin-tip" role="tooltip" style={{ left: Math.max(8, Math.min(hoverPin.pos.x * z + viewport.x + 14, (svgRef.current?.clientWidth ?? 320) - 288)), top: Math.max(8, Math.min(hoverPin.pos.y * z + viewport.y + 16, (svgRef.current?.clientHeight ?? 200) - 100)) }}>
           <strong style={{ fontWeight: 500 }}>{hoverPin.label}</strong>
@@ -1101,16 +1106,33 @@ const PartView = memo(function PartView({
   }
   const x = part.x + (offset?.x ?? 0);
   const y = part.y + (offset?.y ?? 0);
+
+  // Daños: una vez roto, sigue roto hasta que se detiene la simulación.
+  const damage = live ? trackDamage(part.id, assessDamage(part.type, part.props, visual)).damage : null;
+  const isBroken = damage?.level === 'broken';
+  const showToast = useUi((s) => s.showToast);
+  useEffect(() => {
+    if (!live) clearDamage(part.id);
+  }, [live, part.id]);
+  useEffect(() => {
+    if (isBroken && damage) showToast(`${def.name}: ${damage.title.toLowerCase()}. ${damage.reason}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBroken]);
+  const box = damage ? partBounds({ ...part, x, y }) : null;
+
   return (
-    <g
-      data-part={part.id}
-      className={`part ${dragging ? 'lift dragging' : ''}`}
-      style={{ transform: `translate(${x}px, ${y}px) rotate(${shown.current}deg)`, transition: dragging ? 'none' : 'transform 200ms cubic-bezier(0.2, 0, 0, 1)' }}
-    >
-      <g className="part-body">
-        <def.Render part={part} visual={live ? visual : null} onInput={handle} />
+    <>
+      <g
+        data-part={part.id}
+        className={`part ${dragging ? 'lift dragging' : ''}`}
+        style={{ transform: `translate(${x}px, ${y}px) rotate(${shown.current}deg)`, transition: dragging ? 'none' : 'transform 200ms cubic-bezier(0.2, 0, 0, 1)' }}
+      >
+        <g className={`part-body ${isBroken ? `damaged ${damage!.effect}` : ''}`}>
+          <def.Render part={part} visual={live ? visual : null} onInput={handle} />
+        </g>
       </g>
-    </g>
+      {damage && box && <DamageMark damage={damage} x={box.x + box.w / 2} y={box.y} />}
+    </>
   );
 });
 
@@ -1300,6 +1322,51 @@ function PinPicker({
         ))}
         {pins.length === 0 && <p className="pin-picker-empty">Ningún pin se llama así</p>}
       </div>
+    </div>
+  );
+}
+
+/** Explosión con humo si el componente se ha roto; aviso ámbar si va fuera de lo recomendado. */
+function DamageMark({ damage, x, y }: { damage: Damage; x: number; y: number }) {
+  if (damage.level === 'warn')
+    return (
+      <g className="damage-mark warn" transform={`translate(${x} ${y - 2})`} pointerEvents="none">
+        <circle r={7} className="damage-pulse" />
+        <circle r={5.4} fill="#f5b83d" stroke="#3a2a06" strokeWidth={0.8} />
+        <text y={2.6} textAnchor="middle" fontSize={7.5} fontWeight={700} fill="#3a2a06" fontFamily="Geist, sans-serif">
+          !
+        </text>
+      </g>
+    );
+  const spikes = 12;
+  const star = (outer: number, inner: number) =>
+    Array.from({ length: spikes * 2 }, (_, i) => {
+      const r = i % 2 ? inner : outer * (i % 4 === 0 ? 1 : 0.82);
+      const a = (Math.PI * i) / spikes - Math.PI / 2;
+      return `${(Math.cos(a) * r).toFixed(2)},${(Math.sin(a) * r).toFixed(2)}`;
+    }).join(' ');
+  return (
+    <g className={`damage-mark broken ${damage.effect}`} transform={`translate(${x} ${y + 4})`} pointerEvents="none">
+      <g className="smoke">
+        <circle cx={-3} cy={-6} r={4} />
+        <circle cx={3} cy={-8} r={5} />
+        <circle cx={0} cy={-10} r={4.5} />
+      </g>
+      <g className="blast">
+        <polygon points={star(13, 6)} fill="#ff7a1a" stroke="#5a1d00" strokeWidth={0.8} strokeLinejoin="round" />
+        <polygon points={star(8.5, 4)} fill="#ffd23d" />
+        <circle r={2.6} fill="#fff6cf" />
+      </g>
+    </g>
+  );
+}
+
+function DamageTip({ damage, left, top }: { damage: Damage; left: number; top: number }) {
+  return (
+    <div className={`damage-tip ${damage.level}`} role="tooltip" style={{ left, top }}>
+      <strong>{damage.title}</strong>
+      <span>{damage.reason}</span>
+      {damage.fix && <span className="fix">{damage.fix}</span>}
     </div>
   );
 }
