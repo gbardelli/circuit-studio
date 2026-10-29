@@ -7,7 +7,7 @@ import { SimEngine } from '../sim/engine';
 import { Canvas, isTyping } from './Canvas';
 import { EditorContext, useEditor, useSnapshot, type EditorCtx } from './context';
 import { Inspector } from './Inspector';
-import { Library } from './Library';
+import { Library, LibDragFloat } from './Library';
 import { StatusBar, TopBar } from './TopBar';
 import { useUi } from './store';
 import { rememberProject } from './Home';
@@ -172,6 +172,7 @@ function EditorShell() {
     <div className="app">
       <TopBar />
       <Library />
+      <LibDragFloat />
       <main className="workspace">
         <Canvas />
         <Suspense fallback={null}>

@@ -1,6 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import { type LucideIcon, BatteryMedium, Clock, Component, Cpu, Gauge, Grid3x3, LayoutGrid, Lightbulb, Search, Star, ToggleLeft, Triangle, X } from 'lucide-react';
-import { CATEGORIES, PART_LIST } from '../parts';
+import { CATEGORIES, PARTS, PART_LIST } from '../parts';
 import type { Category, PartDef } from '../parts/types';
 import { useUi } from './store';
 
@@ -194,12 +194,7 @@ const PartCard = memo(function PartCard({
   return (
     <div
       className={`card ${armed ? 'armed' : ''}`}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('application/x-part', def.type);
-        e.dataTransfer.effectAllowed = 'copy';
-        onDragStart();
-      }}
+      onPointerDown={(e) => startLibDrag(e, def.type, onDragStart)}
       title={def.description}
     >
       <button className="card-main" onClick={onPick} aria-pressed={armed}>
@@ -215,6 +210,66 @@ const PartCard = memo(function PartCard({
     </div>
   );
 });
+
+/**
+ * Arrastre desde la biblioteca con eventos de puntero (no el arrastre nativo, que solo deja
+ * llevar una captura de la tarjeta): la pieza real sigue al cursor y el lienzo reacciona.
+ * Al soltar sobre el lienzo, este coloca la pieza; aquí solo se empieza y se limpia.
+ */
+function startLibDrag(e: React.PointerEvent, type: string, onStart: () => void) {
+  if (e.button !== 0 || (e.target as Element).closest('.fav')) return;
+  const sx = e.clientX;
+  const sy = e.clientY;
+  let started = false;
+  const ui = useUi.getState;
+  const move = (ev: PointerEvent) => {
+    if (!started && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+    if (!started) {
+      started = true;
+      onStart();
+      document.body.classList.add('lib-dragging');
+    }
+    const over = !!document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.canvas-wrap');
+    ui().setLibDrag({ type, x: ev.clientX, y: ev.clientY, over });
+  };
+  const stop = () => {
+    window.removeEventListener('pointermove', move);
+    window.removeEventListener('pointerup', stop);
+    window.removeEventListener('pointercancel', cancel);
+    window.removeEventListener('keydown', esc);
+    document.body.classList.remove('lib-dragging');
+    // El lienzo atiende el pointerup antes de que se borre el arrastre.
+    if (started) setTimeout(() => ui().setLibDrag(null), 0);
+  };
+  const cancel = () => {
+    ui().setLibDrag(null);
+    stop();
+  };
+  const esc = (ev: KeyboardEvent) => ev.key === 'Escape' && cancel();
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', stop);
+  window.addEventListener('pointercancel', cancel);
+  window.addEventListener('keydown', esc);
+}
+
+/** La pieza flotando fuera del lienzo, al tamaño con el que caerá en él. */
+export function LibDragFloat() {
+  const drag = useUi((s) => s.libDrag);
+  const zoom = useUi((s) => s.viewport.zoom);
+  if (!drag || drag.over || !PARTS[drag.type]) return null;
+  const def = PARTS[drag.type];
+  const b = def.bounds(def.defaults);
+  return (
+    <svg
+      className="lib-drag-float"
+      style={{ left: drag.x, top: drag.y, width: b.w * zoom, height: b.h * zoom }}
+      viewBox={`${b.x} ${b.y} ${b.w} ${b.h}`}
+      aria-hidden="true"
+    >
+      <def.Render part={{ id: 'lib-drag', type: def.type, x: 0, y: 0, rot: 0, props: def.defaults }} visual={null} preview />
+    </svg>
+  );
+}
 
 export const Thumb = memo(function Thumb({ def }: { def: PartDef }) {
   const b = def.bounds(def.defaults);

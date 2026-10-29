@@ -14,6 +14,14 @@ export interface Toast {
 export type Tool = 'select' | 'hand';
 export type View = 'board' | 'schematic';
 
+/** Pieza que se arrastra desde la biblioteca: posición del puntero en pantalla. */
+export interface LibDrag {
+  type: string;
+  x: number;
+  y: number;
+  over: boolean;
+}
+
 export interface UiState {
   selection: string[];
   wireSelection: string[];
@@ -26,6 +34,8 @@ export interface UiState {
   tool: Tool;
   view: View;
   setView(view: View): void;
+  libDrag: LibDrag | null;
+  setLibDrag(d: LibDrag | null): void;
   select(parts: string[], wires?: string[]): void;
   setViewport(v: Viewport): void;
   setPlacing(type: string | null): void;
@@ -49,6 +59,8 @@ export const useUi = create<UiState>((set) => ({
   tool: 'select',
   view: 'board',
   setView: (view) => set({ view }),
+  libDrag: null,
+  setLibDrag: (libDrag) => set({ libDrag }),
   select: (parts, wires = []) => set({ selection: parts, wireSelection: wires }),
   setViewport: (viewport) => set({ viewport }),
   setPlacing: (placing) => set({ placing }),

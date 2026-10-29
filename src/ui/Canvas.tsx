@@ -4,6 +4,7 @@ import { buildNetlist, pinKey } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
 import { PARTS } from '../parts';
+import { SCH_PREFIX } from '../parts/symbols';
 import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
 import { useUi } from './store';
@@ -502,12 +503,20 @@ export function Canvas() {
     select([], [id]);
   };
 
-  const onDrop = (e: React.DragEvent) => {
-    const type = e.dataTransfer.getData('application/x-part');
-    if (!type || !PARTS[type]) return;
-    e.preventDefault();
-    placePart(type, toWorldPt(e.clientX, e.clientY), false);
-  };
+  // Soltar una pieza arrastrada desde la biblioteca.
+  const libDrag = useUi((s) => s.libDrag);
+  const libDragActive = !!libDrag;
+  const placeRef = useRef(placePart);
+  placeRef.current = placePart;
+  useEffect(() => {
+    if (!libDragActive) return;
+    const up = () => {
+      const d = useUi.getState().libDrag;
+      if (d?.over && PARTS[d.type]) placeRef.current(d.type, toWorldPt(d.x, d.y), false);
+    };
+    window.addEventListener('pointerup', up);
+    return () => window.removeEventListener('pointerup', up);
+  }, [libDragActive, toWorldPt]);
 
   const onPartInput = useCallback(
     (part: PartData, key: string, value: number | boolean) => {
@@ -544,31 +553,64 @@ export function Canvas() {
     return out.slice(0, 400);
   }, [hoverPin, netlist, drag, sch]);
 
-  const insertionMarks = useMemo(() => {
-    const ids = drag?.kind === 'parts' ? drag.ids : [];
-    if (sch || ids.length === 0 || drag?.kind !== 'parts') return [] as Vec[];
-    const sockets = new Set<string>();
-    for (const p of scene.parts) {
-      if (ids.includes(p.id)) continue;
+  // Pieza fantasma: la que se arrastra desde la biblioteca o la que se va a colocar con clic.
+  const ghostType = libDrag?.over ? libDrag.type : placing;
+  const ghostAt = libDrag?.over ? toWorldPt(libDrag.x, libDrag.y) : cursor;
+  const ghostDef = ghostType ? (sch ? PARTS[SCH_PREFIX + ghostType] : PARTS[ghostType]) : null;
+  const ghostPart = useMemo<PartData | null>(() => {
+    if (!ghostDef || !ghostAt) return null;
+    const b = ghostDef.bounds(ghostDef.defaults);
+    return { id: 'ghost', type: ghostDef.type, x: snap(ghostAt.x - b.x - b.w / 2), y: snap(ghostAt.y - b.y - b.h / 2), rot: 0, props: ghostDef.defaults };
+  }, [ghostDef, ghostAt?.x, ghostAt?.y]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Orificios libres (de protoboards y cabezales) por posición, con su clave de pin. */
+  const sockets = useMemo(() => {
+    const out = new Map<string, string>();
+    if (sch) return out;
+    for (const p of scene.parts)
       for (const pin of PARTS[p.type].pins(p.props))
         if (pin.kind === 'socket') {
           const w = toWorld(p, pin);
-          sockets.add(`${w.x},${w.y}`);
+          out.set(`${w.x},${w.y}`, pinKey(p.id, pin.id));
         }
-    }
-    const out: Vec[] = [];
-    for (const id of ids) {
-      const p = partsById.get(id);
-      if (!p) continue;
-      for (const pin of PARTS[p.type].pins(p.props)) {
-        if (pin.kind !== 'leg') continue;
-        const w = toWorld(p, pin);
-        const pos = { x: w.x + drag.dx, y: w.y + drag.dy };
-        if (sockets.has(`${pos.x},${pos.y}`)) out.push(pos);
-      }
-    }
     return out;
-  }, [drag, scene, partsById, sch]);
+  }, [scene, sch]);
+
+  // Dónde entrarían las patillas de lo que se mueve o se coloca, y qué tiras se conectan.
+  const insertion = useMemo(() => {
+    const legs: Vec[] = [];
+    if (drag?.kind === 'parts' && drag.moved) {
+      for (const id of drag.ids) {
+        const p = partsById.get(id);
+        if (!p) continue;
+        for (const pin of PARTS[p.type].pins(p.props))
+          if (pin.kind === 'leg') {
+            const w = toWorld(p, pin);
+            legs.push({ x: w.x + drag.dx, y: w.y + drag.dy });
+          }
+      }
+    } else if (ghostPart && !sch) {
+      for (const pin of PARTS[ghostPart.type].pins(ghostPart.props)) if (pin.kind === 'leg') legs.push(toWorld(ghostPart, pin));
+    }
+    const own = drag?.kind === 'parts' ? new Set(drag.ids) : new Set<string>();
+    const marks: Vec[] = [];
+    const nets = new Set<number>();
+    for (const pos of legs) {
+      const key = sockets.get(`${pos.x},${pos.y}`);
+      if (!key || own.has(key.slice(0, key.indexOf(':')))) continue;
+      marks.push(pos);
+      const n = netlist.netOf.get(key);
+      if (n !== undefined) nets.add(n);
+    }
+    const strips: Vec[] = [];
+    if (nets.size)
+      netlist.netOf.forEach((n, key) => {
+        if (!nets.has(n)) return;
+        const pos = netlist.pinWorld.get(key);
+        if (pos && sockets.get(`${pos.x},${pos.y}`) === key) strips.push(pos);
+      });
+    return { marks, strips: strips.slice(0, 600), seated: marks.length > 0 };
+  }, [drag, ghostPart, partsById, sockets, netlist, sch]);
 
   const peerSelections = useMemo(() => {
     const out: { id: string; color: string; name: string; key: string }[] = [];
@@ -581,14 +623,13 @@ export function Canvas() {
   }, [project, selection]);
 
   const draftEnd = cursor && draft ? snapPoint(cursor, draft, false) : null;
-  const ghost = placing && cursor ? PARTS[placing] : null;
   const hoverVoltage = hoverPin && simRunning ? engine.voltageAt(hoverPin.part, hoverPin.pin) : null;
   const gridStep = z < 0.8 ? 50 : 10;
   const draggingIds = drag?.kind === 'parts' && drag.moved ? drag.ids : [];
   const hasSelection = selection.length + wireSelection.length > 0;
 
   return (
-    <div className="canvas-wrap" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div className={`canvas-wrap ${libDrag?.over ? 'lib-target' : ''}`}>
       <svg
         ref={svgRef}
         className={`canvas ${sch ? 'schematic' : ''} ${space || tool === 'hand' || drag?.kind === 'pan' ? 'panning' : ''} ${draft ? 'wiring' : ''} ${hoverPin && !hoverWire ? 'on-pin' : ''}`}
@@ -619,9 +660,14 @@ export function Canvas() {
             <SelRect part={partsById.get(hoverPart)!} offset={offsets.get(hoverPart)} z={z} tone="hover" />
           )}
 
-          {insertionMarks.map((m, i) => (
-            <circle key={i} cx={m.x} cy={m.y} r={3.4} fill="var(--green)" fillOpacity={0.25} stroke="var(--green)" strokeWidth={1} pointerEvents="none" />
-          ))}
+          <g pointerEvents="none">
+            {insertion.strips.map((m, i) => (
+              <circle key={`s${i}`} cx={m.x} cy={m.y} r={2.6} fill="var(--green)" fillOpacity={0.22} />
+            ))}
+            {insertion.marks.map((m, i) => (
+              <circle key={i} cx={m.x} cy={m.y} r={3.4} fill="var(--green)" fillOpacity={0.3} stroke="var(--green)" strokeWidth={1} className="insert-mark" />
+            ))}
+          </g>
 
           <g className="wires">
             {scene.wires.map((w) => (
@@ -671,18 +717,15 @@ export function Canvas() {
             );
           })}
 
-          {ghost &&
-            cursor &&
-            (() => {
-              const b = ghost.bounds(ghost.defaults);
-              const x = snap(cursor.x - b.x - b.w / 2);
-              const y = snap(cursor.y - b.y - b.h / 2);
-              return (
-                <g transform={`translate(${x} ${y})`} opacity={0.75} pointerEvents="none" style={{ filter: 'drop-shadow(0 10px 14px rgba(0,0,0,.5))' }}>
-                  <ghost.Render part={{ id: 'ghost', type: ghost.type, x, y, rot: 0, props: ghost.defaults }} visual={null} preview />
-                </g>
-              );
-            })()}
+          {ghostPart && ghostDef && (
+            <g
+              transform={`translate(${ghostPart.x} ${ghostPart.y})`}
+              className={`ghost ${insertion.seated ? 'seated' : ''}`}
+              pointerEvents="none"
+            >
+              <ghostDef.Render part={ghostPart} visual={null} preview />
+            </g>
+          )}
 
           {drag?.kind === 'marquee' && (
             <rect
