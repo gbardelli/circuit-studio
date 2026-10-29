@@ -8,3 +8,12 @@ tools
 
 .vercel
 .env*
+
+# Skills de agentes que instalan las integraciones del Marketplace
+.agents/
+.claude/
+.continue/
+.kiro/
+.trae/
+.windsurf/
+skills-lock.json
