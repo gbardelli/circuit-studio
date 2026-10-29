@@ -70,23 +70,14 @@ const CATEGORIES: { id: Template['category']; title: string; blurb: string }[] =
 ];
 
 const LEVELS: Level[] = ['all', 'Básico', 'Intermedio', 'Avanzado'];
-const LEVEL_META: Record<Template['level'], { cls: string; bars: number }> = {
-  Básico: { cls: 'basic', bars: 1 },
-  Intermedio: { cls: 'mid', bars: 2 },
-  Avanzado: { cls: 'adv', bars: 3 },
-};
+const LEVEL_CLASS: Record<Template['level'], string> = { Básico: 'basic', Intermedio: 'mid', Avanzado: 'adv' };
 const ROLE_LABEL = { owner: 'Propietario', editor: 'Editor', viewer: 'Solo lectura' } as const;
 
-/** Nivel con color propio y tres barras que se rellenan: se lee de un vistazo sin leer la palabra. */
+/** Nivel: etiqueta sobria con un punto de color (verde, ámbar, rojo) como única señal. */
 function LevelPill({ level }: { level: Template['level'] }) {
-  const { cls, bars } = LEVEL_META[level];
   return (
-    <span className={`level ${cls}`}>
-      <svg width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <rect key={i} x={1 + i * 4} y={9 - i * 3} width="2.6" height={3 + i * 3} rx="0.8" fill="currentColor" opacity={i < bars ? 1 : 0.28} />
-        ))}
-      </svg>
+    <span className={`level ${LEVEL_CLASS[level]}`}>
+      <i aria-hidden="true" />
       {level}
     </span>
   );
