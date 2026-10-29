@@ -157,7 +157,7 @@ export function partTag(def: PartDef): { text: string; tone: 'accent' | 'green' 
   if (def.mcu) return { text: 'Programable', tone: 'accent' };
   if (def.partNumber) return { text: def.partNumber, tone: 'neutral' };
   if (def.type === 'bench-supply') return { text: '0–30 V', tone: 'neutral' };
-  if (['potentiometer', 'pushbutton', 'slide-switch', 'ldr'].includes(def.type)) return { text: 'Se toca al simular', tone: 'green' };
+  if (['potentiometer', 'pushbutton', 'slide-switch', 'ldr'].includes(def.type) || def.type.startsWith('dip-switch-')) return { text: 'Se toca al simular', tone: 'green' };
   if (def.type === 'battery-9v') return { text: '9 V', tone: 'neutral' };
   if (def.type === 'aa-pack') return { text: '3 V · 6 V', tone: 'neutral' };
   if (def.category === 'Protoboards') return { text: `${Number(def.defaults.cols)} columnas`, tone: 'neutral' };

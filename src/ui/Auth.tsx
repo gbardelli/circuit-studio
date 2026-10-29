@@ -5,6 +5,7 @@ import { TEMPLATES } from '../collab/templates';
 import { templateSnapshot } from '../collab/applyTemplate';
 import { Logo, Wordmark } from './Logo';
 import { CircuitPreview } from './Preview';
+import { useStartupTask } from './Startup';
 
 const appearance = {
   variables: {
@@ -43,6 +44,8 @@ function SessionGate({ children }: { children: ReactNode }) {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
   const [ready, setReady] = useState(false);
+  const loading = !isLoaded || Boolean(isSignedIn && (!ready || !user));
+  useStartupTask('session', loading);
 
   useEffect(() => {
     if (!isLoaded) return;
@@ -59,17 +62,9 @@ function SessionGate({ children }: { children: ReactNode }) {
     setReady(true);
   }, [isLoaded, user, getToken]);
 
-  if (!isLoaded || (isSignedIn && (!ready || !user))) return <Splash />;
+  if (loading) return null;
   if (!isSignedIn) return <SignInScreen />;
   return <>{children}</>;
-}
-
-function Splash() {
-  return (
-    <div className="splash">
-      <Logo size={40} />
-    </div>
-  );
 }
 
 function SignInScreen() {

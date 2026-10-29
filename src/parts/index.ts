@@ -8,7 +8,7 @@ import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
 import { diode, hcsr04, lcd1602, mosfet, relay, tmp36 } from './extra';
 import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './misc';
 import { CHIPS } from './chips';
-import { benchSupply, clockGen, dipSwitch, ledBar } from './supply';
+import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -30,6 +30,8 @@ export const PART_LIST: PartDef[] = [
   dcMotor,
   pushbutton,
   slideSwitch,
+  dipSwitch4,
+  dipSwitch6,
   dipSwitch,
   clockGen,
   potentiometer,

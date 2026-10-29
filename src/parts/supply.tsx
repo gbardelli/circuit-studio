@@ -235,70 +235,75 @@ export const clockGen: PartDef = {
   Render: ClockRender,
 };
 
-// ── Interruptor DIP de 8 posiciones ─────────────────────────────────────────────
-const DIP_N = 8;
-const DipRender = memo(function DipRender({ part, onInput, preview }: RenderProps) {
-  const live = !preview && onInput;
-  return (
-    <g>
-      {Array.from({ length: DIP_N }, (_, i) => (
-        <g key={i}>
-          <rect x={i * 10 - 1.4} y={-1} width={2.8} height={5} fill="#b9c0c7" />
-          <rect x={i * 10 - 1.4} y={26} width={2.8} height={5} fill="#b9c0c7" />
-        </g>
-      ))}
-      <rect x={-5} y={3} width={DIP_N * 10} height={24} rx={1.5} fill="#c8302c" />
-      <rect x={-5} y={3} width={DIP_N * 10} height={24} rx={1.5} fill="url(#g-chip)" />
-      <text x={-2} y={8.6} fontSize={3.6} fill="#fff" fontWeight={600} fontFamily="Geist, sans-serif">
-        ON
-      </text>
-      {Array.from({ length: DIP_N }, (_, i) => {
-        const on = Boolean(part.props[`s${i + 1}`]);
-        return (
-          <g
-            key={i}
-            data-interactive={live ? 'true' : undefined}
-            style={{ cursor: live ? 'pointer' : undefined }}
-            onPointerDown={(e) => {
-              if (!live) return;
-              e.stopPropagation();
-              onInput?.(`s${i + 1}`, !on);
-            }}
-          >
-            <rect x={i * 10 - 3} y={10} width={6} height={12} rx={0.8} fill="#2a1312" />
-            <rect x={i * 10 - 2.4} y={on ? 10.8 : 15.6} width={4.8} height={5.6} rx={0.6} fill="#f2f2f0" />
-            <text x={i * 10} y={25.8} textAnchor="middle" fontSize={3.2} fill="#fff" opacity={0.85} fontFamily="Geist, sans-serif">
-              {i + 1}
-            </text>
+// ── Independent SPST switches in standard DIP packages ────────────────────────
+function makeDipSwitch(count: 4 | 6 | 8): PartDef {
+  const DipRender = memo(function DipRender({ part, onInput, preview }: RenderProps) {
+    const live = !preview && onInput;
+    return (
+      <g>
+        {Array.from({ length: count }, (_, i) => (
+          <g key={i}>
+            <rect x={i * 10 - 1.4} y={-1} width={2.8} height={5} fill="url(#g-metal)" />
+            <rect x={i * 10 - 1.4} y={26} width={2.8} height={5} fill="url(#g-metal)" />
           </g>
-        );
-      })}
-    </g>
-  );
-});
+        ))}
+        <rect x={-5} y={3} width={count * 10} height={24} rx={1.5} fill="#c8302c" />
+        <rect x={-5} y={3} width={count * 10} height={24} rx={1.5} fill="url(#g-sheen)" />
+        <text x={-2} y={8.6} fontSize={3.6} fill="#fff" fontWeight={600} fontFamily="Geist, sans-serif">
+          ON
+        </text>
+        {Array.from({ length: count }, (_, i) => {
+          const on = Boolean(part.props[`s${i + 1}`]);
+          return (
+            <g
+              key={i}
+              data-interactive={live ? 'true' : undefined}
+              style={{ cursor: live ? 'pointer' : undefined }}
+              onPointerDown={(e) => {
+                if (!live) return;
+                e.stopPropagation();
+                onInput?.(`s${i + 1}`, !on);
+              }}
+            >
+              <rect x={i * 10 - 3} y={10} width={6} height={12} rx={0.8} fill="#2a1312" />
+              <rect x={i * 10 - 2.4} y={on ? 10.8 : 15.6} width={4.8} height={5.6} rx={0.6} fill="#f2f2f0" />
+              <text x={i * 10} y={25.8} textAnchor="middle" fontSize={3.2} fill="#fff" opacity={0.85} fontFamily="Geist, sans-serif">
+                {i + 1}
+              </text>
+            </g>
+          );
+        })}
+      </g>
+    );
+  });
 
-export const dipSwitch: PartDef = {
-  type: 'dip-switch-8',
-  name: 'Interruptor DIP ×8',
-  category: 'Entradas',
-  description: 'Ocho interruptores en encapsulado DIP. Cada uno une su patilla de abajo con la de arriba. Ideal para poner números binarios en las entradas de un chip.',
-  keywords: ['dip switch', 'interruptor dip', 'microinterruptor', 'switches', 'binario', 'entradas', 'configuracion'],
-  defaults: Object.fromEntries(Array.from({ length: DIP_N }, (_, i) => [`s${i + 1}`, false])),
-  pins: () =>
-    Array.from({ length: DIP_N }, (_, i) => [
-      { id: `${i + 1}A`, x: i * 10, y: 30, kind: 'leg' as const, label: `Interruptor ${i + 1} · patilla ${i + 1}`, desc: `Con el interruptor ${i + 1} en ON, unida a la patilla de enfrente` },
-      { id: `${i + 1}B`, x: i * 10, y: 0, kind: 'leg' as const, label: `Interruptor ${i + 1} · patilla ${2 * DIP_N - i}`, desc: `Con el interruptor ${i + 1} en ON, unida a la patilla de enfrente` },
-    ]).flat(),
-  bounds: () => ({ x: -6, y: -2, w: DIP_N * 10 + 2, h: 34 }),
-  fields: Array.from({ length: DIP_N }, (_, i) => ({ key: `s${i + 1}`, label: `Interruptor ${i + 1}`, kind: 'boolean' as const })),
-  model: 'Ideal',
-  thumbScale: 1.1,
-  sim(ctx) {
-    const elements: Element[] = Array.from({ length: DIP_N }, (_, i) => new Resistor(ctx.net(`${i + 1}A`), ctx.net(`${i + 1}B`), () => (ctx.props[`s${i + 1}`] ? 0.05 : 1e9)));
-    return { elements };
-  },
-  Render: DipRender,
-};
+  return {
+    type: `dip-switch-${count}`,
+    name: `Interruptor DIP ×${count}`,
+    category: 'Entradas',
+    description: `${count} interruptores independientes en encapsulado DIP. Cada uno une su patilla de abajo con la de arriba. Permite configurar entradas binarias durante la simulación.`,
+    keywords: [`${count} posiciones`, `${count} switches`, `${count} interruptores`, 'dip switch', 'interruptor dip', 'microinterruptor', 'switches', 'binario', 'entradas', 'configuracion'],
+    defaults: Object.fromEntries(Array.from({ length: count }, (_, i) => [`s${i + 1}`, false])),
+    pins: () =>
+      Array.from({ length: count }, (_, i) => [
+        { id: `${i + 1}A`, x: i * 10, y: 30, kind: 'leg' as const, label: `Interruptor ${i + 1} · patilla ${i + 1}`, desc: `Con el interruptor ${i + 1} en ON, unida a la patilla de enfrente` },
+        { id: `${i + 1}B`, x: i * 10, y: 0, kind: 'leg' as const, label: `Interruptor ${i + 1} · patilla ${2 * count - i}`, desc: `Con el interruptor ${i + 1} en ON, unida a la patilla de enfrente` },
+      ]).flat(),
+    bounds: () => ({ x: -6, y: -2, w: count * 10 + 2, h: 34 }),
+    fields: Array.from({ length: count }, (_, i) => ({ key: `s${i + 1}`, label: `Interruptor ${i + 1}`, kind: 'boolean' as const })),
+    model: 'Ideal',
+    thumbScale: 1.1,
+    sim(ctx) {
+      const elements: Element[] = Array.from({ length: count }, (_, i) => new Resistor(ctx.net(`${i + 1}A`), ctx.net(`${i + 1}B`), () => (ctx.props[`s${i + 1}`] ? 0.05 : 1e9)));
+      return { elements };
+    },
+    Render: DipRender,
+  };
+}
+
+export const dipSwitch4 = makeDipSwitch(4);
+export const dipSwitch6 = makeDipSwitch(6);
+export const dipSwitch = makeDipSwitch(8);
 
 // ── Barra de 10 LEDs ────────────────────────────────────────────────────────────
 const BAR_N = 10;

@@ -14,6 +14,7 @@ import { useUi } from './store';
 import { rememberProject } from './Home';
 import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
+import { useStartupTask } from './Startup';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -21,6 +22,7 @@ const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.B
 export function Editor({ room, template }: { room: string; template: string | null }) {
   const [ctx, setCtx] = useState<EditorCtx | null>(null);
   const [error, setError] = useState<string | null>(null);
+  useStartupTask('project', !ctx && !error);
   // El proyecto (WebSocket + IndexedDB) nace y muere con el efecto: seguro ante StrictMode y recarga en caliente.
   useEffect(() => {
     let cancelled = false;

@@ -74,6 +74,26 @@ describe('component catalog', () => {
 });
 
 describe('logic models under electrical load', () => {
+  it.each([4, 6, 8])('DIP ×%i switches each contact independently under load', (count) => {
+    const inputs = Object.fromEntries(Array.from({ length: count }, (_, i) => [`${i + 1}A`, 5]));
+    const loads = Object.fromEntries(Array.from({ length: count }, (_, i) => [`${i + 1}B`, 1000]));
+    const h = fixture(`dip-switch-${count}`, inputs, loads);
+    for (let selected = 1; selected <= count; selected++) {
+      for (let i = 1; i <= count; i++) h.props[`s${i}`] = i === selected;
+      h.settle();
+      for (let i = 1; i <= count; i++) {
+        if (i === selected) expect(h.volts(`${i}B`)).toBeGreaterThan(4.9);
+        else expect(h.volts(`${i}B`)).toBeLessThan(.01);
+      }
+    }
+    for (let i = 1; i <= count; i++) h.props[`s${i}`] = true;
+    h.settle();
+    for (let i = 1; i <= count; i++) expect(h.volts(`${i}B`)).toBeGreaterThan(4.9);
+    for (let i = 1; i <= count; i++) h.props[`s${i}`] = false;
+    h.settle();
+    for (let i = 1; i <= count; i++) expect(h.volts(`${i}B`)).toBeLessThan(.01);
+  });
+
   it.each([
     ['74hc00', [true, true, true, false]],
     ['74hc02', [true, false, false, false]],

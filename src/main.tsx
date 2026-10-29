@@ -6,6 +6,7 @@ import { CloudShell } from './ui/Auth';
 import { Editor } from './ui/Editor';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
+import { Startup } from './ui/Startup';
 import './styles.css';
 
 const params = new URLSearchParams(location.search);
@@ -19,6 +20,8 @@ const app = valid ? <Editor room={room} template={template} /> : <Home />;
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SvgDefs />
-    <ErrorBoundary>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</ErrorBoundary>
+    <ErrorBoundary>
+      <Startup cloud={CLOUD}>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</Startup>
+    </ErrorBoundary>
   </StrictMode>,
 );

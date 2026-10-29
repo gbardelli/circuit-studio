@@ -1,0 +1,80 @@
+/* Kept separate so the same identity appears before JavaScript has downloaded. */
+.brand-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #0a0c0b;
+  color: #f0f3ef;
+  pointer-events: auto;
+  isolation: isolate;
+}
+.brand-field {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 44%, #19312660, transparent 57%);
+}
+.brand-grain {
+  position: absolute;
+  inset: 0;
+  opacity: .055;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+.brand-traces {
+  position: absolute;
+  width: min(1200px, 140vw);
+  height: auto;
+  color: #84b29a;
+  opacity: .13;
+  animation: brand-traces-in 900ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.brand-lockup { position: relative; display: flex; flex-direction: column; align-items: center; padding: 24px; }
+.brand-signal { width: 128px; height: 128px; color: #7de9ae; margin: -28px 0 4px; }
+.brand-signal-path { animation: brand-signal-in 680ms 80ms cubic-bezier(.22, 1, .36, 1) both; }
+.brand-signal-node { animation: brand-node-in 240ms 440ms cubic-bezier(.22, 1, .36, 1) both; }
+.brand-name {
+  font: 500 clamp(32px, 5vw, 46px)/1.1 'Instrument Sans', 'Geist', system-ui, sans-serif;
+  letter-spacing: -.055em;
+  animation: brand-type-in 520ms 160ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.brand-name-period { color: #7de9ae; }
+.brand-caption {
+  margin: 16px 0 0;
+  font: 400 13px/1.5 'Geist', system-ui, sans-serif;
+  letter-spacing: .01em;
+  color: #8b9890;
+  animation: brand-type-in 480ms 280ms cubic-bezier(.22, 1, .36, 1) both;
+}
+.brand-signature {
+  position: absolute;
+  bottom: 28px;
+  left: 32px;
+  font: 500 9px/1.4 'Geist', system-ui, sans-serif;
+  letter-spacing: .12em;
+  color: #617268;
+}
+.brand-loading {
+  position: absolute;
+  bottom: 78px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #8b9890;
+  font: 400 11px/1.5 'Geist', system-ui, sans-serif;
+}
+.brand-loading span { height: 3px; width: 16px; border-radius: 2px; background: #7de9ae; animation: brand-wait 1200ms linear infinite; }
+.brand-screen-leaving { pointer-events: none; animation: brand-out 220ms cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes brand-signal-in { from { clip-path: inset(0 100% 0 0); opacity: .3; } to { clip-path: inset(0); opacity: 1; } }
+@keyframes brand-node-in { from { opacity: 0; transform: translateX(-2px); } }
+@keyframes brand-type-in { from { opacity: 0; transform: translateY(5px); filter: blur(3px); } }
+@keyframes brand-traces-in { from { opacity: 0; transform: translateY(4px); } }
+@keyframes brand-out { to { opacity: 0; } }
+@keyframes brand-wait { 0%, 100% { opacity: .35; } 50% { opacity: .9; } }
+@media (max-width: 480px) { .brand-signature { left: 24px; bottom: 24px; font-size: 8px; } .brand-signal { width: 112px; height: 112px; } }
+@media (prefers-reduced-motion: reduce) {
+  .brand-screen, .brand-screen * { animation: none !important; }
+  .brand-screen-leaving { opacity: 0; }
+}
