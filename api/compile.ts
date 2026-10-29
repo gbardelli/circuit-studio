@@ -10,7 +10,7 @@ import { redis } from './_lib/redis.js';
 
 export const maxDuration = 300;
 
-const BASE = 'cs-arduino-toolchain-v2'; // v2: añade LiquidCrystal
+const BASE = 'cs-arduino-toolchain-v3'; // v3: LiquidCrystal_I2C 1.1.2
 const HOME = '/vercel/sandbox/cs';
 const ENV = `export ARDUINO_DIRECTORIES_DATA=${HOME}/data ARDUINO_DIRECTORIES_USER=${HOME}/user ARDUINO_DIRECTORIES_DOWNLOADS=${HOME}/dl;`;
 const SETUP = `set -e; mkdir -p ${HOME} && cd ${HOME}; ${ENV}
@@ -18,6 +18,7 @@ curl -fsSL https://github.com/arduino/arduino-cli/releases/download/v1.5.1/ardui
 ./arduino-cli core update-index
 ./arduino-cli core install arduino:avr
 ./arduino-cli lib install Servo LiquidCrystal
+./arduino-cli lib install 'LiquidCrystal I2C@1.1.2'
 rm -rf ${HOME}/dl && touch ${HOME}/.ready`;
 const MAX_SOURCE = 200_000;
 const FQBNS = ['arduino:avr:uno', 'arduino:avr:nano:cpu=atmega328', 'arduino:avr:mega:cpu=atmega2560'];

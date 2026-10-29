@@ -62,18 +62,26 @@ export class Resistor implements Element {
 
 /** Fuente de tensión con resistencia interna (Norton). */
 export class VSource implements Element {
+  // Lo último que se estampó: la solución `v` corresponde a estos valores, no a los que
+  // tengan `volts()` y `rint()` ahora (un mando movido entre dos resoluciones).
+  private stampedVolts: number | null = null;
+  private stampedR = 0;
   constructor(public p: number, public n: number, public volts: () => number, public rint: () => number) {}
   stamp(s: Stamper) {
     const r = Math.max(this.rint(), 1e-4);
+    const e = this.volts();
+    this.stampedVolts = e;
+    this.stampedR = r;
     s.conductance(this.p, this.n, 1 / r);
-    const i = this.volts() / r;
+    const i = e / r;
     s.rhs(this.p, i);
     s.rhs(this.n, -i);
   }
   /** Corriente entregada por el terminal positivo. */
   currentOf(v: Float64Array) {
-    const r = Math.max(this.rint(), 1e-4);
-    return (this.volts() - (volt(v, this.p) - volt(v, this.n))) / r;
+    const r = this.stampedVolts === null ? Math.max(this.rint(), 1e-4) : this.stampedR;
+    const e = this.stampedVolts ?? this.volts();
+    return (e - (volt(v, this.p) - volt(v, this.n))) / r;
   }
 }
 

@@ -41,6 +41,7 @@ export interface SimContext {
 
 export interface PartSim {
   elements: Element[];
+  i2c?: I2cSlave;
   /** Muestra instantánea; el motor promedia en el tiempo cada valor numérico. */
   probe?(v: Float64Array): Record<string, number>;
   /** Para lo que no es un promedio (anchura de pulso de un servo, frecuencia de un zumbador). */
@@ -56,6 +57,17 @@ export interface PartSim {
   mcuNodes?: number[];
   /** Nodo de cada entrada analógica (A0, A1…), para el ADC. */
   analogNodes?: number[];
+}
+
+/** Byte-level device on the physical SDA/SCL nets. Electrical waveforms are not synthesized. */
+export interface I2cSlave {
+  pins: { sda: string; scl: string; ground: string; supply: string };
+  address(v: Float64Array): number;
+  powered(v: Float64Array): boolean;
+  start?(read: boolean): void;
+  stop?(): void;
+  write(value: number, v: Float64Array): boolean;
+  read(v: Float64Array): number;
 }
 
 export interface Field {

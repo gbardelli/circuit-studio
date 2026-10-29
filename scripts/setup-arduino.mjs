@@ -44,4 +44,5 @@ const run = (...args) => execFileSync(bin, ['--config-file', config, ...args], {
 run('core', 'update-index');
 run('core', 'install', 'arduino:avr');
 run('lib', 'install', 'Servo', 'LiquidCrystal');
+run('lib', 'install', 'LiquidCrystal I2C@1.1.2');
 console.log('arduino-cli listo en', bin);

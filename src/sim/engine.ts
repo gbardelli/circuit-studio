@@ -7,6 +7,7 @@ import type { CircuitSnapshot, PartData, Props } from '../core/types';
 import { PARTS } from '../parts';
 import type { McuBridge, PartSim, Visual } from '../parts/types';
 import { AvrRunner, CLOCK_HZ, type BoardId } from './avr';
+import { I2cBus } from './i2c';
 
 const MAX_SEGMENT = 0.001;
 const MAX_SOLVES_PER_FRAME = 6000;
@@ -317,6 +318,28 @@ export class SimEngine {
     this.hasCapacitors = elements.some((e) => e instanceof Capacitor);
     this.circuit = new Circuit(count, elements);
     const r = this.circuit.solve(0);
+    for (const mcu of mcus) {
+      if (!mcu.runner) continue;
+      const [sdaIndex, sclIndex] = mcu.runner.board.i2cPins;
+      const def = PARTS[parts.get(mcu.partId)!.type];
+      const net = (part: string, pin: string) => this.netlist?.netOf.get(pinKey(part, pin));
+      const sda = () => net(mcu.partId, def.mcu!.pinIds[sdaIndex]);
+      const scl = () => net(mcu.partId, def.mcu!.pinIds[sclIndex]);
+      const ground = () => net(mcu.partId, def.ground![0]);
+      mcu.runner.i2c = new I2cBus((address) => {
+        const a = sda(), c = scl(), g = ground();
+        if (a === undefined || c === undefined || g === undefined || a === c || a === g || c === g) return [];
+        const av = this.circuit!.v[this.netNode.get(a) ?? -1] ?? 0;
+        const cv = this.circuit!.v[this.netNode.get(c) ?? -1] ?? 0;
+        if (av < 2.5 || cv < 2.5) return [];
+        return [...this.parts.values()].flatMap((part) => {
+          const device = part.sim.i2c;
+          return device && net(part.id, device.pins.sda) === a && net(part.id, device.pins.scl) === c && net(part.id, device.pins.ground) === g
+            && net(part.id, device.pins.supply) !== a && net(part.id, device.pins.supply) !== c
+            && device.powered(this.circuit!.v) && device.address(this.circuit!.v) === address ? [device] : [];
+        });
+      }, () => this.circuit!.v);
+    }
     this.status = { ...this.status, running: true, nodes: count, converged: r.converged, message: r.converged ? null : 'El circuito no converge en el punto de operación.' };
     this.syncMcuInputs();
     this.dirty = false;

@@ -5,6 +5,7 @@ import {
   AVRIOPort,
   AVRTimer,
   AVRUSART,
+  AVRTWI,
   CPU,
   PinState,
   adcConfig,
@@ -24,11 +25,14 @@ import {
   timer1Config,
   timer2Config,
   usart0Config,
+  twiConfig,
   type ADCConfig,
   type AVRPortConfig,
   type AVRTimerConfig,
+  type TWIConfig,
 } from 'avr8js';
 import type { McuPinMode } from '../parts/types';
+import type { I2cMasterPort } from './i2c';
 
 export const CLOCK_HZ = 16_000_000;
 
@@ -58,6 +62,8 @@ interface BoardProfile {
   timers: AVRTimerConfig[];
   usart: typeof usart0Config;
   adc: ADCConfig;
+  twi: TWIConfig;
+  i2cPins: [number, number];
 }
 
 const p = (port: Port, bits: number[]) => bits.map((b) => [port, b] as [Port, number]);
@@ -68,6 +74,8 @@ const ATMEGA328: Omit<BoardProfile, 'pins'> = {
   timers: [timer0Config, timer1Config, timer2Config],
   usart: usart0Config,
   adc: adcConfig,
+  twi: twiConfig,
+  i2cPins: [18, 19],
 };
 // D0–D7 = PD0–7, D8–D13 = PB0–5, A0–A5 = PC0–5 (D14–D19).
 const PINS_328: [Port, number][] = [...p('D', [0, 1, 2, 3, 4, 5, 6, 7]), ...p('B', [0, 1, 2, 3, 4, 5]), ...p('C', [0, 1, 2, 3, 4, 5])];
@@ -100,6 +108,8 @@ export const BOARDS: Record<BoardId, BoardProfile> = {
     timers: MEGA_TIMERS,
     usart: { ...usart0Config, rxCompleteInterrupt: 0x32, dataRegisterEmptyInterrupt: 0x34, txCompleteInterrupt: 0x36 },
     adc: { ...adcConfig, adcInterrupt: 0x3a },
+    twi: { ...twiConfig, twiInterrupt: 0x4e },
+    i2cPins: [20, 21],
   },
 };
 
@@ -131,6 +141,8 @@ export class AvrRunner {
   private ports = new Map<Port, AVRIOPort>();
   readonly adc: AVRADC;
   readonly usart: AVRUSART;
+  readonly twi: AVRTWI;
+  i2c: I2cMasterPort | null = null;
   /** Se activa cuando cambia la salida de algún pin; el motor resuelve el circuito entonces. */
   pinsChanged = false;
   onSerial: ((char: string) => void) | null = null;
@@ -152,6 +164,17 @@ export class AvrRunner {
     this.usart.onByteTransmit = (b) => {
       this.txActivity = 1;
       this.onSerial?.(String.fromCharCode(b));
+    };
+    this.twi = new AVRTWI(this.cpu, board.twi, CLOCK_HZ);
+    const finish = (bits: number, operation: () => void) => {
+      this.cpu.addClockEvent(() => { operation(); this.pinsChanged = true; }, Math.max(1, Math.round(bits * CLOCK_HZ / this.twi.sclFrequency)));
+    };
+    this.twi.eventHandler = {
+      start: (repeated) => finish(1, () => { this.i2c?.start(repeated); this.twi.completeStart(); }),
+      stop: () => finish(1, () => { this.i2c?.stop(); this.twi.completeStop(); }),
+      connectToSlave: (address, write) => finish(9, () => this.twi.completeConnect(this.i2c?.connect(address, write) ?? false)),
+      writeByte: (value) => finish(9, () => this.twi.completeWrite(this.i2c?.write(value) ?? false)),
+      readByte: () => finish(9, () => this.twi.completeRead(this.i2c?.read() ?? 0xff)),
     };
   }
 

@@ -10,6 +10,7 @@ import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './m
 import { CHIPS } from './chips';
 import { oscilloscope } from './scope';
 import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
+import { lcdI2c, pcf8574, pcf8574a } from './i2c';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -25,6 +26,7 @@ export const PART_LIST: PartDef[] = [
   ledBar,
   sevenSegment,
   lcd1602,
+  lcdI2c,
   relay,
   buzzer,
   servo,
@@ -43,6 +45,8 @@ export const PART_LIST: PartDef[] = [
   mosfet,
   npn,
   ...CHIPS,
+  pcf8574,
+  pcf8574a,
   benchSupply,
   battery9v,
   aaPack,

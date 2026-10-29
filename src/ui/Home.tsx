@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { UserButton } from '@clerk/react';
 import { CLOUD, api, type ProjectSummary } from '../cloud';
 import { CircuitBoard, Clock, FolderClosed, House, LayoutTemplate, Loader2, LogOut, Plus, Search, Trash2, Users, X } from 'lucide-react';
-import { TEMPLATES } from '../collab/templates';
+import { TEMPLATES, type Template } from '../collab/templates';
 import { templateSnapshot } from '../collab/applyTemplate';
 import { localUser } from '../collab/project';
 import type { CircuitSnapshot } from '../core/types';
@@ -48,12 +48,22 @@ function ago(at: number) {
 }
 
 type View = 'home' | 'templates' | 'projects';
+type Level = Template['level'] | 'all';
+
+const CATEGORIES: { id: Template['category']; title: string; blurb: string }[] = [
+  { id: 'Lógica secuencial', title: 'Lógica secuencial', blurb: 'Contadores, divisores de frecuencia y luces, repartidos en varias protoboards encadenadas.' },
+  { id: 'Arduino', title: 'Con Arduino', blurb: 'Una placa Uno sobre la protoboard y el código que la gobierna.' },
+  { id: 'Fundamentos', title: 'Fundamentos', blurb: 'Circuitos sin código para medir y entender qué pasa.' },
+];
+
+const LEVELS: Level[] = ['all', 'Básico', 'Intermedio', 'Avanzado'];
 
 export function Home() {
   const [recent, setRecent] = useState<Recent[]>(() => (CLOUD ? [] : readRecent()));
   const [loading, setLoading] = useState(CLOUD);
   const [busy, setBusy] = useState<string | null>(null);
   const [view, setView] = useState<View>('home');
+  const [level, setLevel] = useState<Level>('all');
 
   useEffect(() => {
     if (!CLOUD) return;
@@ -84,11 +94,19 @@ export function Home() {
   const [query, setQuery] = useState('');
   const user = useMemo(localUser, []);
   const previews = useMemo(() => new Map(TEMPLATES.map((t) => [t.id, templateSnapshot(t)])), []);
+  const boards = useMemo(() => new Map(TEMPLATES.map((t) => [t.id, t.parts.filter((p) => p.type.startsWith('breadboard')).length])), []);
 
   const q = query.trim().toLowerCase();
-  const templates = TEMPLATES.filter((t) => !q || `${t.name} ${t.summary}`.toLowerCase().includes(q));
+  const groups = CATEGORIES.map((c) => ({
+    ...c,
+    items: TEMPLATES.filter((t) => t.category === c.id && (level === 'all' || t.level === level) && (!q || `${t.name} ${t.summary} ${t.category}`.toLowerCase().includes(q))),
+  })).filter((g) => g.items.length > 0);
   const projects = recent.filter((r) => !q || r.name.toLowerCase().includes(q));
   const open = (url: string) => (location.href = url);
+
+  const heading = view === 'projects' ? 'Mis circuitos' : view === 'templates' ? 'Plantillas' : 'Circuitos';
+  const lede =
+    view === 'projects' ? 'Los abiertos en este equipo. Comparte el enlace para editar en equipo.' : view === 'templates' ? 'Montajes que ya funcionan: ábrelos, míralos correr y cámbialos.' : 'Empieza en blanco o parte de un montaje que ya funciona.';
 
   return (
     <div className="home">
@@ -141,52 +159,30 @@ export function Home() {
             </button>
           </div>
 
-          <h1>{view === 'projects' ? 'Mis circuitos' : view === 'templates' ? 'Plantillas' : 'Circuitos'}</h1>
-          <p className="lede">{view === 'projects' ? 'Los abiertos en este equipo. Comparte el enlace para editar en equipo.' : 'Empieza en blanco o parte de un montaje que ya funciona.'}</p>
+          <h1>{heading}</h1>
+          <p className="lede">{lede}</p>
 
-          {view !== 'projects' && (
-            <section className="home-section">
-              <div className="section-head">
-                <h2>Empezar</h2>
-                <span className="eyebrow">{templates.length + 1} opciones</span>
-              </div>
-              <div className="tpl-grid">
-                {!q && (
-                  <button className="tpl blank" onClick={() => create()} disabled={busy !== null}>
-                    <div className="tpl-art">
-                      <span className="blank-plus">
-                        <Plus size={22} />
-                      </span>
-                    </div>
-                    <div className="tpl-body">
-                      <strong>Lienzo en blanco</strong>
-                      <span>Protoboard y componentes a tu gusto.</span>
-                    </div>
-                  </button>
-                )}
-                {templates.map((t) => (
-                  <button key={t.id} className="tpl" onClick={() => create(t.id, t.name)} disabled={busy !== null}>
-                    <div className="tpl-art">
-                      <CircuitPreview snapshot={previews.get(t.id)!} />
-                      <span className="pill">
-                        {busy === t.id ? <Loader2 size={11} style={{ animation: 'spin 0.8s linear infinite' }} /> : <CircuitBoard size={11} />} {t.level}
-                      </span>
-                    </div>
-                    <div className="tpl-body">
-                      <strong>{t.name}</strong>
-                      <span>{t.summary}</span>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </section>
+          {view !== 'projects' && !q && (
+            <button className="blank-row" onClick={() => create()} disabled={busy !== null}>
+              <span className="blank-plus">{busy === 'blank' ? <Loader2 size={20} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Plus size={22} />}</span>
+              <span className="blank-text">
+                <strong>Lienzo en blanco</strong>
+                <span>Una protoboard vacía y todo el catálogo de componentes a tu gusto.</span>
+              </span>
+            </button>
           )}
 
           {view !== 'templates' && (
             <section className="home-section">
               <div className="section-head">
-                <h2>Recientes</h2>
-                {projects.length > 0 && <span className="eyebrow">{projects.length} circuitos</span>}
+                <h2>{view === 'home' ? 'Recientes' : 'Todos tus circuitos'}</h2>
+                {view === 'home' && projects.length > 4 ? (
+                  <button className="link-btn" onClick={() => setView('projects')}>
+                    Ver los {projects.length}
+                  </button>
+                ) : (
+                  projects.length > 0 && <span className="eyebrow">{projects.length} circuitos</span>
+                )}
               </div>
               {projects.length === 0 ? (
                 <div className="empty-projects">
@@ -195,7 +191,7 @@ export function Home() {
                 </div>
               ) : (
                 <div className="tpl-grid">
-                  {projects.map((r) => (
+                  {(view === 'home' ? projects.slice(0, 4) : projects).map((r) => (
                     <a key={r.room} className="tpl" href={`?p=${r.room}`} style={{ textDecoration: 'none', color: 'inherit' }}>
                       <div className="tpl-art">
                         {r.snapshot && r.snapshot.parts.length > 0 ? <CircuitPreview snapshot={r.snapshot} /> : null}
@@ -230,6 +226,55 @@ export function Home() {
                 </div>
               )}
             </section>
+          )}
+
+          {view !== 'projects' && (
+            <>
+              {view === 'templates' && (
+                <div className="filter-row" role="group" aria-label="Nivel">
+                  {LEVELS.map((l) => (
+                    <button key={l} className="filter" aria-pressed={level === l} onClick={() => setLevel(l)}>
+                      {l === 'all' ? 'Todos los niveles' : l}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {groups.map((g) => (
+                <section key={g.id} className="home-section">
+                  <div className="section-head">
+                    <div>
+                      <h2>{g.title}</h2>
+                      <p className="section-blurb">{g.blurb}</p>
+                    </div>
+                    <span className="eyebrow">
+                      {g.items.length} {g.items.length === 1 ? 'plantilla' : 'plantillas'}
+                    </span>
+                  </div>
+                  <div className="tpl-grid">
+                    {g.items.map((t) => (
+                      <button key={t.id} className={`tpl ${boards.get(t.id)! > 1 ? 'wide' : ''}`} onClick={() => create(t.id, t.name)} disabled={busy !== null}>
+                        <div className="tpl-art">
+                          <CircuitPreview snapshot={previews.get(t.id)!} />
+                          <span className="pill">
+                            {busy === t.id ? <Loader2 size={11} style={{ animation: 'spin 0.8s linear infinite' }} /> : <CircuitBoard size={11} />} {t.level}
+                          </span>
+                        </div>
+                        <div className="tpl-body">
+                          <strong>{t.name}</strong>
+                          <span>{t.summary}</span>
+                          {boards.get(t.id)! > 1 && <em className="tpl-meta">{boards.get(t.id)} protoboards en serie</em>}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              ))}
+              {groups.length === 0 && (
+                <div className="empty-projects" style={{ marginTop: 32 }}>
+                  <LayoutTemplate size={18} /> Ninguna plantilla coincide con la búsqueda.
+                </div>
+              )}
+            </>
           )}
         </div>
       </main>

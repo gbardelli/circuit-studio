@@ -77,12 +77,12 @@ function BrandScene({ loading }: { loading: boolean }) {
   return <>
     <div className="brand-grain" aria-hidden="true" />
     <div className="brand-lockup" aria-hidden="true">
-      <svg className="brand-signal" viewBox="4 7 26 18" fill="none">
-        <path className="brand-signal-base" d="M6 20h4v-8h5v8h4v-8h3" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-        <path className="brand-signal-path" pathLength="1" d="M6 20h4v-8h5v8h4v-8h3" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" />
-        <circle className="brand-signal-node" cx="25" cy="12" r="2" />
+      <svg className="brand-signal" viewBox="2 8 38 24" fill="none">
+        <path className="brand-signal-base" d="M5 27h8V13h8v14h8V13h6" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path className="brand-signal-path" pathLength="1" d="M5 27h8V13h8v14h8V13h6" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+        <circle className="brand-signal-node" cx="35" cy="13" r="2.6" />
       </svg>
-      <span className="brand-name">CircuitStudio</span>
+      <span className="brand-name">circuit<b>studio</b></span>
     </div>
     {loading && <span className="brand-loading" aria-hidden="true">Preparando tu espacio</span>}
   </>;

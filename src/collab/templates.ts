@@ -2,6 +2,7 @@
 // Protoboard de 400 en (320,−10): columna c → x = 350 + 10·(c−1); filas a–e = 50–90,
 // f–j = 120–160; rieles + = 10 / 190, − = 20 / 200 (sin orificio en las columnas 6, 12, 18…).
 import type { Props, Rotation, Vec } from '../core/types';
+import { SEQUENTIAL } from './sequential';
 
 export interface TemplatePart {
   key: string;
@@ -23,7 +24,9 @@ export interface Template {
   id: string;
   name: string;
   summary: string;
-  level: 'Básico' | 'Intermedio';
+  level: 'Básico' | 'Intermedio' | 'Avanzado';
+  /** Con qué se monta: la portada agrupa por esto. */
+  category: 'Arduino' | 'Fundamentos' | 'Lógica secuencial';
   parts: TemplatePart[];
   wires: TemplateWire[];
   sketch?: string;
@@ -44,12 +47,13 @@ const POWER: TemplateWire[] = [
   { a: ['uno', 'GND.2'], b: ['bb', 'bn1'], points: [{ x: 130, y: 234 }, { x: 330, y: 234 }, { x: 330, y: 200 }], color: BLACK },
 ];
 
-export const TEMPLATES: Template[] = [
+const SIMPLE: Template[] = [
   {
     id: 'blink',
     name: 'Parpadeo',
     summary: 'Un LED en el pin 13 que se enciende cada medio segundo.',
     level: 'Básico',
+    category: 'Arduino',
     parts: [UNO, BB, { key: 'led', type: 'led', x: 470, y: 120, props: { color: 'red' } }, { key: 'r', type: 'resistor', x: 480, y: 160, props: { resistance: 220 } }],
     wires: [
       ...POWER,
@@ -75,6 +79,7 @@ void loop() {
     name: 'Semáforo',
     summary: 'Tres LEDs con su ciclo de rojo, verde y ámbar.',
     level: 'Básico',
+    category: 'Arduino',
     parts: [
       UNO,
       BB,
@@ -124,6 +129,7 @@ void loop() {
     name: 'Pulsador y LED',
     summary: 'Lee un pulsador con resistencia interna de pull-up.',
     level: 'Básico',
+    category: 'Arduino',
     parts: [
       UNO,
       BB,
@@ -159,6 +165,7 @@ void loop() {
     name: 'Atenuador PWM',
     summary: 'El potenciómetro regula el brillo del LED por PWM.',
     level: 'Intermedio',
+    category: 'Arduino',
     parts: [
       UNO,
       BB,
@@ -197,6 +204,7 @@ void loop() {
     name: 'Servo con potenciómetro',
     summary: 'El ángulo del servo sigue al mando.',
     level: 'Intermedio',
+    category: 'Arduino',
     parts: [UNO, BB, { key: 'pot', type: 'potentiometer', x: 550, y: 120, props: { resistance: 10000, position: 0.3 } }, { key: 'servo', type: 'servo', x: 700, y: 150 }],
     wires: [
       ...POWER,
@@ -229,6 +237,7 @@ void loop() {
     name: 'Divisor de tensión',
     summary: 'Pila de 9 V, dos resistencias y un multímetro. Sin código.',
     level: 'Básico',
+    category: 'Fundamentos',
     parts: [
       { key: 'bb', type: 'breadboard-half', x: 0, y: 0, props: { cols: 30 } },
       { key: 'bat', type: 'battery-9v', x: -60, y: 130 },
@@ -247,3 +256,5 @@ void loop() {
     ],
   },
 ];
+
+export const TEMPLATES: Template[] = [...SIMPLE, ...SEQUENTIAL];

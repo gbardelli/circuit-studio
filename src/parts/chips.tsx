@@ -29,6 +29,8 @@ export interface ChipSpec<S = Record<string, number>> {
   vcc: string | null;
   gnd: string;
   outputs: string[];
+  inputThresholds?: { low: number; high: number };
+  minSupply?: number;
   /** Salidas de colector abierto: solo tiran a tierra. */
   openDrain?: boolean;
   /** Alimentación de la que salen los niveles altos (si no es vcc). */
@@ -66,7 +68,7 @@ function pinIds(names: string[]) {
 }
 
 /** Patilla 1 abajo a la izquierda (muesca a la izquierda), numeración en sentido antihorario. */
-function dipPins(spec: Pick<ChipSpec<unknown>, 'pins' | 'desc'>): PinDef[] {
+export function dipPins(spec: Pick<ChipSpec<unknown>, 'pins' | 'desc'>): PinDef[] {
   const ids = pinIds(spec.pins);
   const half = spec.pins.length / 2;
   return spec.pins.map((name, i) => {
@@ -104,7 +106,7 @@ function describe(name: string): string {
 }
 
 // ── Encapsulado ─────────────────────────────────────────────────────────────────
-function DipBody({ count, part, maker }: { count: number; part: string; maker: string }) {
+export function DipBody({ count, part, maker }: { count: number; part: string; maker: string }) {
   const half = count / 2;
   const w = (half - 1) * PITCH + 10;
   return (
@@ -185,7 +187,7 @@ function chipSim<S>(spec: ChipSpec<S>) {
           const at = (n: number) => (n < 0 ? 0 : v[n]);
           const ref = at(gnd);
           const supply = spec.vcc ? at(vcc) - ref : 5;
-          const on = supply > 1.6;
+          const on = supply >= (spec.minSupply ?? 1.6);
           if (!on) {
             if (powered) {
               powered = false;
@@ -200,7 +202,7 @@ function chipSim<S>(spec: ChipSpec<S>) {
           for (const n of inputs) {
             const volts = at(net(n)) - ref;
             prev[n] = now[n] ?? false;
-            now[n] = prev[n] ? volts > 0.35 * span : volts > 0.55 * span; // histéresis
+            now[n] = prev[n] ? volts > (spec.inputThresholds?.low ?? 0.35 * span) : volts > (spec.inputThresholds?.high ?? 0.55 * span);
           }
           if (!powered) for (const n of inputs) prev[n] = now[n]; // al encender no hay flancos
           powered = true;
@@ -261,6 +263,8 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
 
 /** 74HC00 también se encuentra como 7400, 74LS00, 74HCT00, SN74HC00… */
 function aliases(part: string) {
+  if (part === '7473') return ['sn7473', 'pulse triggered', 'maestro esclavo'];
+  if (part === '74LS73A') return ['sn74ls73a', 'ls73a', 'negative edge'];
   const m = /^74[A-Z]*(\d+)$/.exec(part);
   if (m) return [`74${m[1]}`, `74ls${m[1]}`, `74hc${m[1]}`, `74hct${m[1]}`, `sn74hc${m[1]}`];
   const c = /^CD(\d+)/.exec(part);
@@ -1033,10 +1037,118 @@ const ne555Def: PartDef = (() => {
 })();
 
 // ── Catálogo ────────────────────────────────────────────────────────────────────
+// Legacy packages in the course diagrams. TTL thresholds do not apply to HC parts.
+const LEGACY = { ...TTL, inputThresholds: { low: 0.8, high: 2 }, minSupply: 4.5 };
+function jk73(edgeTriggered: boolean): ChipSpec<{ q: number[]; master: number[] }> {
+  return {
+    type: edgeTriggered ? '74ls73a' : '7473',
+    part: edgeTriggered ? '74LS73A' : '7473',
+    name: edgeTriggered ? 'Dos biestables JK por flanco' : 'Dos biestables JK maestro-esclavo',
+    family: FF,
+    description: edgeTriggered
+      ? 'JK por flanco de bajada, con borrado asíncrono activo bajo. Patillaje DIP-14 de la familia 73.'
+      : 'JK maestro-esclavo: captura durante el nivel alto y transfiere al bajar el reloj. Mantén J/K estables durante el pulso alto. VCC en patilla 4 y GND en 11.',
+    keywords: [edgeTriggered ? 'sn74ls73a' : 'sn7473', 'jk', 'flip flop', 'contador', 'gtx', 'reset', 'secuencial'],
+    pins: ['1CLK', '1CLR', '1K', 'VCC', '2CLK', '2CLR', '2J', '2QN', '2Q', '2K', 'GND', '1QN', '1Q', '1J'],
+    desc: Object.fromEntries([1, 2].flatMap((n) => [
+      [`${n}CLK`, edgeTriggered ? 'Reloj: flanco de bajada' : 'Captura J/K en alto; transfiere Q al bajar'],
+      [`${n}CLR`, 'Borrado asíncrono activo bajo; fuerza Q a 0'],
+      [`${n}J`, 'J: pone a uno; con K alto alterna'], [`${n}K`, 'K: pone a cero; con J alto alterna'],
+      [`${n}Q`, `Salida Q del biestable ${n}`], [`${n}QN`, `Salida complementaria del biestable ${n}`],
+    ])),
+    ...LEGACY,
+    outputs: ['1Q', '1QN', '2Q', '2QN'],
+    init: () => ({ q: [0, 0], master: [0, 0] }),
+    evaluate(io, state) {
+      const out: Record<string, Level> = {};
+      for (const n of [1, 2]) {
+        const i = n - 1;
+        const next = () => io.v(`${n}J`) ? (io.v(`${n}K`) ? state.q[i] ^ 1 : 1) : (io.v(`${n}K`) ? 0 : state.q[i]);
+        if (!io.v(`${n}CLR`)) state.q[i] = state.master[i] = 0;
+        else if (edgeTriggered) { if (io.fall(`${n}CLK`)) state.q[i] = next(); }
+        else {
+          if (io.v(`${n}CLK`)) state.master[i] = next();
+          if (io.fall(`${n}CLK`)) state.q[i] = state.master[i];
+        }
+        out[`${n}Q`] = Boolean(state.q[i]);
+        out[`${n}QN`] = !state.q[i];
+      }
+      return out;
+    },
+  };
+}
+const latch75: ChipSpec<{ q: number[] }> = {
+  type: '7475', part: '7475', name: 'Memoria de 4 latches D', family: FF,
+  description: 'Cuatro latches transparentes con Q y Q invertida. LE12 controla bits 1–2 y LE34 bits 3–4. VCC en patilla 5 y GND en 12.',
+  keywords: ['sn7475', 'memoria', 'latch', '4 bits', 'gtx', 'tx', 'rx', 'enable'],
+  pins: ['1QN', '1D', '2D', 'LE34', 'VCC', '3D', '4D', '4QN', '4Q', '3Q', '3QN', 'GND', 'LE12', '2QN', '2Q', '1Q'],
+  desc: {
+    LE12: 'Habilitación activa alta de los latches 1 y 2. Bajo: retiene sus datos',
+    LE34: 'Habilitación activa alta de los latches 3 y 4. Bajo: retiene sus datos',
+    ...Object.fromEntries([1, 2, 3, 4].flatMap((n) => [
+      [`${n}D`, `Entrada de dato del latch ${n}`], [`${n}Q`, `Dato almacenado del latch ${n}`], [`${n}QN`, `Complemento del dato del latch ${n}`],
+    ])),
+  },
+  ...LEGACY, outputs: [1, 2, 3, 4].flatMap((n) => [`${n}Q`, `${n}QN`]),
+  init: () => ({ q: [0, 0, 0, 0] }),
+  evaluate(io, state) {
+    const out: Record<string, Level> = {};
+    for (const n of [1, 2, 3, 4]) {
+      if (io.v(n <= 2 ? 'LE12' : 'LE34')) state.q[n - 1] = Number(io.v(`${n}D`));
+      out[`${n}Q`] = Boolean(state.q[n - 1]); out[`${n}QN`] = !state.q[n - 1];
+    }
+    return out;
+  },
+};
+const mux153: ChipSpec<Record<string, never>> = {
+  type: '74153', part: '74153', name: 'Dos multiplexores 4 a 1', family: COMB,
+  description: 'Dos multiplexores de cuatro entradas comparten A/B. Cada canal tiene habilitación G activa baja; deshabilitado fuerza su salida a cero.',
+  keywords: ['sn74153', 'mux', 'multiplexor', '4 a 1', 'selector', 'gtx'],
+  pins: ['1G', 'B', '1C3', '1C2', '1C1', '1C0', '1Y', 'GND', '2Y', '2C0', '2C1', '2C2', '2C3', 'A', '2G', 'VCC'],
+  desc: { A: 'Selección compartida, bit menos significativo', B: 'Selección compartida, bit más significativo',
+    ...Object.fromEntries([1, 2].flatMap((n) => [
+      [`${n}G`, `Habilitación del canal ${n}, activa baja. Alto: salida a cero`], [`${n}Y`, `Salida del canal ${n}`],
+      ...[0, 1, 2, 3].map((i) => [`${n}C${i}`, `Dato ${i} del canal ${n}`]),
+    ])),
+  },
+  ...LEGACY, outputs: ['1Y', '2Y'], init: () => ({}),
+  evaluate(io) {
+    const selected = bits(io, ['A', 'B']);
+    return { '1Y': !io.v('1G') && io.v(`1C${selected}`), '2Y': !io.v('2G') && io.v(`2C${selected}`) };
+  },
+};
+const encoder148: ChipSpec<Record<string, never>> = {
+  type: '74hc148', part: '74HC148', name: 'Codificador prioritario 8 a 3', family: COMB,
+  description: 'Entradas y salidas activas bajas. La entrada de mayor índice tiene prioridad. EI habilita; GS indica un dato válido y EO permite cascada.',
+  keywords: ['encoder', 'codificador', 'prioridad', '8 a 3', 'ascensor', 'teclado'],
+  pins: ['I4', 'I5', 'I6', 'I7', 'EI', 'A2', 'A1', 'GND', 'A0', 'I0', 'I1', 'I2', 'I3', 'GS', 'EO', 'VCC'],
+  desc: { EI: 'Habilitación activa baja', EO: 'Baja si está habilitado y no hay ninguna entrada activa', GS: 'Baja si hay una entrada activa y está habilitado',
+    ...Object.fromEntries([0, 1, 2].map((i) => [`A${i}`, `Bit ${i} del código binario invertido`])),
+    ...Object.fromEntries([0, 1, 2, 3, 4, 5, 6, 7].map((i) => [`I${i}`, `Entrada ${i}, activa baja. Mayor índice: mayor prioridad`])),
+  },
+  ...TTL, outputs: ['A0', 'A1', 'A2', 'GS', 'EO'], init: () => ({}),
+  evaluate(io) {
+    let selected = -1;
+    if (!io.v('EI')) for (let i = 0; i < 8; i++) if (!io.v(`I${i}`)) selected = i;
+    return { ...outBits(['A0', 'A1', 'A2'], selected < 0 ? 7 : (~selected & 7)), GS: selected < 0, EO: io.v('EI') || selected >= 0 };
+  },
+};
+
 export const CHIPS: PartDef[] = [
   ...gateChips.map((spec) => chipDef(spec)),
   chipDef(buffer125),
   ...cmosGates.map((spec) => chipDef(spec)),
+  chipDef(jk73(false)),
+  chipDef(jk73(true)),
+  chipDef(latch75),
+  chipDef({ ...latch75, type: '74ls75', part: '74LS75', keywords: ['sn74ls75', ...latch75.keywords] }),
+  chipDef(mux153),
+  chipDef({ ...mux153, type: '74hc153', part: '74HC153', inputThresholds: undefined, minSupply: undefined }),
+  chipDef({ ...mux153, type: '74ls153', part: '74LS153' }),
+  chipDef({ ...dec138, ...LEGACY, type: '74138', part: '74138' }),
+  chipDef({ ...dec138, ...LEGACY, type: '74ls138', part: '74LS138' }),
+  chipDef(encoder148),
+  chipDef({ ...encoder148, ...LEGACY, type: '74148', part: '74148' }),
   chipDef(ff74),
   chipDef(ff112),
   chipDef(latch373),

@@ -372,7 +372,8 @@ export const relay: PartDef = {
 // ── Pantalla LCD 16×2 (HD44780) ─────────────────────────────────────────────
 const LCD_PINS = ['VSS', 'VDD', 'V0', 'RS', 'RW', 'E', 'D0', 'D1', 'D2', 'D3', 'D4', 'D5', 'D6', 'D7', 'A', 'K'];
 
-const LcdRender = memo(function LcdRender({ part, visual }: RenderProps) {
+export const LcdRender = memo(function LcdRender({ part, visual }: RenderProps) {
+  const serial = part.type === 'lcd-i2c';
   const blue = part.props.color === 'blue';
   const on = Boolean(visual?.on);
   const light = Number(visual?.backlight ?? 0);
@@ -382,7 +383,7 @@ const LcdRender = memo(function LcdRender({ part, visual }: RenderProps) {
   const cell = blue ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)';
   return (
     <g>
-      {LCD_PINS.map((id, i) => (
+      {!serial && LCD_PINS.map((id, i) => (
         <g key={id}>
           <Leg x={i * 10} y0={-8} y1={0} />
         </g>
@@ -419,12 +420,20 @@ const LcdRender = memo(function LcdRender({ part, visual }: RenderProps) {
           }),
         )}
       <g fontSize="3.4" fill="#e3f5e8" textAnchor="middle" fontFamily={FONT}>
-        {LCD_PINS.map((id, i) => (
+        {!serial && LCD_PINS.map((id, i) => (
           <text key={id} x={i * 10} y={-12}>
             {id}
           </text>
         ))}
       </g>
+      {serial && <g>
+        <rect x={-35} y={-107} width={12} height={44} rx={1} fill="url(#g-header)" />
+        {['GND', 'VCC', 'SDA', 'SCL'].map((pin, i) => <g key={pin}>
+          <path d={`M-40 ${-100 + i * 10}h15`} stroke="url(#g-metal)" strokeWidth={2.4} />
+          <text x={-21} y={-98.5 + i * 10} fontSize={3.5} fill="#e3f5e8" fontFamily={FONT}>{pin}</text>
+        </g>)}
+        <text x={14} y={-20} fontSize={5} fill="#e3f5e8" fontFamily={FONT}>I²C · PCF8574 · {String(part.props.address ?? '0x27')}</text>
+      </g>}
     </g>
   );
 });
