@@ -2,7 +2,7 @@ import type { FC } from 'react';
 import type { Element } from '../core/solver';
 import type { PartData, PinDef, Props } from '../core/types';
 
-export type Category = 'Placas' | 'Protoboards' | 'Básicos' | 'Salidas' | 'Entradas' | 'Semiconductores' | 'Energía' | 'Instrumentos';
+export type Category = 'Placas' | 'Protoboards' | 'Básicos' | 'Salidas' | 'Entradas' | 'Semiconductores' | 'Lógica' | 'Integrados' | 'Energía' | 'Instrumentos';
 
 export interface Bounds {
   x: number;
@@ -84,6 +84,10 @@ export interface PartDef {
   type: string;
   mcu?: McuSpec;
   name: string;
+  /** Referencia del fabricante (74HC00, NE555…): se muestra en la tarjeta y se busca. */
+  partNumber?: string;
+  /** Subgrupo dentro de la categoría (Puertas lógicas, Contadores…). */
+  family?: string;
   category: Category;
   description: string;
   keywords: string[];

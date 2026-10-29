@@ -1,8 +1,8 @@
 import { memo } from 'react';
 import type { PinDef } from '../core/types';
 import type { McuSpec, PartDef, RenderProps } from './types';
-import { BOTTOM_HEADER, HEADER_Y, Header, TOP_HEADER, mcuSim } from './arduino';
-import { Glow } from './common';
+import { BOTTOM_HEADER, HEADER_Y, Header, TOP_HEADER, mcuSim, describeMcuPin } from './arduino';
+import { Glow, Smd } from './common';
 
 const FONT = 'Geist, sans-serif';
 const range = (n: number, f: (i: number) => string) => Array.from({ length: n }, (_, i) => f(i));
@@ -14,8 +14,8 @@ const NANO_BOTTOM = ['D13', '3V3', 'AREF', 'A0', 'A1', 'A2', 'A3', 'A4', 'A5', '
 const nanoLabel = (id: string) => ({ 'GND.1': 'GND', 'GND.2': 'GND', 'RST.1': 'RST', 'RST.2': 'RST', D0: 'RX0', D1: 'TX1', '3V3': '3V3', AREF: 'REF' })[id] ?? id.replace(/^D/, 'D');
 
 const NANO_PINS: PinDef[] = [
-  ...NANO_TOP.map((id, i) => ({ id, x: i * 10, y: 0, kind: 'leg' as const, label: nanoLabel(id) })),
-  ...NANO_BOTTOM.map((id, i) => ({ id, x: i * 10, y: 60, kind: 'leg' as const, label: nanoLabel(id) })),
+  ...NANO_TOP.map((id, i) => ({ id, x: i * 10, y: 0, kind: 'leg' as const, label: nanoLabel(id), desc: describeMcuPin(id, 'nano') })),
+  ...NANO_BOTTOM.map((id, i) => ({ id, x: i * 10, y: 60, kind: 'leg' as const, label: nanoLabel(id), desc: describeMcuPin(id, 'nano') })),
 ];
 
 const NANO_MCU: McuSpec = {
@@ -33,9 +33,14 @@ const NanoRender = memo(function NanoRender({ visual }: RenderProps) {
     <g>
       <g filter="url(#f-shadow)">
         <rect x={-8} y={-7} width={156} height={74} rx={3} fill="#1d4fa6" stroke="#123a80" strokeWidth={0.8} />
+        <rect x={-7} y={-6} width={154} height={72} rx={2.5} fill="url(#g-sheen)" />
+        <rect x={-7} y={-6} width={154} height={72} rx={2.5} fill="url(#p-epoxy)" opacity="0.6" />
+        <path d="M-6 -5h151M-6 -5v70" stroke="#91b0d1" strokeOpacity="0.45" strokeWidth="0.5" />
       </g>
       {/* mini-USB */}
       <rect x={-22} y={20} width={20} height={20} rx={2} fill="url(#g-metal)" stroke="#6b7177" strokeWidth={0.6} />
+      <rect x={-21} y={21} width={18} height={18} rx={1.5} fill="url(#p-brushed)" />
+      <path d="M-17 22h9v3h-9zM-17 35h9v3h-9z" fill="#6c777e" opacity="0.65" />
       <rect x={-21} y={25} width={4} height={10} fill="#2a2d31" />
       {/* ATmega328P TQFP */}
       <g transform="rotate(45 62 30)">
@@ -51,6 +56,7 @@ const NanoRender = memo(function NanoRender({ visual }: RenderProps) {
         <circle cx={54} cy={22} r={1} fill="#2c2e33" />
       </g>
       {/* cristal, botón de reset */}
+      {[[34,14],[37,43],[86,16],[105,40],[131,42],[89,37]].map(([x,y],i) => <Smd key={i} x={x} y={y} ceramic={i%2===0} vertical={i%3===0} />)}
       <rect x={90} y={24} width={14} height={7} rx={3.5} fill="url(#g-metal-v)" />
       <rect x={112} y={22} width={14} height={14} rx={1.5} fill="url(#g-metal)" />
       <circle cx={119} cy={29} r={4} fill="#e8e8ea" />
@@ -136,7 +142,7 @@ const MEGA_PINS: PinDef[] = [
   ...[...TOP_HEADER, ...MEGA_COMM].map(([id, x, label]) => ({ id, x, y: HEADER_Y.top, kind: 'socket' as const, label })),
   ...MEGA_BOTTOM.map(([id, x, label]) => ({ id, x, y: HEADER_Y.bottom, kind: 'socket' as const, label })),
   ...MEGA_SIDE,
-];
+].map((pin) => ({ ...pin, desc: describeMcuPin(pin.id, 'mega') }));
 
 const MEGA_MCU: McuSpec = {
   board: 'mega',
@@ -155,6 +161,8 @@ const MegaRender = memo(function MegaRender({ visual }: RenderProps) {
     <g>
       <g filter="url(#f-shadow)">
         <path d="M4 0 H392 L400 8 V202 L392 210 H4 Q0 210 0 206 V4 Q0 0 4 0 Z" fill="url(#g-pcb)" stroke="#06555b" strokeWidth={1} />
+        <path d="M4 0 H392 L400 8 V202 L392 210 H4 Q0 210 0 206 V4 Q0 0 4 0 Z" fill="url(#p-epoxy)" opacity="0.5" />
+        <path d="M5 1.5h386l7.5 7.5M1.5 5v199" stroke="#83c5c3" strokeOpacity="0.5" strokeWidth="0.7" fill="none" />
       </g>
       {[
         [14, 104],
@@ -168,6 +176,9 @@ const MegaRender = memo(function MegaRender({ visual }: RenderProps) {
         </g>
       ))}
       <rect x={-8} y={30} width={46} height={40} rx={2} fill="url(#g-metal)" stroke="#6b7177" strokeWidth={0.8} />
+      <rect x={-7} y={31} width={44} height={38} rx={1.5} fill="url(#p-brushed)" />
+      <path d="M42 103h56l19 19h25M239 81h48l18 -18h45M245 115h46l17 17h42M245 128h38l24 24h43M177 151v14h-55M56 124h42l10 10h29" stroke="#69b2ad" strokeWidth="0.7" opacity="0.4" fill="none" />
+      {[[48,93],[50,115],[60,140],[82,142],[100,56],[123,57],[146,57],[258,83],[277,97],[254,141],[281,152],[314,83],[332,111],[318,145]].map(([x,y],i) => <Smd key={i} x={x} y={y} ceramic={i%3===0} vertical={i%2===0} />)}
       <rect x={-8} y={38} width={10} height={24} fill="#5d646b" />
       <rect x={-6} y={146} width={44} height={36} rx={3} fill="url(#g-black-plastic)" />
       <circle cx={6} cy={164} r={7} fill="#0b0b0c" />
@@ -175,12 +186,12 @@ const MegaRender = memo(function MegaRender({ visual }: RenderProps) {
       <circle cx={27} cy={15} r={5.5} fill="#b23a2c" />
       {/* ATmega2560 TQFP-100 */}
       <g transform="rotate(45 200 112)">
-        {range(16, (i) => String(i)).map((k, i) => (
+        {range(25, (i) => String(i)).map((k, i) => (
           <g key={k} fill="url(#g-metal-v)">
-            <rect x={178 + i * 2.8} y={86} width={1.2} height={4} />
-            <rect x={178 + i * 2.8} y={134} width={1.2} height={4} />
-            <rect x={174} y={90 + i * 2.8} width={4} height={1.2} />
-            <rect x={222} y={90 + i * 2.8} width={4} height={1.2} />
+            <rect x={179 + i * 1.7} y={86} width={0.85} height={4} />
+            <rect x={179 + i * 1.7} y={134} width={0.85} height={4} />
+            <rect x={174} y={91 + i * 1.7} width={4} height={0.85} />
+            <rect x={222} y={91 + i * 1.7} width={4} height={0.85} />
           </g>
         ))}
         <rect x={178} y={90} width={44} height={44} rx={1.5} fill="url(#g-chip)" />

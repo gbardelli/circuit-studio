@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircuitBoard, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
-import { buildNetlist, pinKey } from '../core/netlist';
-import { snap, toLocal, toWorld, type PartData, type Vec, type WireData, type WireEnd } from '../core/types';
+import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
+import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
 import { PARTS } from '../parts';
 import { SCH_PREFIX } from '../parts/symbols';
@@ -16,6 +16,7 @@ interface PinHit {
   pin: string;
   pos: Vec;
   label: string;
+  desc?: string;
 }
 
 type Drag =
@@ -60,6 +61,9 @@ export function Canvas() {
   const [hoverPart, setHoverPart] = useState<string | null>(null);
   const [hoverWire, setHoverWire] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; part?: string; wire?: string } | null>(null);
+  // Selector de pin: al soltar un cable del esquema sobre el cuerpo de un símbolo.
+  const [picker, setPicker] = useState<{ x: number; y: number; part: string; at: Vec } | null>(null);
+  const showToast = useUi((s) => s.showToast);
   const [space, setSpace] = useState(false);
   const lastPresence = useRef(0);
   const fitted = useRef(false);
@@ -69,7 +73,38 @@ export function Canvas() {
   const netlist = useMemo(() => buildNetlist(snapshot, PARTS), [snapshot]);
   // Vista de esquema: símbolos «sch:» con los mismos ids; las conexiones salen de las redes.
   const sch = useMemo(() => (view === 'schematic' ? buildSchematic(snapshot, netlist) : null), [view, snapshot, netlist]);
-  const scene = useMemo(() => (sch ? { parts: sch.parts, wires: [] as WireData[] } : snapshot), [sch, snapshot]);
+  // En la protoboard, las conexiones dibujadas en el esquema no son cables físicos.
+  const boardScene = useMemo(() => (snapshot.wires.some((w) => w.sch) ? { parts: snapshot.parts, wires: snapshot.wires.filter((w) => !w.sch) } : snapshot), [snapshot]);
+  const scene = useMemo(() => (sch ? { parts: sch.parts, wires: [] as WireData[] } : boardScene), [sch, boardScene]);
+
+  /** Conexiones del esquema que la protoboard aún no hace: se muestran discontinuas. */
+  const pending = useMemo(() => {
+    if (sch) return [];
+    const schWires = snapshot.wires.filter((w) => w.sch && w.a.part && w.a.pin && w.b.part && w.b.pin);
+    if (schWires.length === 0) return [];
+    const physical = buildNetlist(boardScene, PARTS);
+    return schWires.flatMap((w) => {
+      const ka = pinKey(w.a.part!, w.a.pin!);
+      const kb = pinKey(w.b.part!, w.b.pin!);
+      const na = physical.netOf.get(ka);
+      if (na !== undefined && na === physical.netOf.get(kb)) return [];
+      const a = physical.pinWorld.get(ka);
+      const b = physical.pinWorld.get(kb);
+      return a && b ? [{ id: w.id, a, b }] : [];
+    });
+  }, [sch, snapshot, boardScene]);
+
+  /** Redes del esquema con algún cable seleccionado. */
+  const selectedNets = useMemo(() => {
+    const out = new Set<number>();
+    if (!sch) return out;
+    for (const id of wireSelection) {
+      const w = snapshot.wires.find((x) => x.id === id);
+      const n = w?.a.part && w.a.pin ? netlist.netOf.get(pinKey(w.a.part, w.a.pin)) : undefined;
+      if (n !== undefined) out.add(n);
+    }
+    return out;
+  }, [sch, wireSelection, snapshot, netlist]);
   const partsById = useMemo(() => new Map(scene.parts.map((p) => [p.id, p])), [scene]);
   const wiresById = useMemo(() => new Map(snapshot.wires.map((w) => [w.id, w])), [snapshot]);
   const z = viewport.zoom;
@@ -115,8 +150,10 @@ export function Canvas() {
     }
   }, [scene, fit]);
 
-  // Al cambiar de vista se encuadra de nuevo.
+  // Al cambiar de vista se encuadra de nuevo; un cable a medias no tiene sentido en la otra.
   useEffect(() => {
+    setDraft(null);
+    setPicker(null);
     requestAnimationFrame(fit);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
@@ -160,6 +197,7 @@ export function Canvas() {
       }
       if (e.key === 'Escape') {
         setDraft(null);
+        setPicker(null);
         setMenu(null);
         setPlacing(null);
         setDrag(null);
@@ -196,7 +234,7 @@ export function Canvas() {
           const score = d - order * 0.001 - (pin.kind === 'leg' ? 1 : 0);
           if (score < bestScore) {
             bestScore = score;
-            best = { part: p.id, pin: pin.id, pos: toWorld(p, pin), label: pin.label ?? pin.id };
+            best = { part: p.id, pin: pin.id, pos: toWorld(p, pin), label: pin.label ?? pin.id, desc: pin.desc };
           }
         }
       });
@@ -222,10 +260,10 @@ export function Canvas() {
 
   const offsets = useMemo(() => {
     const map = new Map<string, Vec>();
-    for (const peer of peers) if (peer.drag) for (const id of peer.drag.ids) map.set(id, { x: peer.drag.dx, y: peer.drag.dy });
+    for (const peer of peers) if ((peer.view ?? 'board') === view && peer.drag) for (const id of peer.drag.ids) map.set(id, { x: peer.drag.dx, y: peer.drag.dy });
     if (drag?.kind === 'parts') for (const id of drag.ids) map.set(id, { x: drag.dx, y: drag.dy });
     return map;
-  }, [peers, drag]);
+  }, [peers, drag, view]);
 
   /** Puntos de un cable con la edición en curso aplicada (codo o extremo arrastrado). */
   const livePoints = useCallback(
@@ -242,6 +280,7 @@ export function Canvas() {
   const onPointerDown = (e: React.PointerEvent) => {
     if ((e.target as Element).closest('[data-interactive]')) return;
     setMenu(null);
+    setPicker(null);
     if (e.button === 2) return;
     const w = toWorldPt(e.clientX, e.clientY);
     svgRef.current!.setPointerCapture(e.pointerId);
@@ -280,7 +319,14 @@ export function Canvas() {
 
     if (draft) {
       if (pin && !(pin.part === draft.from.part && pin.pin === draft.from.pin)) finishWire(pin);
-      else setDraft({ ...draft, points: [...draft.points, snapPoint(w, draft, e.shiftKey)] });
+      else if (!openPicker(partId, w, e.clientX, e.clientY)) setDraft({ ...draft, points: [...draft.points, snapPoint(w, draft, e.shiftKey)] });
+      return;
+    }
+
+    // En el esquema, clic en una conexión selecciona los cables que la forman.
+    const netAttr = sch && !pin ? target.closest('[data-net]')?.getAttribute('data-net') : null;
+    if (netAttr) {
+      selectNet(Number(netAttr), e.shiftKey);
       return;
     }
 
@@ -384,8 +430,13 @@ export function Canvas() {
     svgRef.current?.releasePointerCapture?.(e.pointerId);
     if (!drag) {
       if (draft && draft.points.length === 0) {
-        const pin = findPin(toWorldPt(e.clientX, e.clientY), null);
+        const w = toWorldPt(e.clientX, e.clientY);
+        const pin = findPin(w, null);
         if (pin && !(pin.part === draft.from.part && pin.pin === draft.from.pin)) finishWire(pin);
+        else if (!pin) {
+          const el = document.elementFromPoint(e.clientX, e.clientY);
+          openPicker(el?.closest('[data-part]')?.getAttribute('data-part') ?? null, w, e.clientX, e.clientY, false);
+        }
       }
       return;
     }
@@ -490,16 +541,23 @@ export function Canvas() {
   const placePart = (type: string, w: Vec, keepArmed: boolean) => {
     const def = PARTS[type];
     const b = def.bounds(def.defaults);
-    const id = project.addPart(type, snap(w.x - b.x - b.w / 2), snap(w.y - b.y - b.h / 2));
-    if (sch) project.moveSchematic([{ id, x: snap(w.x), y: snap(w.y) }]);
+    const symbol = sch ? PARTS[SCH_PREFIX + type] : def;
+    const shownBounds = symbol.bounds(symbol.defaults);
+    const at = { x: snap(w.x - shownBounds.x - shownBounds.w / 2), y: snap(w.y - shownBounds.y - shownBounds.h / 2) };
+    // A schematic placement must not silently insert pins into an existing breadboard.
+    const edge = sch ? Math.max(0, ...snapshot.parts.map((p) => { const bounds = partBounds(p); return bounds.x + bounds.w; })) : 0;
+    const id = project.addPart(type, sch ? snap(edge + 60 - b.x) : at.x, sch ? snap(-b.y) : at.y);
+    if (sch) project.moveSchematic([{ id, ...at }]);
     select([id], []);
     if (!keepArmed) setPlacing(null);
   };
 
   const finishWire = (pin: PinHit) => {
     if (!draft) return;
-    const id = project.addWire(draft.from, { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, draft.points, draft.color);
+    // Los quiebros del esquema no son puntos de la protoboard: el cable del esquema va sin ellos.
+    const id = project.addWire(draft.from, { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, sch ? [] : draft.points, draft.color, !!sch);
     setDraft(null);
+    setPicker(null);
     select([], [id]);
   };
 
@@ -517,6 +575,30 @@ export function Canvas() {
     window.addEventListener('pointerup', up);
     return () => window.removeEventListener('pointerup', up);
   }, [libDragActive, toWorldPt]);
+
+  /** Cable del esquema soltado sobre el cuerpo de un símbolo: elegir a qué pin va. */
+  const openPicker = (hit: string | null, w: Vec, clientX: number, clientY: number, allowSelf = true) => {
+    if (!sch) return false;
+    // Los símbolos son trazos finos: se busca la pieza por su caja, no por el píxel pintado.
+    const partId = hit ?? [...scene.parts].reverse().find((p) => {
+      const b = partBounds(p);
+      return w.x >= b.x && w.x <= b.x + b.w && w.y >= b.y && w.y <= b.y + b.h;
+    })?.id ?? null;
+    if (!partId || (!allowSelf && partId === draft?.from.part) || !snapshot.parts.some((p) => p.id === partId)) return false;
+    const r = svgRef.current!.getBoundingClientRect();
+    setPicker({ x: Math.max(8, Math.min(clientX - r.left, r.width - 236)), y: Math.max(8, Math.min(clientY - r.top, r.height - 330)), part: partId, at: w });
+    return true;
+  };
+
+  const selectNet = (net: number, additive: boolean) => {
+    const ids = snapshot.wires.filter((w) => w.a.part && w.a.pin && netlist.netOf.get(pinKey(w.a.part, w.a.pin)) === net).map((w) => w.id);
+    if (ids.length === 0) {
+      select([], []);
+      showToast('Esta conexión la hace la protoboard. Cámbiala en la vista Protoboard.');
+      return;
+    }
+    select(additive ? selection : [], additive ? [...new Set([...wireSelection, ...ids])] : ids);
+  };
 
   const onPartInput = useCallback(
     (part: PartData, key: string, value: number | boolean) => {
@@ -619,8 +701,8 @@ export function Canvas() {
   }, [peers]);
 
   useEffect(() => {
-    project.setPresence({ selection });
-  }, [project, selection]);
+    project.setPresence({ selection, view });
+  }, [project, selection, view]);
 
   const draftEnd = cursor && draft ? snapPoint(cursor, draft, false) : null;
   const hoverVoltage = hoverPin && simRunning ? engine.voltageAt(hoverPin.part, hoverPin.pin) : null;
@@ -651,7 +733,7 @@ export function Canvas() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${z})`}>
-          {sch && <NetLayer nets={sch.nets} />}
+          {sch && <NetLayer nets={sch.nets} selected={selectedNets} />}
           {scene.parts.map((p) => (
             <PartView key={p.id} part={p} offset={offsets.get(p.id)} onInput={onPartInput} live={simRunning} dragging={draggingIds.includes(p.id)} />
           ))}
@@ -669,13 +751,36 @@ export function Canvas() {
             ))}
           </g>
 
+          {pending.length > 0 && (
+            <g className="ratsnest" pointerEvents="none">
+              {pending.map((r) => (
+                <g key={r.id}>
+                  <line x1={r.a.x} y1={r.a.y} x2={r.b.x} y2={r.b.y} stroke="var(--sch-wire)" strokeWidth={1.2 / Math.max(z, 0.6)} strokeDasharray={`${5 / Math.max(z, 0.6)} ${4 / Math.max(z, 0.6)}`} strokeLinecap="round" />
+                  <circle cx={r.a.x} cy={r.a.y} r={2.2} fill="none" stroke="var(--sch-wire)" strokeWidth={1} />
+                  <circle cx={r.b.x} cy={r.b.y} r={2.2} fill="none" stroke="var(--sch-wire)" strokeWidth={1} />
+                </g>
+              ))}
+            </g>
+          )}
+
           <g className="wires">
             {scene.wires.map((w) => (
               <WireView key={w.id} wire={w} points={livePoints(w)} z={z} selected={wireSelection.includes(w.id)} hovered={hoverWire === w.id && !drag} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
             ))}
           </g>
 
-          {draft && draftEnd && (
+          {draft && draftEnd && sch && (
+            <path
+              d={roundedPath([{ x: draft.from.x, y: draft.from.y }, ...draft.points, hoverPin ? hoverPin.pos : draftEnd], 0)}
+              stroke="var(--sch-wire)"
+              strokeWidth={1.4}
+              strokeDasharray="4 3"
+              className="marching"
+              fill="none"
+              pointerEvents="none"
+            />
+          )}
+          {draft && draftEnd && !sch && (
             <g pointerEvents="none" opacity={0.9}>
               <path d={roundedPath([{ x: draft.from.x, y: draft.from.y }, ...draft.points, hoverPin ? hoverPin.pos : draftEnd])} stroke={draft.color} strokeWidth={2.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
               <path d={roundedPath([{ x: draft.from.x, y: draft.from.y }, ...draft.points, hoverPin ? hoverPin.pos : draftEnd])} stroke="#fff" strokeOpacity={0.5} strokeWidth={0.8} strokeDasharray="3 5" className="marching" fill="none" />
@@ -746,7 +851,7 @@ export function Canvas() {
       </svg>
 
       {peers.map((peer) =>
-        peer.cursor ? (
+        peer.cursor && (peer.view ?? 'board') === view ? (
           <div key={peer.clientId} className="peer-cursor" style={{ transform: `translate(${peer.cursor.x * z + viewport.x}px, ${peer.cursor.y * z + viewport.y}px)` }}>
             <svg width="18" height="20" viewBox="0 0 18 20" aria-hidden="true">
               <path d="M2 1.5 L2 16 L6 12.4 L8.8 18.4 L11.4 17.2 L8.7 11.4 L14 11.4 Z" fill={peer.user.color} stroke="#0b0c0e" strokeWidth="1.2" strokeLinejoin="round" />
@@ -759,8 +864,9 @@ export function Canvas() {
       )}
 
       {hoverPin && cursor && (!drag || drag.kind === 'end') && (
-        <div className="pin-tip" style={{ transform: `translate(${hoverPin.pos.x * z + viewport.x + 14}px, ${hoverPin.pos.y * z + viewport.y - 34}px)` }}>
+        <div className="pin-tip" role="tooltip" style={{ left: Math.max(8, Math.min(hoverPin.pos.x * z + viewport.x + 14, (svgRef.current?.clientWidth ?? 320) - 288)), top: Math.max(8, Math.min(hoverPin.pos.y * z + viewport.y + 16, (svgRef.current?.clientHeight ?? 200) - 100)) }}>
           <strong style={{ fontWeight: 500 }}>{hoverPin.label}</strong>
+          {hoverPin.desc && <span className="pin-desc">{hoverPin.desc}</span>}
           {hoverVoltage !== null && <span className="mono v">{formatSI(hoverVoltage, 'V')}</span>}
         </div>
       )}
@@ -785,7 +891,7 @@ export function Canvas() {
                 </button>
               </>
             )}
-            {selection.length === 0 && wireSelection.length > 0 && (
+            {!sch && selection.length === 0 && wireSelection.length > 0 && !wireSelection.every((id) => wiresById.get(id)?.sch) && (
               <span className="wire-colors" role="group" aria-label="Color del cable">
                 {WIRE_COLORS.map((c) => (
                   <button
@@ -837,6 +943,11 @@ export function Canvas() {
         <div className="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} role="menu">
           {menu.part && (
             <>
+              {sch && <button role="menuitem" onClick={() => {
+                const r = svgRef.current!.getBoundingClientRect();
+                openPicker(menu.part!, toWorldPt(r.left + menu.x, r.top + menu.y), r.left + menu.x, r.top + menu.y);
+                setMenu(null);
+              }}><Spline size={14} /> Conectar pin</button>}
               <button role="menuitem" onClick={() => (rotateSelection(), setMenu(null))}>
                 <RotateCw size={14} /> Rotar <kbd>R</kbd>
               </button>
@@ -862,6 +973,24 @@ export function Canvas() {
         </div>
       )}
 
+      {picker && <PinPicker picker={picker} part={snapshot.parts.find((p) => p.id === picker.part)} exclude={draft?.from ?? {}} netlist={netlist} onPick={(pin) => {
+        const pos = sch?.pinPos.get(pinKey(picker.part, pin.id)) ?? picker.at;
+        if (draft) finishWire({ part: picker.part, pin: pin.id, pos, label: pin.label ?? pin.id });
+        else {
+          setDraft({ from: { part: picker.part, pin: pin.id, ...pos }, label: pin.label ?? pin.id, points: [], color: suggestWireColor(pin.id) });
+          setPicker(null);
+        }
+      }} onClose={() => setPicker(null)} />}
+
+      {!placing && !draft && pending.length > 0 && (
+        <button className="float hint-float pending-hint" onClick={() => setView('schematic')} title="Ver en el esquema">
+          <Spline size={15} />
+          <span>
+            {pending.length === 1 ? 'Una conexión del esquema sin cablear' : `${pending.length} conexiones del esquema sin cablear`}
+          </span>
+        </button>
+      )}
+
       {placing && (
         <div className="float hint-float" role="status">
           <PackagePlus size={15} />
@@ -877,10 +1006,10 @@ export function Canvas() {
         <div className="float hint-float" role="status">
           <Spline size={15} style={{ color: draft.color }} />
           <span>
-            Cable desde <strong>{draft.label}</strong>
+            {sch ? 'Conexión' : 'Cable'} desde <strong>{draft.label}</strong>
           </span>
           <span className="keys">
-            clic dobla <kbd>⇧</kbd> recto <kbd>Esc</kbd>
+            {sch ? 'suelta en un pin o en una placa' : <>clic dobla <kbd>⇧</kbd> recto</>} <kbd>Esc</kbd>
           </span>
         </div>
       )}
@@ -1028,27 +1157,31 @@ const WireView = memo(function WireView({ wire, points, z, selected, hovered, ed
 });
 
 // ── Redes en el esquema ──────────────────────────────────────────────────────
-const NetLayer = memo(function NetLayer({ nets }: { nets: SchNet[] }) {
+const NetLayer = memo(function NetLayer({ nets, selected }: { nets: SchNet[]; selected: Set<number> }) {
   return (
-    <g pointerEvents="none">
-      {nets.map((net) =>
-        net.kind === 'wire' ? (
-          <g key={net.id}>
-            {net.segments.map((seg, i) => (
-              <path key={i} d={seg.map((p, j) => `${j ? 'L' : 'M'}${p.x} ${p.y}`).join('')} stroke="var(--sch-wire)" strokeWidth={1.4} fill="none" strokeLinejoin="round" />
-            ))}
-            {junctions(net.segments).map((p, i) => (
-              <circle key={i} cx={p.x} cy={p.y} r={2.2} fill="var(--sch-wire)" />
-            ))}
-          </g>
-        ) : (
-          <g key={net.id}>
-            {net.pins.map((p, i) => (
-              <RailGlyph key={i} at={p} dir={net.dirs[i]} kind={net.kind} label={net.label} />
-            ))}
-          </g>
-        ),
-      )}
+    <g>
+      {nets.map((net) => (
+        <g key={net.id} className={`sch-net ${selected.has(net.id) ? 'on' : ''}`} data-net={net.id}>
+          {net.kind === 'wire' ? (
+            <>
+              {net.segments.map((seg, i) => {
+                const d = seg.map((p, j) => `${j ? 'L' : 'M'}${p.x} ${p.y}`).join('');
+                return (
+                  <g key={i}>
+                    <path d={d} className="hit" stroke="transparent" strokeWidth={8} fill="none" pointerEvents="stroke" />
+                    <path d={d} className="seg" stroke="var(--sch-wire)" strokeWidth={1.4} fill="none" strokeLinejoin="round" pointerEvents="none" />
+                  </g>
+                );
+              })}
+              {junctions(net.segments).map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={2.2} className="dot" fill="var(--sch-wire)" pointerEvents="none" />
+              ))}
+            </>
+          ) : (
+            net.pins.map((p, i) => <RailGlyph key={i} at={p} dir={net.dirs[i]} kind={net.kind} label={net.label} />)
+          )}
+        </g>
+      ))}
     </g>
   );
 });
@@ -1061,7 +1194,8 @@ function RailGlyph({ at, dir, kind, label }: { at: Vec; dir: Vec; kind: SchNet['
   const down = kind === 'ground' ? dir.y >= 0 : dir.y > 0;
   const s = down ? 1 : -1;
   return (
-    <g stroke={color} strokeWidth={1.3} strokeLinecap="round" fill="none">
+    <g stroke={color} strokeWidth={1.3} strokeLinecap="round" fill="none" className="seg-group">
+      <rect x={Math.min(at.x, end.x) - 8} y={Math.min(at.y, end.y + 16 * s) - 4} width={Math.abs(end.x - at.x) + 16} height={Math.abs(end.y + 16 * s - at.y) + 8} fill="transparent" stroke="none" pointerEvents="all" />
       <path d={`M${at.x} ${at.y} L${end.x} ${end.y} v${6 * s}`} />
       {kind === 'ground' ? (
         <path d={`M${end.x - 7} ${end.y + 6 * s} h14 M${end.x - 4.5} ${end.y + 9.5 * s} h9 M${end.x - 2} ${end.y + 13 * s} h4`} />
@@ -1088,4 +1222,84 @@ function junctions(segments: Vec[][]): Vec[] {
       else count.set(k, { p, n: 1 });
     }
   return [...count.values()].filter((c) => c.n >= 3).map((c) => c.p);
+}
+
+/** Lista de pines de una pieza para cerrar una conexión del esquema, con búsqueda. */
+function PinPicker({
+  picker,
+  part,
+  exclude,
+  netlist,
+  onPick,
+  onClose,
+}: {
+  picker: { x: number; y: number; part: string };
+  part: PartData | undefined;
+  exclude: { part?: string; pin?: string };
+  netlist: Netlist;
+  onPick: (pin: PinDef) => void;
+  onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [active, setActive] = useState(0);
+  const listRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { listRef.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest' }); }, [active, query]);
+  const def = part ? PARTS[part.type] : null;
+  const pins = useMemo(() => {
+    if (!def || !part) return [];
+    const q = query.trim().toLowerCase();
+    return def
+      .pins(part.props)
+      .filter((p) => !(exclude.part === part.id && exclude.pin === p.id))
+      .filter((p) => !q || `${p.id} ${p.label ?? ''} ${p.desc ?? ''}`.toLowerCase().includes(q));
+  }, [def, part, query, exclude]);
+  if (!def || !part) return null;
+
+  const used = (pin: PinDef) => {
+    const n = netlist.netOf.get(pinKey(part.id, pin.id));
+    if (n === undefined) return false;
+    for (const [key, m] of netlist.netOf) if (m === n && !key.startsWith(`${part.id}:`)) return true;
+    return false;
+  };
+
+  return (
+    <div className="menu pin-picker" style={{ left: picker.x, top: picker.y }} onPointerDown={(e) => e.stopPropagation()} role="dialog" aria-label={`Pin de ${def.name}`}>
+      <div className="pin-picker-head">{def.name}</div>
+      <input
+        autoFocus
+        role="combobox"
+        aria-label="Buscar pin"
+        aria-expanded="true"
+        aria-controls="pin-picker-results"
+        aria-activedescendant={pins[active] ? `pin-option-${pins[active].id}` : undefined}
+        className="pin-picker-search"
+        placeholder="Buscar pin"
+        value={query}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setActive(0);
+        }}
+        onKeyDown={(e) => {
+          e.stopPropagation();
+          if (e.key === 'Escape') { e.preventDefault(); onClose(); }
+          else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActive((i) => Math.max(0, Math.min(i + 1, pins.length - 1)));
+          } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActive((i) => Math.max(i - 1, 0));
+          } else if (e.key === 'Enter' && pins[active]) onPick(pins[active]);
+        }}
+      />
+      <div className="pin-picker-list" id="pin-picker-results" ref={listRef} role="listbox" aria-label="Pines">
+        {pins.map((pin, i) => (
+          <button key={pin.id} id={`pin-option-${pin.id}`} role="option" aria-selected={i === active} title={pin.desc} className={i === active ? 'active' : ''} onMouseEnter={() => setActive(i)} onClick={() => onPick(pin)}>
+            <span>{pin.label ?? pin.id}</span>
+            {used(pin) && <span className="pin-used">en uso</span>}
+          </button>
+        ))}
+        {pins.length === 0 && <p className="pin-picker-empty">Ningún pin se llama así</p>}
+      </div>
+    </div>
+  );
 }

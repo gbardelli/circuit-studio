@@ -129,3 +129,25 @@ void loop() {
     }
   }, 120_000);
 });
+
+describe('conexiones dibujadas en el esquema', () => {
+  it('pila, resistencia y LED unidos solo en el esquema encienden el LED', () => {
+    const snap = circuit(
+      [part('bat', 'battery-9v'), part('r1', 'resistor', { resistance: 470 }), part('d1', 'led', { color: 'red' })],
+      [
+        ['bat', '+', 'r1', '1'],
+        ['r1', '2', 'd1', 'A'],
+        ['d1', 'K', 'bat', '-'],
+      ],
+    );
+    for (const w of snap.wires) w.sch = true;
+    const engine = new SimEngine();
+    engine.update(snap);
+    engine.start({ manual: true });
+    engine.tick(0.05);
+    const i = Number(engine.getVisual('d1')?.i ?? 0);
+    // (9 V − ~1.9 V) / 470 Ω ≈ 15 mA
+    expect(i).toBeGreaterThan(0.012);
+    expect(i).toBeLessThan(0.018);
+  });
+});

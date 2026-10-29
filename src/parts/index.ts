@@ -7,6 +7,8 @@ import { capacitor, ldr, potentiometer, resistor } from './basic';
 import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
 import { diode, hcsr04, lcd1602, mosfet, relay, tmp36 } from './extra';
 import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './misc';
+import { CHIPS } from './chips';
+import { benchSupply, clockGen, dipSwitch, ledBar } from './supply';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -19,6 +21,7 @@ export const PART_LIST: PartDef[] = [
   capacitor,
   led,
   rgbLed,
+  ledBar,
   sevenSegment,
   lcd1602,
   relay,
@@ -27,6 +30,8 @@ export const PART_LIST: PartDef[] = [
   dcMotor,
   pushbutton,
   slideSwitch,
+  dipSwitch,
+  clockGen,
   potentiometer,
   ldr,
   tmp36,
@@ -34,6 +39,8 @@ export const PART_LIST: PartDef[] = [
   diode,
   mosfet,
   npn,
+  ...CHIPS,
+  benchSupply,
   battery9v,
   aaPack,
   multimeter,
@@ -44,4 +51,4 @@ export const PARTS: Record<string, PartDef> = Object.fromEntries(PART_LIST.map((
 // Símbolos de la vista de esquema: misma pieza, otra forma, mismos pines.
 for (const d of PART_LIST) if (d.category !== 'Protoboards') PARTS[SCH_PREFIX + d.type] = schematicDef(d);
 
-export const CATEGORIES: Category[] = ['Placas', 'Protoboards', 'Básicos', 'Entradas', 'Salidas', 'Semiconductores', 'Energía', 'Instrumentos'];
+export const CATEGORIES: Category[] = ['Placas', 'Protoboards', 'Básicos', 'Entradas', 'Salidas', 'Semiconductores', 'Lógica', 'Integrados', 'Energía', 'Instrumentos'];

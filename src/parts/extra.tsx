@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Diode, NMOS, Resistor, VSource, type Element } from '../core/solver';
 import { Hd44780 } from '../sim/hd44780';
 import type { PartDef, RenderProps, SimContext } from './types';
-import { Glow, Leg } from './common';
+import { Glow, Leg, Screw, Smd } from './common';
 
 const FONT = 'Geist, sans-serif';
 const num = (v: unknown, d: number) => {
@@ -17,6 +17,7 @@ const DiodeRender = memo(function DiodeRender() {
     <g>
       <line x1={0} y1={0} x2={40} y2={0} stroke="#a8afb6" strokeWidth={1.6} strokeLinecap="round" />
       <rect x={11} y={-5.5} width={18} height={11} rx={2.5} fill="url(#g-black-plastic)" />
+      <path d="M13 -4h13" stroke="#a3a9ae" strokeWidth="0.45" strokeOpacity="0.4" />
       <rect x={25} y={-5.5} width={2.6} height={11} fill="#c9ced4" />
       <text x={18} y={1.6} textAnchor="middle" fontSize="3.2" fill="#9aa0a8" fontFamily={FONT}>
         4007
@@ -55,6 +56,7 @@ const MosfetRender = memo(function MosfetRender() {
       <rect x={-6} y={-58} width={32} height={24} rx={2} fill="url(#g-metal)" stroke="#727a82" strokeWidth={0.5} />
       <circle cx={10} cy={-48} r={4} fill="#3a3f45" />
       <rect x={-6} y={-36} width={32} height={26} rx={1.5} fill="url(#g-black-plastic)" />
+      <rect x={-5} y={-35} width={30} height={24} rx={1} fill="url(#p-epoxy)" />
       <text x={10} y={-25} textAnchor="middle" fontSize="4.4" fill="#c9cbd1" fontFamily={FONT}>
         IRLZ44N
       </text>
@@ -162,8 +164,8 @@ const SonarRender = memo(function SonarRender({ part, visual }: RenderProps) {
       {[-30, 60].map((cx) => (
         <g key={cx}>
           <circle cx={cx} cy={-52} r={30} fill="url(#g-metal)" stroke="#6b7177" strokeWidth={0.8} />
-          <circle cx={cx} cy={-52} r={24} fill="#1d1f22" />
-          <circle cx={cx} cy={-52} r={24} fill="url(#g-knob)" opacity={0.35} />
+          <circle cx={cx} cy={-52} r={26.5} fill="none" stroke="#edf0f0" strokeWidth="0.75" />
+          <circle cx={cx} cy={-52} r={24} fill="url(#p-mesh)" stroke="#171c20" strokeWidth="2" />
           {Array.from({ length: 5 }, (_, i) => (
             <circle key={i} cx={cx} cy={-52} r={4 + i * 4} fill="none" stroke="#3a3d42" strokeWidth={0.6} />
           ))}
@@ -267,6 +269,10 @@ const RelayRender = memo(function RelayRender({ part, visual }: RenderProps) {
         <rect x={-14} y={-76} width={136} height={68} rx={3} fill="#1f5fbf" stroke="#14438c" strokeWidth={0.8} />
       </g>
       <rect x={22} y={-70} width={56} height={46} rx={2} fill="#2f6fe0" stroke="#1b4fae" strokeWidth={0.8} />
+      <rect x={23} y={-69} width={54} height={44} rx={1.5} fill="url(#g-sheen)" />
+      <path d="M24 -68h52M24 -68v41" stroke="#b1d1ff" strokeOpacity="0.35" strokeWidth="0.7" />
+      <path d="M24 -27h52" stroke="#123e8e" strokeWidth="1" />
+      <Smd x={4} y={-44} vertical ceramic /><Smd x={8} y={-58} vertical />
       <text x={50} y={-50} textAnchor="middle" fontSize="5.4" fontWeight={700} fill="#eaf1ff" fontFamily={FONT}>
         SRD-05VDC
       </text>
@@ -274,6 +280,7 @@ const RelayRender = memo(function RelayRender({ part, visual }: RenderProps) {
         10A 250VAC
       </text>
       <rect x={84} y={-72} width={34} height={22} rx={2} fill="#2e8f4f" />
+      <path d="M85 -71h32M95 -71v20M105 -71v20" stroke="#65ba7b" strokeWidth="0.55" />
       {[90, 100, 110].map((x) => (
         <g key={x}>
           <circle cx={x} cy={-60} r={3.6} fill="url(#g-metal)" />
@@ -389,10 +396,13 @@ const LcdRender = memo(function LcdRender({ part, visual }: RenderProps) {
         [-12, -16],
         [292, -16],
       ].map(([cx, cy]) => (
-        <circle key={`${cx}${cy}`} cx={cx} cy={cy} r={4} fill="#c9ced4" />
+        <g key={`${cx}${cy}`}><circle cx={cx} cy={cy} r={4.3} fill="url(#g-metal)" /><circle cx={cx} cy={cy} r={2.5} fill="#123d26" /></g>
       ))}
       <rect x={-4} y={-128} width={288} height={92} rx={3} fill="#121315" />
+      <rect x={-3} y={-127} width={286} height={90} rx={2.5} fill="none" stroke="#535a5e" strokeWidth="0.8" />
+      {[[-.5,-124],[280,-124],[-.5,-40],[280,-40]].map(([x,y]) => <Screw key={`${x}:${y}`} x={x} y={y} r={1.2} />)}
       <rect x={6} y={-118} width={268} height={72} rx={2} fill={glass} />
+      <rect x={7} y={-117} width={266} height={70} rx={1.5} fill="url(#g-sheen)" opacity="0.5" />
       {on &&
         lines.map((text, row) =>
           Array.from({ length: 16 }, (_, c) => {

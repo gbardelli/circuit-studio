@@ -18,7 +18,8 @@ const ResistorRender = memo(function ResistorRender({ part, visual }: RenderProp
   const hot = power > rating;
   return (
     <g>
-      <line x1={0} y1={0} x2={40} y2={0} stroke="#a8afb6" strokeWidth={1.6} strokeLinecap="round" />
+      <line x1={0} y1={0} x2={40} y2={0} stroke="#7b848b" strokeWidth={1.8} strokeLinecap="round" />
+      <line x1={0} y1={-0.35} x2={40} y2={-0.35} stroke="#dde3e6" strokeWidth={0.6} strokeLinecap="round" />
       <path
         d="M9 -5.5 Q9 -7 11 -7 H14 Q16 -5 18 -5 H22 Q24 -5 26 -7 H29 Q31 -7 31 -5.5 V5.5 Q31 7 29 7 H26 Q24 5 22 5 H18 Q16 5 14 7 H11 Q9 7 9 5.5 Z"
         fill={hot ? '#d9844f' : 'url(#g-resistor)'}
@@ -86,6 +87,9 @@ const CapacitorRender = memo(function CapacitorRender({ part, visual }: RenderPr
       <Leg x={0} y0={-8} y1={0} />
       <Leg x={10} y0={-8} y1={0} />
       <rect x={-4} y={-36} width={18} height={29} rx={3} fill="url(#g-cap)" />
+      <path d="M-2 -32v22M12 -32v22" stroke="#14283e" strokeWidth="0.7" opacity="0.65" />
+      <path d="M-2.8 -30v18" stroke="#d1e1ff" strokeWidth="0.6" opacity="0.35" />
+      <ellipse cx={5} cy={-8.5} rx={8} ry={1.8} fill="#102b53" />
       <rect x={-4} y={-36} width={5} height={29} fill="#d7e1f5" opacity={0.85} />
       <text x={-1.5} y={-26} fontSize="5" fill="#1d3b7a" textAnchor="middle" fontWeight="700">
         −
@@ -93,7 +97,7 @@ const CapacitorRender = memo(function CapacitorRender({ part, visual }: RenderPr
       <text x={-1.5} y={-15} fontSize="5" fill="#1d3b7a" textAnchor="middle" fontWeight="700">
         −
       </text>
-      <ellipse cx={5} cy={-36} rx={9} ry={2.4} fill="#b8c1cc" />
+      <ellipse cx={5} cy={-36} rx={9} ry={2.4} fill="url(#g-metal)" stroke="#77848d" strokeWidth="0.4" />
       <path d="M1 -36 L9 -36 M5 -39 L5 -33" stroke="#7f8894" strokeWidth={0.6} />
       <text x={8} y={-20} fontSize="4.2" fill="#e8eefc" textAnchor="middle" transform="rotate(-90 8 -20)">
         {formatSI(c, 'F', 3)}
@@ -228,8 +232,10 @@ const LdrRender = memo(function LdrRender({ part }: RenderProps) {
       <Leg x={0} y0={-12} y1={0} />
       <Leg x={10} y0={-12} y1={0} />
       <circle cx={5} cy={-20} r={10} fill="#e9dfc8" stroke="#b9ab8a" strokeWidth={0.6} />
+      <circle cx={5} cy={-20} r={9.2} fill="none" stroke="#fff6df" strokeWidth="0.65" />
       <path d="M-1 -27 H8 V-24 H1 V-21 H9 V-18 H1 V-15 H11" fill="none" stroke="#b6322a" strokeWidth={1.4} strokeLinejoin="round" />
       <circle cx={5} cy={-20} r={10} fill="#fff6a8" opacity={light * 0.35} />
+      <circle cx={5} cy={-20} r={10} fill="url(#g-led-glass)" opacity="0.45" />
     </g>
   );
 });

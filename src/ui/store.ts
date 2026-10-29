@@ -33,6 +33,8 @@ export interface UiState {
   toast: Toast | null;
   tool: Tool;
   view: View;
+  compactPanel: 'library' | 'inspector' | null;
+  setCompactPanel(panel: 'library' | 'inspector' | null): void;
   setView(view: View): void;
   libDrag: LibDrag | null;
   setLibDrag(d: LibDrag | null): void;
@@ -58,6 +60,8 @@ export const useUi = create<UiState>((set) => ({
   toast: null,
   tool: 'select',
   view: 'board',
+  compactPanel: null,
+  setCompactPanel: (compactPanel) => set({ compactPanel }),
   setView: (view) => set({ view }),
   libDrag: null,
   setLibDrag: (libDrag) => set({ libDrag }),

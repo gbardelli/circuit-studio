@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Stamper, VSource, type Element } from '../core/solver';
 import type { PinDef } from '../core/types';
 import type { McuBridge, McuSpec, PartDef, PartSim, RenderProps, SimContext } from './types';
-import { Glow } from './common';
+import { Glow, Smd } from './common';
 
 // Cabezales hembra alineados a la rejilla de 0.1". Índices Arduino: D0–D13 = 0–13, A0–A5 = 14–19.
 const TOP_Y = 10;
@@ -49,9 +49,27 @@ export const HEADER_Y = { top: TOP_Y, bottom: BOTTOM_Y };
 
 export const MCU_PIN_IDS = [...Array.from({ length: 14 }, (_, i) => `D${i}`), 'A0', 'A1', 'A2', 'A3', 'A4', 'A5'];
 
+export function describeMcuPin(id: string, board: 'uno' | 'nano' | 'mega' = 'uno'): string {
+  if (/^GND/.test(id)) return 'Tierra común del circuito (0 V).';
+  if (/^5V/.test(id)) return 'Salida de alimentación regulada de 5 V.';
+  if (id === '3V3') return 'Salida de alimentación de 3,3 V.';
+  if (id === 'VIN') return 'Entrada de alimentación externa de la placa.';
+  if (/^(RESET|RST)/.test(id)) return 'Reinicio del microcontrolador, activo en nivel bajo.';
+  if (id === 'IOREF') return 'Referencia del nivel lógico de la placa: 5 V.';
+  if (id === 'AREF') return 'Referencia externa del conversor analógico-digital.';
+  if (id === 'SDA' || (board === 'mega' && id === 'D20')) return 'SDA: línea de datos del bus I²C.';
+  if (id === 'SCL' || (board === 'mega' && id === 'D21')) return 'SCL: reloj del bus I²C.';
+  if (/^A\d+$/.test(id)) return `Entrada analógica ${id}. Conversión de 10 bits en el rango de 0 a 5 V.`;
+  const n = Number(id.slice(1));
+  if (id === 'D0') return 'RX: recepción del puerto serie UART.';
+  if (id === 'D1') return 'TX: transmisión del puerto serie UART.';
+  const pwm = board === 'mega' ? (n >= 2 && n <= 13) || (n >= 44 && n <= 46) : [3, 5, 6, 9, 10, 11].includes(n);
+  return `Entrada/salida digital ${n}, lógica de 5 V.${pwm ? ' Admite salida PWM con analogWrite().' : ''}`;
+}
+
 const PINS: PinDef[] = [
-  ...TOP.map(([id, x, label]) => ({ id, x, y: TOP_Y, kind: 'socket' as const, label })),
-  ...BOTTOM.map(([id, x, label]) => ({ id, x, y: BOTTOM_Y, kind: 'socket' as const, label })),
+  ...TOP.map(([id, x, label]) => ({ id, x, y: TOP_Y, kind: 'socket' as const, label, desc: describeMcuPin(id) })),
+  ...BOTTOM.map(([id, x, label]) => ({ id, x, y: BOTTOM_Y, kind: 'socket' as const, label, desc: describeMcuPin(id) })),
 ];
 
 /** Driver de un pin del ATmega328P según DDR/PORT. Resistencias aproximadas del datasheet. */
@@ -78,8 +96,13 @@ export function Header({ x, y, count }: { x: number; y: number; count: number })
   return (
     <g>
       <rect x={x - 5} y={y - 5} width={w} height={10} rx={1} fill="url(#g-header)" />
+      <path d={`M${x-4} ${y-4.4}h${w-2}`} stroke="#777b7f" strokeWidth="0.45" strokeOpacity="0.5" />
       {Array.from({ length: count }, (_, i) => (
-        <rect key={i} x={x - 2 + i * 10} y={y - 2} width={4} height={4} fill="#050505" stroke="#3d3d3d" strokeWidth={0.4} />
+        <g key={i}>
+          <rect x={x - 3 + i * 10} y={y - 3} width={6} height={6} rx="0.45" fill="#171a1c" stroke="#565a5c" strokeWidth="0.35" />
+          <rect x={x - 2 + i * 10} y={y - 2} width={4} height={4} fill="#050607" />
+          <path d={`M${x-1.3+i*10} ${y+1.4}h2.6`} stroke="#9e947d" strokeWidth="0.5" />
+        </g>
       ))}
     </g>
   );
@@ -93,6 +116,8 @@ const UnoRender = memo(function UnoRender({ visual }: RenderProps) {
     <g>
       <g filter="url(#f-shadow)">
         <path d="M4 0 H262 L270 8 V196 L258 210 H4 Q0 210 0 206 V4 Q0 0 4 0 Z" fill="url(#g-pcb)" stroke="#06555b" strokeWidth={1} />
+        <path d="M4 0 H262 L270 8 V196 L258 210 H4 Q0 210 0 206 V4 Q0 0 4 0 Z" fill="url(#p-epoxy)" opacity="0.5" />
+        <path d="M5 1.4H261l7.5 7.5M1.5 5v199" stroke="#83c5c3" strokeOpacity="0.55" strokeWidth="0.65" fill="none" />
       </g>
       {/* agujeros de montaje */}
       {[
@@ -108,8 +133,12 @@ const UnoRender = memo(function UnoRender({ visual }: RenderProps) {
       ))}
       {/* pistas decorativas */}
       <path d="M84 96 H112 V118 M150 52 V70 H230 M40 124 H92 V140" stroke="#0c7c83" strokeWidth={1.1} fill="none" opacity={0.6} />
+      <path d="M86 52h25l15 15h86l12 12v34h19M93 56h17l15 16h80l13 13v29M41 114h63l8 8M102 168h10l8 8h118M87 86h12l16 16h14" fill="none" stroke="#70b7b1" strokeWidth="0.6" opacity="0.36" />
+      {[[40,78],[41,90],[48,104],[88,91],[88,102],[101,79],[107,111],[48,174],[226,67],[223,88],[189,55],[207,55]].map(([x,y],i) => <Smd key={i} x={x} y={y} ceramic={i%3===0} vertical={i%4===0} />)}
       {/* USB-B */}
       <rect x={-8} y={30} width={46} height={40} rx={2} fill="url(#g-metal)" stroke="#6b7177" strokeWidth={0.8} />
+      <rect x={-7} y={31} width={44} height={38} rx={1.5} fill="url(#p-brushed)" />
+      <path d="M1 31v38M29 32v35M5 34h18v4H5zM5 61h18v4H5z" stroke="#6c747a" strokeWidth="0.7" fill="none" opacity="0.6" />
       <rect x={-8} y={38} width={10} height={24} fill="#5d646b" />
       <rect x={-6} y={42} width={6} height={16} fill="#1d1f22" />
       {/* jack DC */}
@@ -121,6 +150,7 @@ const UnoRender = memo(function UnoRender({ visual }: RenderProps) {
       <rect x={52} y={146} width={12} height={4} fill="url(#g-metal)" />
       <circle cx={80} cy={162} r={7} fill="url(#g-metal-v)" stroke="#727a82" strokeWidth={0.6} />
       <circle cx={96} cy={162} r={7} fill="url(#g-metal-v)" stroke="#727a82" strokeWidth={0.6} />
+      <path d="M76 162h8M80 158v8M92 162h8M96 158v8" stroke="#747d83" strokeWidth="0.5" />
       {/* ATmega16U2 */}
       <rect x={62} y={70} width={20} height={20} rx={1} fill="url(#g-chip)" transform="rotate(45 72 80)" />
       {/* cristal */}
@@ -134,6 +164,8 @@ const UnoRender = memo(function UnoRender({ visual }: RenderProps) {
           </g>
         ))}
         <rect x={114} y={126} width={136} height={32} rx={2} fill="url(#g-chip)" />
+        <rect x={115} y={127} width={134} height={30} rx={1.4} fill="url(#p-epoxy)" />
+        <path d="M116 127.3h132" stroke="#6b7176" strokeOpacity="0.5" strokeWidth="0.65" />
         <path d="M114 138 a4 4 0 0 1 0 8" fill="#0b0b0c" />
         <circle cx={122} cy={152} r={1.6} fill="#2c2e33" />
         <text x={182} y={140} textAnchor="middle" fontSize="6" fill="#b8bcc2" fontFamily="Geist, sans-serif" letterSpacing="0.4">

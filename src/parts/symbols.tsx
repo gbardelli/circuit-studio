@@ -247,7 +247,9 @@ function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
   const visible = (props: Props) => {
     const list = allPins(props);
     const only = typeof props.__pins === 'string' ? new Set(props.__pins.split(',').filter(Boolean)) : null;
-    return only && list.length > 12 ? list.filter((p) => only.has(p.id)) : list;
+    if (!only || list.length <= 24) return list;
+    const shown = only.size ? only : new Set(['5V', 'GND.1', 'D2', 'D9', 'A0']);
+    return list.filter((p) => shown.has(p.id));
   };
   const layout = (props: Props) => {
     const pins = visible(props);
@@ -274,7 +276,7 @@ function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
             <g key={p.id}>
               {lead(p.x, p.y, p.x === 0 ? 10 : 70, p.y)}
               <text x={p.x === 0 ? 13 : 67} y={p.y + 2.2} textAnchor={p.x === 0 ? 'start' : 'end'} fontSize="5.6" fill={SOFT} fontFamily={FONT}>
-                {p.label}
+                {p.id.replace(/\.\d+$/, '')}
               </text>
             </g>
           ))}
@@ -285,6 +287,16 @@ function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
 }
 
 const SYMBOLS: Record<string, (orig: PartDef) => Symbol> = {
+  'bench-supply': () => ({
+    pins: () => [pin('-', 0, 0, 'Borne negativo'), pin('+', 60, 0, 'Borne positivo')],
+    bounds: () => ({ x: -2, y: -30, w: 64, h: 48 }),
+    Render: ({ part }) => <g>
+      {lead(0, 0, 18, 0)}{lead(42, 0, 60, 0)}
+      <circle cx={30} cy={0} r={12} fill="none" stroke={INK} strokeWidth={SW} />
+      {lead(22, 0, 27, 0)}{lead(33, 0, 38, 0)}{lead(35.5, -2.5, 35.5, 2.5)}
+      <Name x={30} y={-19} text={`${Number(part.props.voltage ?? 5)} V`} />
+    </g>,
+  }),
   resistor: () => RESISTOR,
   led: () => LED_SYM,
   diode: () => DIODE_SYM,
@@ -305,11 +317,14 @@ export const SCH_PREFIX = 'sch:';
 
 /** Definición «sch:<tipo>» derivada de la pieza: mismos pines (ids), símbolo propio. */
 export function schematicDef(orig: PartDef): PartDef {
-  const sym = SYMBOLS[orig.type]?.(orig) ?? boxSymbol(orig.pins, orig.name.replace(/^Arduino /, ''));
+  const sym = SYMBOLS[orig.type]?.(orig) ?? boxSymbol(orig.pins, orig.partNumber ?? orig.name.replace(/^Arduino /, ''));
   return {
     ...orig,
     type: SCH_PREFIX + orig.type,
-    pins: sym.pins,
+    pins: (props) => {
+      const original = new Map(orig.pins(props).map((p) => [p.id, p]));
+      return sym.pins(props).map((p) => ({ ...p, label: original.get(p.id)?.label ?? p.label, desc: original.get(p.id)?.desc }));
+    },
     bounds: sym.bounds,
     internal: undefined,
     Render: sym.Render,

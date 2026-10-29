@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Info } from 'lucide-react';
+import { CheckCircle2, Info, Component, SlidersHorizontal, X } from 'lucide-react';
 import { Project } from '../collab/project';
+import { PARTS } from '../parts';
 import { schematicPlacement, withFrozenPlacement } from './schematic';
 import { applyTemplate, findTemplate } from '../collab/applyTemplate';
 import { SimEngine } from '../sim/engine';
@@ -99,6 +100,8 @@ function EditorShell() {
   const { project, engine } = useEditor();
   const snapshot = useSnapshot();
   const toast = useUi((s) => s.toast);
+  const compactPanel = useUi((s) => s.compactPanel);
+  const setCompactPanel = useUi((s) => s.setCompactPanel);
 
   // El motor sigue al documento: cambios de topología reconstruyen, cambios de valores no.
   useEffect(() => engine.update(snapshot), [engine, snapshot]);
@@ -142,6 +145,10 @@ function EditorShell() {
           project.deleteItems(ui.selection, ui.wireSelection);
           ui.select([], []);
         }
+      } else if (key === 'f' && !mod && ui.selection.length) {
+        // Voltear: solo piezas que lo admiten (LED…), cada una sobre su propio eje.
+        for (const p of project.snapshot().parts)
+          if (ui.selection.includes(p.id) && PARTS[p.type]?.fields?.some((f) => f.key === 'flip')) project.setProp(p.id, 'flip', !p.props.flip);
       } else if (key === 'r' && !mod && ui.selection.length) {
         if (ui.view === 'schematic') project.rotateSchematic(ui.selection, schematicPlacement(project.snapshot().parts));
         else project.rotateParts(ui.selection);
@@ -169,8 +176,16 @@ function EditorShell() {
   }, [shortcuts]);
 
   return (
-    <div className="app">
+    <div className="app" data-panel={compactPanel ?? ''}>
       <TopBar />
+      <div className="compact-panels float" role="toolbar" aria-label="Paneles">
+        <button className={`icon-btn ${compactPanel === 'library' ? 'on' : ''}`} aria-label="Componentes" aria-pressed={compactPanel === 'library'} title="Componentes" onClick={() => setCompactPanel(compactPanel === 'library' ? null : 'library')}>
+          {compactPanel === 'library' ? <X size={16} /> : <Component size={16} />}
+        </button>
+        <button className={`icon-btn ${compactPanel === 'inspector' ? 'on' : ''}`} aria-label="Propiedades" aria-pressed={compactPanel === 'inspector'} title="Propiedades" onClick={() => setCompactPanel(compactPanel === 'inspector' ? null : 'inspector')}>
+          {compactPanel === 'inspector' ? <X size={16} /> : <SlidersHorizontal size={16} />}
+        </button>
+      </div>
       <Library />
       <LibDragFloat />
       <main className="workspace">

@@ -31,6 +31,7 @@ function ButtonRender({ part, onInput, preview, visual }: RenderProps) {
       ))}
       <rect x={-3} y={2} width={26} height={26} rx={2} fill="url(#g-metal)" stroke="#727a82" strokeWidth={0.5} />
       <rect x={-1} y={4} width={22} height={22} rx={1.5} fill="#24262a" />
+      <rect x={-0.5} y={4.5} width={21} height={21} rx={1.5} fill="url(#g-sheen)" stroke="#858a90" strokeOpacity="0.4" strokeWidth="0.4" />
       {[
         [1.5, 6.5],
         [18.5, 6.5],
@@ -162,6 +163,8 @@ const Battery9Render = memo(function Battery9Render({ visual }: RenderProps) {
       </g>
       <rect x={-22} y={-150} width={62} height={34} rx={5} fill="#f0b429" />
       <rect x={-22} y={-122} width={62} height={6} fill="#f0b429" />
+      <rect x={-21} y={-149} width={60} height={110} rx={4.5} fill="url(#g-sheen)" stroke="#e6d3ab" strokeOpacity="0.2" strokeWidth="0.6" />
+      <path d="M-19 -145v102M37 -145v102" stroke="#fff" strokeOpacity="0.12" strokeWidth="0.7" />
       <text x={9} y={-127} textAnchor="middle" fontSize="16" fontWeight="800" fill="#1b1b1d" fontFamily="Geist, sans-serif">
         9V
       </text>
@@ -322,8 +325,11 @@ const MeterRender = memo(function MeterRender({ part, visual }: RenderProps) {
         <rect x={0} y={0} width={80} height={140} rx={10} fill="#f0b429" />
       </g>
       <rect x={6} y={6} width={68} height={128} rx={7} fill="#2a2b2f" />
+      <rect x={1} y={1} width={78} height={138} rx={9.5} fill="url(#g-sheen)" stroke="#ffe9a6" strokeOpacity="0.4" strokeWidth="0.6" />
+      <path d="M4 20v22M4 52v22M4 84v22M76 20v22M76 52v22M76 84v22" stroke="#8e671d" strokeWidth="1" opacity="0.6" />
       <rect x={12} y={14} width={56} height={30} rx={3} fill="#a9b8a0" />
       <rect x={12} y={14} width={56} height={30} rx={3} fill="url(#g-board)" opacity={0.15} />
+      <path d="M13 15h54M13 15v28" stroke="#2d382e" strokeWidth="1" opacity="0.6" />
       <text x={64} y={36} textAnchor="end" fontSize="13" fontFamily="Geist, sans-serif" fill="#1d2418">
         {reading}
       </text>

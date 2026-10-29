@@ -18,6 +18,7 @@ interface PartRuntime {
   sim: PartSim;
   sums: Record<string, number>;
   time: number;
+  startedAt: number;
 }
 
 interface McuRuntime {
@@ -41,7 +42,7 @@ export interface SimStatus {
 type Listener = () => void;
 
 function topologyKey(snap: CircuitSnapshot) {
-  const parts = snap.parts.map((p) => `${p.id}|${p.type}|${p.x}|${p.y}|${p.rot}|${p.props.cols ?? ''}`).sort();
+  const parts = snap.parts.map((p) => `${p.id}|${p.type}|${p.x}|${p.y}|${p.rot}|${p.props.cols ?? ''}|${p.props.flip ?? false}`).sort();
   const wires = snap.wires.map((w) => `${w.a.part}:${w.a.pin}-${w.b.part}:${w.b.pin}`).sort();
   return parts.join(';') + '#' + wires.join(';');
 }
@@ -101,7 +102,7 @@ export class SimEngine {
 
   stop() {
     this.running = false;
-    cancelAnimationFrame(this.raf);
+    if (this.raf) cancelAnimationFrame(this.raf);
     this.circuit = null;
     this.mcus = [];
     this.parts.clear();
@@ -255,7 +256,7 @@ export class SimEngine {
         mcus.push(mcu);
       }
       elements.push(...sim.elements);
-      parts.set(p.id, { id: p.id, type: p.type, props, sim, sums: {}, time: 0 });
+      parts.set(p.id, { id: p.id, type: p.type, props, sim, sums: {}, time: 0, startedAt: this.simTime });
     }
     this.netNode = netNode;
     this.parts = parts;
@@ -303,7 +304,8 @@ export class SimEngine {
       // Eventos programados por piezas (eco de un HC-SR04…): el segmento termina justo ahí.
       for (const rt of this.parts.values()) {
         const at = rt.sim.nextEvent?.();
-        if (at != null && at > this.simTime + 1e-12 && at < segEnd) segEnd = at;
+        const eventTime = at == null ? null : rt.startedAt + at;
+        if (eventTime != null && eventTime > this.simTime + 1e-12 && eventTime < segEnd) segEnd = eventTime;
       }
       let changed = false;
       for (const m of active) {

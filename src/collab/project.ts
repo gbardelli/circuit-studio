@@ -24,6 +24,7 @@ export interface Presence {
   user: UserInfo;
   cursor: Vec | null;
   selection: string[];
+  view?: 'board' | 'schematic';
   drag: { ids: string[]; dx: number; dy: number } | null;
 }
 
@@ -197,6 +198,7 @@ export class Project {
         return;
       }
       const data: WireData = { id, a: fixed.a, b: fixed.b, points: fixed.points ?? [], color: fixed.color ?? '#2fbf4a' };
+      if (fixed.sch) data.sch = true;
       this.wireCache.set(id, { json, data });
       wires.push(data);
     });
@@ -355,7 +357,7 @@ export class Project {
     });
   }
 
-  addWire(a: WireEnd, b: WireEnd, points: Vec[], color: string): string {
+  addWire(a: WireEnd, b: WireEnd, points: Vec[], color: string, sch = false): string {
     const id = crypto.randomUUID();
     this.tx(() => {
       const m = new Y.Map<unknown>();
@@ -363,6 +365,7 @@ export class Project {
       m.set('b', b);
       m.set('points', points);
       m.set('color', color);
+      if (sch) m.set('sch', true);
       this.wires.set(id, m);
     });
     return id;
@@ -390,6 +393,11 @@ export class Project {
         m.set('x', p.x + dx);
         m.set('y', p.y + dy);
         m.set('rot', p.rot);
+        if (p.sx !== undefined && p.sy !== undefined) {
+          m.set('sx', p.sx + dx);
+          m.set('sy', p.sy + dy);
+          m.set('srot', p.srot ?? 0);
+        }
         m.set('z', Date.now());
         const props = new Y.Map<unknown>();
         for (const [k, v] of Object.entries(p.props)) props.set(k, v);
@@ -405,6 +413,7 @@ export class Project {
         m.set('b', { ...w.b, part: map.get(w.b.part!), x: w.b.x + dx, y: w.b.y + dy });
         m.set('points', w.points.map((p) => ({ x: p.x + dx, y: p.y + dy })));
         m.set('color', w.color);
+        if (w.sch) m.set('sch', true);
         this.wires.set(crypto.randomUUID(), m);
       }
     });

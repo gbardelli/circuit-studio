@@ -1,7 +1,7 @@
 # Circuit Studio
 
-Simulador de circuitos colaborativo en el navegador: Arduino Uno emulado, protoboards,
-componentes realistas y edición simultánea entre varias personas.
+Simulador de circuitos colaborativo en el navegador: Arduino Uno, Nano y Mega emulados,
+protoboards, integrados lógicos y edición simultánea en protoboard y esquema.
 
 ## Arrancar
 
@@ -16,6 +16,26 @@ circuito (5 V, 3.3 V, GND) pero no corre código.
 
 `npm test` ejecuta las pruebas del núcleo (unidades, solver, redes de protoboard, avr8js).
 `npm run build && npm start` sirve el build de producción desde el mismo servidor.
+
+## Diseño y componentes
+
+La biblioteca incluye puertas lógicas, biestables, registros, contadores, multiplexores,
+decodificadores, drivers y temporizador 555. Se puede buscar por función, referencia o alias.
+La fuente de laboratorio permite ajustar tensión y límite de corriente desde el inspector
+o sus mandos. El LED distingue ánodo y cátodo y se invierte con F.
+
+El esquema permite conectar pines y simular el circuito directamente. Las conexiones
+del esquema aparecen discontinuas en la protoboard hasta que se cablean físicamente.
+Ambas vistas comparten la topología y conservan posiciones independientes.
+
+Las decisiones visuales y referencias están en `DESIGN.md`.
+
+## Producción
+
+El despliegue existente en Vercel usa Clerk para cuentas, Neon para proyectos y roles,
+Upstash para sincronización y Vercel Sandbox para compilar firmware. Las claves se
+configuran como variables de entorno y no se guardan en Git. Sin la clave pública de
+Clerk, el desarrollo local utiliza salas WebSocket e IndexedDB.
 
 ## Cómo está hecho
 
@@ -34,5 +54,7 @@ Los proyectos se guardan en `data/<sala>.ydoc` (escritura atómica + `.bak`).
 ## Límites conocidos
 
 - Solver propio para interactividad; no sustituye a ngspice para análisis AC o modelos de fabricante.
-- Sin autenticación: cualquiera con el enlace edita. El servidor valida tamaño de mensajes, no la semántica.
+- El servidor local permite editar a quien tenga acceso a su enlace. En producción se comprueban sesión y rol.
+- Los modelos lógicos son aproximaciones educativas; no reproducen todos los parámetros de las hojas de datos.
+- ESP32, OLED e instrumentos de análisis avanzado siguen pendientes.
 - Un solo Arduino por proyecto está probado; varios funcionan pero comparten la misma ventana de tiempo.

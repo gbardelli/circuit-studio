@@ -29,7 +29,10 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
 
   // Pines con algo al otro lado (otra pieza visible en la misma red).
   const perNet = new Map<number, string[]>();
+  const aliases = new Map<string, string>();
   for (const p of visible) {
+    for (const group of PARTS[p.type].internal?.(p.props) ?? [])
+      for (const id of group) aliases.set(pinKey(p.id, id), pinKey(p.id, group[0]));
     for (const pin of PARTS[p.type].pins(p.props)) {
       const key = pinKey(p.id, pin.id);
       const net = netlist.netOf.get(key);
@@ -39,14 +42,14 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
       else perNet.set(net, [key]);
     }
   }
-  // Solo cuentan las redes que unen piezas distintas, y de cada pieza un pin por red: los GND
-  // de una placa (o SDA y A4) ya están unidos por dentro y bastaría con dibujar uno.
+  // Collapse internally equivalent pins only. Separate inputs on one chip and feedback
+  // loops must remain visible even when they belong to the same component.
   const connected = new Set<string>();
   for (const [net, keys] of perNet) {
     const first = new Map<string, string>();
     for (const k of keys) {
-      const part = k.slice(0, k.indexOf(':'));
-      if (!first.has(part)) first.set(part, k);
+      const canonical = aliases.get(k) ?? k;
+      if (!first.has(canonical)) first.set(canonical, k);
     }
     if (first.size < 2) perNet.delete(net);
     else {
@@ -105,6 +108,13 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
       }
   }
 
+  // Lo ya trazado y los símbolos: el router evita pisarlos al elegir la forma de cada L.
+  const taken: Vec[][] = [];
+  const boxes = parts.map((p) => {
+    const b = PARTS[p.type].bounds(p.props);
+    const c = [toWorld(p, { x: b.x, y: b.y }), toWorld(p, { x: b.x + b.w, y: b.y + b.h })];
+    return { x0: Math.min(c[0].x, c[1].x) + 3, y0: Math.min(c[0].y, c[1].y) + 3, x1: Math.max(c[0].x, c[1].x) - 3, y1: Math.max(c[0].y, c[1].y) - 3 };
+  });
   const nets: SchNet[] = [];
   for (const [id, keys] of perNet) {
     if (keys.length < 2) continue;
@@ -116,7 +126,9 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
     else {
       // Cada pin sale primero recto 10 unidades; el árbol une esos extremos.
       const tips = pins.map((p, i) => ({ x: p.x + dirs[i].x * 10, y: p.y + dirs[i].y * 10 }));
-      nets.push({ id, kind: 'wire', pins, dirs, segments: [...pins.map((p, i) => [p, tips[i]]), ...route(tips)] });
+      const routed = route(tips, taken, boxes);
+      taken.push(...routed);
+      nets.push({ id, kind: 'wire', pins, dirs, segments: [...pins.map((p, i) => [p, tips[i]]), ...routed] });
     }
   }
   return { parts, nets, pinPos };
@@ -170,7 +182,7 @@ export function withFrozenPlacement(all: PartData[], moves: { id: string; x: num
 }
 
 /** Árbol de recubrimiento mínimo (Prim, distancia Manhattan) con tramos en L. */
-function route(pins: Vec[]): Vec[][] {
+function route(pins: Vec[], taken: Vec[][], boxes: Box[]): Vec[][] {
   const unique = pins.filter((p, i) => pins.findIndex((q) => q.x === p.x && q.y === p.y) === i);
   if (unique.length < 2) return [];
   const inTree = [unique[0]];
@@ -185,8 +197,64 @@ function route(pins: Vec[]): Vec[][] {
       });
     const b = rest.splice(best.idx, 1)[0];
     const a = best.from;
-    out.push(a.x === b.x || a.y === b.y ? [a, b] : [a, { x: b.x, y: a.y }, b]);
+    const others = [...taken, ...out];
+    let bestPath: Vec[] = [];
+    let bestCost = Infinity;
+    for (const path of candidates(a, b)) {
+      const c = cost(path, others, boxes);
+      if (c < bestCost) {
+        bestCost = c;
+        bestPath = path;
+      }
+    }
+    out.push(bestPath);
     inTree.push(b);
   }
   return out;
 }
+
+/** Formas posibles entre dos puntos: recto, las dos L y rodeos en U o Z por canales cercanos. */
+function candidates(a: Vec, b: Vec): Vec[][] {
+  const out: Vec[][] = [];
+  if (a.x === b.x || a.y === b.y) out.push([a, b]);
+  else out.push([a, { x: b.x, y: a.y }, b], [a, { x: a.x, y: b.y }, b]);
+  const ys = [a.y - 30, a.y + 30, b.y - 30, b.y + 30, Math.min(a.y, b.y) - 50, Math.max(a.y, b.y) + 50];
+  const xs = [a.x - 30, a.x + 30, b.x - 30, b.x + 30, Math.min(a.x, b.x) - 50, Math.max(a.x, b.x) + 50];
+  for (const y of ys) out.push([a, { x: a.x, y }, { x: b.x, y }, b]);
+  for (const x of xs) out.push([a, { x, y: a.y }, { x, y: b.y }, b]);
+  return out;
+}
+
+interface Box {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+}
+
+/** Cuánto estorba un trazado: tramos superpuestos a otras redes y símbolos atravesados. */
+function cost(path: Vec[], taken: Vec[][], boxes: Box[]) {
+  let c = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const a = path[i];
+    const b = path[i + 1];
+    c += (Math.abs(a.x - b.x) + Math.abs(a.y - b.y)) * 0.05 + 1;
+    for (const seg of taken)
+      for (let j = 0; j < seg.length - 1; j++) {
+        const p = seg[j];
+        const q = seg[j + 1];
+        if (a.y === b.y && p.y === q.y && a.y === p.y) c += 10 * overlap(a.x, b.x, p.x, q.x);
+        else if (a.x === b.x && p.x === q.x && a.x === p.x) c += 10 * overlap(a.y, b.y, p.y, q.y);
+      }
+    for (const r of boxes) {
+      const x0 = Math.min(a.x, b.x);
+      const x1 = Math.max(a.x, b.x);
+      const y0 = Math.min(a.y, b.y);
+      const y1 = Math.max(a.y, b.y);
+      if (x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0) c += 400;
+    }
+  }
+  return c;
+}
+
+const overlap = (a0: number, a1: number, b0: number, b1: number) => Math.max(0, Math.min(Math.max(a0, a1), Math.max(b0, b1)) - Math.max(Math.min(a0, a1), Math.min(b0, b1)));

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Code2, Copy, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
 import { formatSI, parseSI } from '../core/units';
 import { PARTS } from '../parts';
+import { schematicPlacement } from './schematic';
 import { LED_COLORS } from '../parts/outputs';
 import type { Field } from '../parts/types';
 import type { PartData } from '../core/types';
@@ -41,7 +42,11 @@ export function Inspector() {
       {parts.length === 1 && wires.length === 0 ? (
         <PartInspector key={parts[0].id} part={parts[0]} />
       ) : parts.length === 0 && wires.length > 0 ? (
-        <WireInspector ids={wires.map((w) => w.id)} color={wires[0].color} />
+        wires.every((w) => w.sch) ? (
+          <SchematicLinkInspector ids={wires.map((w) => w.id)} />
+        ) : (
+          <WireInspector ids={wires.map((w) => w.id)} color={wires[0].color} />
+        )
       ) : parts.length + wires.length > 1 ? (
         <MultiInspector parts={parts.length} wires={wires.length} />
       ) : (
@@ -158,6 +163,34 @@ function MultiInspector({ parts, wires }: { parts: number; wires: number }) {
   );
 }
 
+/** Conexión dibujada en el esquema: no tiene color ni codos, solo existe o no. */
+function SchematicLinkInspector({ ids }: { ids: string[] }) {
+  const { project } = useEditor();
+  const select = useUi((s) => s.select);
+  return (
+    <div className="insp-card">
+      <div className="insp-hero">
+        <span className="thumb" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--sch-wire)' }}>
+          <Spline size={26} />
+        </span>
+        <div>
+          <h2>{ids.length === 1 ? 'Conexión del esquema' : `${ids.length} conexiones del esquema`}</h2>
+        </div>
+      </div>
+      <div className="insp-section">
+        <p className="faint" style={{ margin: '0 0 10px', fontSize: 12 }}>
+          Cuenta para la simulación. En la protoboard se ve discontinua hasta que pongas el cable.
+        </p>
+        <div className="actions">
+          <button className="btn sm danger" onClick={() => (project.deleteItems([], ids), select([], []))}>
+            <Trash2 size={13} /> Eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function WireInspector({ ids, color }: { ids: string[]; color: string }) {
   const { project } = useEditor();
   const select = useUi((s) => s.select);
@@ -201,6 +234,7 @@ function PartInspector({ part }: { part: PartData }) {
   const def = PARTS[part.type];
   const visual = useVisual(part.id);
   const simRunning = useUi((s) => s.simRunning);
+  const view = useUi((s) => s.view);
   const openCode = useUi((s) => s.openCode);
   const select = useUi((s) => s.select);
   const peers = usePeers().filter((p) => p.selection?.includes(part.id));
@@ -213,7 +247,7 @@ function PartInspector({ part }: { part: PartData }) {
           <Thumb def={def} />
           <div style={{ minWidth: 0 }}>
             <h2>{def.name}</h2>
-            <p className="insp-desc">{def.description}</p>
+            <p className="insp-desc" title={def.description}>{def.description}</p>
           </div>
         </div>
         {peers.length > 0 && (
@@ -231,7 +265,6 @@ function PartInspector({ part }: { part: PartData }) {
         )}
         {def.fields && def.fields.length > 0 && (
           <div className="insp-section">
-            <h3>Propiedades</h3>
             {def.fields.map((f) => (
               <FieldEditor key={f.key} field={f} value={part.props[f.key]} onChange={(v) => project.setProp(part.id, f.key, v)} />
             ))}
@@ -252,7 +285,7 @@ function PartInspector({ part }: { part: PartData }) {
         )}
         <div className="insp-section">
           <div className="actions">
-            <button className="btn sm" onClick={() => project.rotateParts([part.id])} title="Rotar · R">
+            <button className="btn sm" onClick={() => view === 'schematic' ? project.rotateSchematic([part.id], schematicPlacement(project.snapshot().parts)) : project.rotateParts([part.id])} title="Rotar · R">
               <RotateCw size={13} /> Rotar
             </button>
             <button className="btn sm" onClick={() => select(project.duplicate([part.id], 20, 20), [])} title="Duplicar · Ctrl D">
@@ -265,19 +298,17 @@ function PartInspector({ part }: { part: PartData }) {
         </div>
       </div>
       {simRunning && metrics.length > 0 && (
-        <div className="insp-card">
-          <div className="insp-section" style={{ borderTop: 'none' }}>
-            <h3>En vivo</h3>
-            <div className="readouts">
+        <section className="insp-section measurements" aria-label="Mediciones">
+            <h3>Mediciones</h3>
+            <dl className="readouts">
               {metrics.map(([k, v]) => (
                 <div key={k} className="readout">
-                  <div className="k">{METRICS[k].label}</div>
-                  <div className="v">{METRICS[k].unit === '°' ? `${Math.round(Number(v))}°` : formatSI(Number(v), METRICS[k].unit)}</div>
+                  <dt className="k">{METRICS[k].label}</dt>
+                  <dd className="v">{METRICS[k].unit === '°' ? `${Math.round(Number(v))}°` : formatSI(Math.abs(Number(v)) < 1e-9 ? 0 : Number(v), METRICS[k].unit)}</dd>
                 </div>
               ))}
-            </div>
-          </div>
-        </div>
+            </dl>
+        </section>
       )}
     </>
   );
@@ -337,7 +368,7 @@ function FieldEditor({ field, value, onChange }: { field: Field; value: unknown;
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input id={id} type="range" min={field.min} max={field.max} step={field.step} value={v} style={{ ['--fill' as string]: `${pct}%` }} onChange={(e) => onChange(Number(e.target.value))} />
           <span className="mono muted" style={{ minWidth: 34, textAlign: 'right', fontSize: 12, whiteSpace: 'nowrap' }}>
-            {field.unit ? `${Math.round(v)} ${field.unit}` : `${Math.round(pct)}%`}
+            {field.unit ? formatSI(v, field.unit) : `${Math.round(pct)}%`}
           </span>
         </div>
       </div>

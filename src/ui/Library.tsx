@@ -1,7 +1,8 @@
 import { memo, useMemo, useState } from 'react';
-import { type LucideIcon, BatteryMedium, Clock, Component, Cpu, Gauge, Grid3x3, LayoutGrid, Lightbulb, Search, Star, ToggleLeft, Triangle, X } from 'lucide-react';
+import { type LucideIcon, Binary, Microchip, BatteryMedium, Clock, Component, Cpu, Gauge, Grid3x3, LayoutGrid, Lightbulb, Search, Star, ToggleLeft, Triangle, X } from 'lucide-react';
 import { CATEGORIES, PARTS, PART_LIST } from '../parts';
 import type { Category, PartDef } from '../parts/types';
+import { scorePart } from '../parts/search';
 import { useUi } from './store';
 
 export const CATEGORY_ICON: Record<Category, LucideIcon> = {
@@ -11,38 +12,11 @@ export const CATEGORY_ICON: Record<Category, LucideIcon> = {
   Entradas: ToggleLeft,
   Salidas: Lightbulb,
   Semiconductores: Triangle,
+  Lógica: Binary,
+  Integrados: Microchip,
   Energía: BatteryMedium,
   Instrumentos: Gauge,
 };
-
-const norm = (s: string) =>
-  s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-
-/** Puntuación tolerante: palabra completa > prefijo > subcadena > subsecuencia. */
-function score(def: PartDef, query: string) {
-  const q = norm(query.trim());
-  if (!q) return 1;
-  const hay = norm([def.name, ...def.keywords, def.category].join(' '));
-  let total = 0;
-  for (const token of q.split(/\s+/)) {
-    const esc = token.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`\\b${esc}\\b`).test(hay)) total += 4;
-    else if (new RegExp(`\\b${esc}`).test(hay)) total += 3;
-    else if (hay.includes(token)) total += 2;
-    else if (subsequence(token, hay)) total += 0.5;
-    else return 0;
-  }
-  return total;
-}
-
-function subsequence(needle: string, hay: string) {
-  let i = 0;
-  for (const ch of hay) if (ch === needle[i]) i++;
-  return i === needle.length;
-}
 
 function readList(key: string): string[] {
   try {
@@ -70,7 +44,7 @@ export function Library() {
 
   const results = useMemo(
     () =>
-      PART_LIST.map((d) => ({ d, s: score(d, query) }))
+      PART_LIST.map((d) => ({ d, s: scorePart(d, query) }))
         .filter(({ d, s }) => s > 0 && (!category || d.category === category))
         .sort((a, b) => b.s - a.s)
         .map(({ d }) => d),
@@ -89,7 +63,11 @@ export function Library() {
     writeList('cs-favs', next);
   };
 
-  const groups = query || category ? [{ title: query ? 'Resultados' : category!, icon: category ? CATEGORY_ICON[category] : Search, items: results }] : buildGroups(favs, recent);
+  const groups = query
+    ? [{ title: 'Resultados', icon: Search, items: results }]
+    : category
+      ? categoryGroups(category)
+      : buildGroups(favs, recent);
 
   return (
     <aside className="library" aria-label="Componentes">
@@ -137,6 +115,7 @@ export function Library() {
                     onPick={() => {
                       use(d.type);
                       setPlacing(placing === d.type ? null : d.type);
+                      useUi.getState().setCompactPanel(null);
                     }}
                     onDragStart={() => use(d.type)}
                   />
@@ -161,13 +140,23 @@ function buildGroups(favs: string[], recent: string[]) {
   const groups: { title: string; icon: LucideIcon; items: PartDef[] }[] = [];
   if (favs.length) groups.push({ title: 'Favoritos', icon: Star, items: favs.flatMap((t) => byType.get(t) ?? []) });
   if (recent.length) groups.push({ title: 'Recientes', icon: Clock, items: recent.flatMap((t) => byType.get(t) ?? []) });
-  for (const c of CATEGORIES) groups.push({ title: c, icon: CATEGORY_ICON[c], items: PART_LIST.filter((d) => d.category === c) });
+  for (const c of CATEGORIES) groups.push(...categoryGroups(c));
   return groups;
+}
+
+/** Una categoría con familias (Lógica) se parte en subgrupos: Puertas, Contadores… */
+function categoryGroups(c: Category) {
+  const items = PART_LIST.filter((d) => d.category === c);
+  const families = [...new Set(items.map((d) => d.family).filter(Boolean))] as string[];
+  if (families.length < 2) return [{ title: c, icon: CATEGORY_ICON[c], items }];
+  return families.map((f) => ({ title: `${c} · ${f}`, icon: CATEGORY_ICON[c], items: items.filter((d) => d.family === f) }));
 }
 
 /** Etiqueta solo cuando dice algo útil antes de colocar la pieza. */
 export function partTag(def: PartDef): { text: string; tone: 'accent' | 'green' | 'neutral' } | null {
   if (def.mcu) return { text: 'Programable', tone: 'accent' };
+  if (def.partNumber) return { text: def.partNumber, tone: 'neutral' };
+  if (def.type === 'bench-supply') return { text: '0–30 V', tone: 'neutral' };
   if (['potentiometer', 'pushbutton', 'slide-switch', 'ldr'].includes(def.type)) return { text: 'Se toca al simular', tone: 'green' };
   if (def.type === 'battery-9v') return { text: '9 V', tone: 'neutral' };
   if (def.type === 'aa-pack') return { text: '3 V · 6 V', tone: 'neutral' };

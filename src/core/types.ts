@@ -45,6 +45,9 @@ export interface WireData {
   b: WireEnd;
   points: Vec[];
   color: string;
+  /** Conexión dibujada en el esquema: cuenta en el circuito, pero en la protoboard aún no
+   *  es un cable físico (se muestra como pendiente hasta que se cablee). */
+  sch?: boolean;
 }
 
 export interface CircuitSnapshot {
@@ -61,6 +64,8 @@ export interface PinDef {
   y: number;
   kind: PinKind;
   label?: string;
+  /** Qué hace el pin, para la etiqueta al pasar el ratón. */
+  desc?: string;
 }
 
 export function rotate(p: Vec, rot: Rotation): Vec {

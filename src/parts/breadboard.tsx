@@ -105,8 +105,10 @@ const BreadboardRender = memo(function BreadboardRender({ part }: RenderProps) {
       {/* canal central */}
       <rect x={6} y={110} width={w - 12} height={10} rx={2} fill="#e2ddd2" />
       <rect x={6} y={114} width={w - 12} height={2} fill="#d5cfc2" />
-      <path d={d} fill="#3b3a37" />
-      <path d={d} fill="none" stroke="#c8c2b5" strokeWidth={0.6} transform="translate(0.5,0.6)" opacity={0.6} />
+      <path d={`M6 110H${w-6}M6 228H${w-6}M1 4V226`} stroke="#fff" strokeWidth="0.8" opacity="0.7" fill="none" />
+      <path d={`M6 120H${w-6}M6 226H${w-6}`} stroke="#b4b3ad" strokeWidth="0.6" opacity="0.7" />
+      <path d={d} fill="#32342f" stroke="#b2b2a9" strokeWidth="0.9" strokeLinejoin="round" />
+      <path d={d} fill="none" stroke="#fff" strokeWidth={0.5} transform="translate(0.4,0.7)" opacity={0.5} />
       {labels}
     </g>
   );
