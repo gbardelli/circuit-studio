@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircuitBoard, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
+import { CircuitBoard, Zap, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
@@ -8,6 +8,7 @@ import { SCH_PREFIX } from '../parts/symbols';
 import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
 import { useUi } from './store';
+import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath } from './wires';
 import { buildSchematic, withFrozenPlacement, type SchNet } from './schematic';
@@ -706,6 +707,58 @@ export function Canvas() {
   }, [project, selection, view]);
 
   const draftEnd = cursor && draft ? snapPoint(cursor, draft, false) : null;
+  // ── Corriente animada ──────────────────────────────────────────────────────
+  // Cada cable lleva puntos que avanzan en el sentido convencional de la corriente, más
+  // rápido cuanto más corriente, y de color según su tensión (azul 0 V → rojo la más alta).
+  const showFlow = useUi((s) => s.showFlow);
+  const setShowFlow = useUi((s) => s.setShowFlow);
+  const flowOn = simRunning && showFlow && !sch;
+  const flowPaths = useRef(new Map<string, SVGPathElement>());
+  const flowEdges = useMemo(() => connectionEdges(snapshot, PARTS), [snapshot]);
+  useEffect(() => {
+    if (!flowOn) return;
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const amps = new Map<string, number>();
+    const offset = new Map<string, number>();
+    let volts = new Map<string, number>();
+    let last = performance.now();
+    let measured = 0;
+    let raf = 0;
+    const step = (now: number) => {
+      const dt = Math.min(0.1, (now - last) / 1000);
+      last = now;
+      if (now - measured > 70) {
+        measured = now;
+        const fresh = wireCurrents(flowEdges, engine.pinCurrents());
+        volts = new Map();
+        for (const w of snapshot.wires) {
+          const i = fresh.get(w.id) ?? 0;
+          amps.set(w.id, (amps.get(w.id) ?? i) * 0.6 + i * 0.4); // suaviza el PWM
+          if (w.a.part && w.a.pin) volts.set(w.id, engine.voltageAt(w.a.part, w.a.pin) ?? 0);
+        }
+      }
+      let top = 1;
+      volts.forEach((v) => (top = Math.max(top, Math.abs(v))));
+      for (const [id, el] of flowPaths.current) {
+        const i = amps.get(id) ?? 0;
+        if (Math.abs(i) < 2e-5) {
+          el.style.opacity = '0';
+          continue;
+        }
+        const speed = Math.min(320, 60 * Math.sqrt(Math.abs(i) / 1e-3));
+        const o = (offset.get(id) ?? 0) - Math.sign(i) * speed * (reduced ? 0 : dt);
+        offset.set(id, o % 1000);
+        el.style.opacity = '1';
+        el.style.strokeDashoffset = String(o % 1000);
+        const t = Math.min(1, Math.abs(volts.get(id) ?? 0) / top);
+        el.style.stroke = `hsl(${Math.round(215 - 215 * t)} 100% ${Math.round(80 - 6 * t)}%)`;
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [flowOn, flowEdges, engine, snapshot]);
+
   const hoverVoltage = hoverPin && simRunning ? engine.voltageAt(hoverPin.part, hoverPin.pin) : null;
   const gridStep = z < 0.8 ? 50 : 10;
   const draggingIds = drag?.kind === 'parts' && drag.moved ? drag.ids : [];
@@ -769,6 +822,23 @@ export function Canvas() {
               <WireView key={w.id} wire={w} points={livePoints(w)} z={z} selected={wireSelection.includes(w.id)} hovered={hoverWire === w.id && !drag} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
             ))}
           </g>
+
+          {flowOn && (
+            <g className="flow" pointerEvents="none">
+              {scene.wires
+                .filter((w) => !w.sch)
+                .map((w) => (
+                  <path
+                    key={w.id}
+                    ref={(el) => {
+                      if (el) flowPaths.current.set(w.id, el);
+                      else flowPaths.current.delete(w.id);
+                    }}
+                    d={roundedPath(livePoints(w))}
+                  />
+                ))}
+            </g>
+          )}
 
           {draft && draftEnd && sch && (
             <path
@@ -883,6 +953,17 @@ export function Canvas() {
         <button className={`icon-btn ${tool === 'hand' ? 'on' : ''}`} onClick={() => setTool('hand')} aria-label="Mover la vista" title="Mano · H o Espacio">
           <Hand size={15} />
         </button>
+        {simRunning && !sch && (
+          <button
+            className={`icon-btn ${showFlow ? 'on' : ''}`}
+            onClick={() => setShowFlow(!showFlow)}
+            aria-pressed={showFlow}
+            aria-label="Ver la corriente en los cables"
+            title={showFlow ? 'Ocultar la corriente' : 'Ver la corriente en los cables'}
+          >
+            <Zap size={15} />
+          </button>
+        )}
         {hasSelection && (
           <>
             <span className="sep" />

@@ -164,6 +164,59 @@ export class SimEngine {
     return node < 0 ? 0 : this.circuit.v[node];
   }
 
+  /**
+   * Corriente que entra en cada componente por cada pin (A), en el último punto resuelto.
+   * Se obtiene de las ecuaciones de sus propios elementos (G·v − b), así vale también para
+   * diodos y transistores. Los condensadores cuentan como abiertos en este cálculo.
+   */
+  pinCurrents(): Map<string, number> {
+    const out = new Map<string, number>();
+    if (!this.running || !this.netlist || !this.circuit) return out;
+    const v = this.circuit.v;
+    const netlist = this.netlist;
+    for (const rt of this.parts.values()) {
+      const node = new Map<number, number>();
+      const add = (k: number, i: number) => {
+        if (k >= 0 && i) node.set(k, (node.get(k) ?? 0) + i);
+      };
+      const at = (k: number) => (k < 0 ? 0 : v[k]);
+      const probe = {
+        v,
+        dt: 0,
+        limited: false,
+        volt: at,
+        conductance: (a: number, k: number, g: number) => {
+          const i = g * (at(a) - at(k));
+          add(a, i);
+          add(k, -i);
+        },
+        current: (a: number, k: number, i: number) => {
+          add(a, i);
+          add(k, -i);
+        },
+        jac: (row: number, col: number, g: number) => add(row, g * at(col)),
+        rhs: (row: number, value: number) => add(row, -value),
+      };
+      for (const e of rt.sim.elements) e.stamp(probe as never);
+      let total = 0;
+      node.forEach((i) => (total += i));
+      // Cada nodo, a un único pin del componente; la tierra recibe lo que falta (KCL).
+      const def = PARTS[rt.type];
+      if (!def) continue;
+      const seen = new Set<number>();
+      for (const pin of def.pins(rt.props)) {
+        const key = pinKey(rt.id, pin.id);
+        const net = netlist.netOf.get(key);
+        if (net === undefined) continue;
+        const k = this.netNode.get(net);
+        if (k === undefined || seen.has(k)) continue;
+        seen.add(k);
+        out.set(key, k < 0 ? -total : (node.get(k) ?? 0));
+      }
+    }
+    return out;
+  }
+
   // ── Construcción ───────────────────────────────────────────────────────────
   private rebuild(resetMcu: boolean) {
     const snap = this.snapshot;

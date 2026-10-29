@@ -32,6 +32,9 @@ export interface UiState {
   bottomTab: 'code' | 'serial' | null;
   toast: Toast | null;
   tool: Tool;
+  /** Puntos que recorren los cables durante la simulación. */
+  showFlow: boolean;
+  setShowFlow(on: boolean): void;
   view: View;
   compactPanel: 'library' | 'inspector' | null;
   setCompactPanel(panel: 'library' | 'inspector' | null): void;
@@ -59,6 +62,8 @@ export const useUi = create<UiState>((set) => ({
   bottomTab: null,
   toast: null,
   tool: 'select',
+  showFlow: true,
+  setShowFlow: (showFlow) => set({ showFlow }),
   view: 'board',
   compactPanel: null,
   setCompactPanel: (compactPanel) => set({ compactPanel }),
