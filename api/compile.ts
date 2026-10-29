@@ -67,24 +67,29 @@ export async function POST(req: Request) {
   await pub.expire(rate, 120);
 
   try {
-    await ensureBase();
-    const box = await Sandbox.fork({ sourceSandbox: BASE, persistent: false, timeout: 3 * 60_000 });
-    try {
-      await box.writeFiles([{ path: `${HOME}/sketch/sketch.ino`, content: code }]);
-      const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn arduino:avr:uno --output-dir ${HOME}/out ${HOME}/sketch`]);
-      const stdout = await run.stdout();
-      const stderr = (await run.stderr()).split(`${HOME}/sketch/`).join('');
-      if (run.exitCode !== 0) return json({ ok: false, stdout, stderr });
-      const hex = await box.readFileToBuffer({ path: `${HOME}/out/sketch.ino.hex` });
-      if (!hex) return json({ ok: false, stdout, stderr: 'El compilador no generó el .hex.' });
-      const result = { ok: true, hex: hex.toString('utf8'), stdout, stderr };
-      await pub.set(key, JSON.stringify(result), { EX: 7 * 24 * 3600 });
-      return json(result);
-    } finally {
-      await box.delete().catch(() => {});
-    }
+    const result = await compileInSandbox(code);
+    if (result.ok) await pub.set(key, JSON.stringify(result), { EX: 7 * 24 * 3600 });
+    return json(result);
   } catch (err) {
     console.error('compile', err);
     return json({ ok: false, stdout: '', stderr: (err as Error).message || 'Error del compilador' }, 500);
+  }
+}
+
+/** Compila en un clon desechable de la sandbox base. */
+export async function compileInSandbox(code: string) {
+  await ensureBase();
+  const box = await Sandbox.fork({ sourceSandbox: BASE, persistent: false, timeout: 3 * 60_000 });
+  try {
+    await box.writeFiles([{ path: `${HOME}/sketch/sketch.ino`, content: code }]);
+    const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn arduino:avr:uno --output-dir ${HOME}/out ${HOME}/sketch`]);
+    const stdout = await run.stdout();
+    const stderr = (await run.stderr()).split(`${HOME}/sketch/`).join('');
+    if (run.exitCode !== 0) return { ok: false, stdout, stderr };
+    const hex = await box.readFileToBuffer({ path: `${HOME}/out/sketch.ino.hex` });
+    if (!hex) return { ok: false, stdout, stderr: 'El compilador no generó el .hex.' };
+    return { ok: true, hex: hex.toString('utf8'), stdout, stderr };
+  } finally {
+    await box.delete().catch(() => {});
   }
 }
