@@ -19,7 +19,8 @@ export function TopBar() {
   const showToast = useUi((s) => s.showToast);
   const status = useSimStatus();
   const [starting, setStarting] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
+  // `?share=1` (desde el menú de la portada) abre directamente el panel de miembros y acceso.
+  const [shareOpen, setShareOpen] = useState(() => CLOUD && new URLSearchParams(location.search).has('share'));
   const [name, setName] = useState(project.name);
   const [, force] = useState(0);
 

@@ -190,7 +190,7 @@ function counter4(): Template {
   const t = new Rig();
   t.board('bb1', 0, 0);
   t.board('bb2', 400, 0);
-  t.power('psu', 0, -160, ['bb1', 'bb2']);
+  t.power('psu', 0, -70, ['bb1', 'bb2']);
   t.put('clk', 'clock', 'bb1', 5, 'c', { frequency: 2, duty: 50 });
   t.dip('cnt', '74hc161', 'bb1', 9);
   t.gnd(['clk', 'GND']);
@@ -214,7 +214,7 @@ function decade(): Template {
   t.board('bb1', 0, 0);
   t.board('bb2', 400, 0);
   t.board('bb3', 800, 0);
-  t.power('psu', 0, -160, ['bb1', 'bb2', 'bb3'], { skipPlus: ['bb3'] });
+  t.power('psu', 0, -70, ['bb1', 'bb2', 'bb3'], { skipPlus: ['bb3'] });
 
   // Placa 1: reloj, contador y la puerta que lo devuelve a cero tras el 9.
   t.put('clk', 'clock', 'bb1', 5, 'c', { frequency: 2, duty: 50 });
@@ -259,7 +259,7 @@ function chaser(): Template {
   t.board('bb1', 0, 0);
   t.board('bb2', 400, 0);
   t.board('bb3', 800, 0);
-  t.power('psu', 0, -160, ['bb1', 'bb2', 'bb3'], { skipPlus: ['bb3'] });
+  t.power('psu', 0, -70, ['bb1', 'bb2', 'bb3'], { skipPlus: ['bb3'] });
 
   // Placa 1: 555 como oscilador astable (R1 = 1 kΩ, R2 = 33 kΩ, C = 4,7 µF ≈ 4,6 Hz).
   t.dip('osc', 'ne555', 'bb1', 5);
@@ -301,7 +301,7 @@ function freqdiv(): Template {
   const t = new Rig();
   t.board('bb1', 0, 0);
   t.board('bb2', 400, 0);
-  t.power('psu', 0, -160, ['bb1', 'bb2']);
+  t.power('psu', 0, -70, ['bb1', 'bb2']);
   t.put('clk', 'clock', 'bb1', 5, 'c', { frequency: 8, duty: 50 });
   t.gnd(['clk', 'GND']);
 

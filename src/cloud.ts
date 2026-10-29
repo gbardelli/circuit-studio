@@ -45,6 +45,8 @@ export interface ProjectSummary {
   owner_id: string;
   role: Role;
   members: number;
+  /** Los primeros miembros, para mostrar sus caras. */
+  people: { id: string; name: string | null; image: string | null }[];
 }
 
 export interface ProjectDetail {
