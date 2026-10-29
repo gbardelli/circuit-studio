@@ -43,5 +43,5 @@ writeFileSync(config, `directories:\n  data: ${JSON.stringify(dataDir)}\n  downl
 const run = (...args) => execFileSync(bin, ['--config-file', config, ...args], { stdio: 'inherit' });
 run('core', 'update-index');
 run('core', 'install', 'arduino:avr');
-run('lib', 'install', 'Servo');
+run('lib', 'install', 'Servo', 'LiquidCrystal');
 console.log('arduino-cli listo en', bin);

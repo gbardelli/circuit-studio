@@ -1,6 +1,7 @@
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Info } from 'lucide-react';
 import { Project } from '../collab/project';
+import { schematicPlacement, withFrozenPlacement } from './schematic';
 import { applyTemplate, findTemplate } from '../collab/applyTemplate';
 import { SimEngine } from '../sim/engine';
 import { Canvas, isTyping } from './Canvas';
@@ -142,7 +143,8 @@ function EditorShell() {
           ui.select([], []);
         }
       } else if (key === 'r' && !mod && ui.selection.length) {
-        project.rotateParts(ui.selection);
+        if (ui.view === 'schematic') project.rotateSchematic(ui.selection, schematicPlacement(project.snapshot().parts));
+        else project.rotateParts(ui.selection);
       } else if (key === '/' && !mod) {
         e.preventDefault();
         document.getElementById('lib-search')?.focus();
@@ -150,8 +152,12 @@ function EditorShell() {
         e.preventDefault();
         const step = e.shiftKey ? 50 : 10;
         const d = { arrowleft: [-step, 0], arrowright: [step, 0], arrowup: [0, -step], arrowdown: [0, step] }[key]!;
-        const snap = project.snapshot();
-        project.moveParts(snap.parts.filter((p) => ui.selection.includes(p.id)).map((p) => ({ id: p.id, x: p.x + d[0], y: p.y + d[1] })));
+        const all = project.snapshot().parts;
+        const parts = all.filter((p) => ui.selection.includes(p.id));
+        if (ui.view === 'schematic') {
+          const pos = schematicPlacement(all);
+          project.moveSchematic(withFrozenPlacement(all, parts.map((p) => ({ id: p.id, x: pos.get(p.id)!.x + d[0], y: pos.get(p.id)!.y + d[1] }))));
+        } else project.moveParts(parts.map((p) => ({ id: p.id, x: p.x + d[0], y: p.y + d[1] })));
       }
     },
     [project],

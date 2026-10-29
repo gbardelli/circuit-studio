@@ -1,12 +1,12 @@
 import { memo } from 'react';
 import { Stamper, VSource, type Element } from '../core/solver';
 import type { PinDef } from '../core/types';
-import type { McuBridge, PartDef, RenderProps } from './types';
+import type { McuBridge, McuSpec, PartDef, PartSim, RenderProps, SimContext } from './types';
 import { Glow } from './common';
 
 // Cabezales hembra alineados a la rejilla de 0.1". Índices Arduino: D0–D13 = 0–13, A0–A5 = 14–19.
-const TOP_Y = 12;
-const BOTTOM_Y = 198;
+const TOP_Y = 10;
+const BOTTOM_Y = 200;
 const TOP: [string, number, string][] = [
   ['SCL', 70, 'SCL'],
   ['SDA', 80, 'SDA'],
@@ -43,6 +43,10 @@ const BOTTOM: [string, number, string][] = [
   ['A5', 220, 'A5'],
 ];
 
+export const TOP_HEADER = TOP;
+export const BOTTOM_HEADER = BOTTOM;
+export const HEADER_Y = { top: TOP_Y, bottom: BOTTOM_Y };
+
 export const MCU_PIN_IDS = [...Array.from({ length: 14 }, (_, i) => `D${i}`), 'A0', 'A1', 'A2', 'A3', 'A4', 'A5'];
 
 const PINS: PinDef[] = [
@@ -51,7 +55,7 @@ const PINS: PinDef[] = [
 ];
 
 /** Driver de un pin del ATmega328P según DDR/PORT. Resistencias aproximadas del datasheet. */
-class McuPin implements Element {
+export class McuPin implements Element {
   constructor(private node: number, private index: number, private mcu: McuBridge) {}
   stamp(s: Stamper) {
     const mode = this.mcu.running ? this.mcu.pinMode(this.index) : 'input';
@@ -69,7 +73,7 @@ class McuPin implements Element {
   }
 }
 
-function Header({ x, y, count }: { x: number; y: number; count: number }) {
+export function Header({ x, y, count }: { x: number; y: number; count: number }) {
   const w = count * 10;
   return (
     <g>
@@ -194,6 +198,27 @@ const UnoRender = memo(function UnoRender({ visual }: RenderProps) {
   );
 });
 
+const UNO_MCU: McuSpec = {
+  board: 'uno',
+  fqbn: 'arduino:avr:uno',
+  pinIds: MCU_PIN_IDS,
+  analogIds: ['A0', 'A1', 'A2', 'A3', 'A4', 'A5'],
+};
+
+/**
+ * Modelo eléctrico común a las placas: reguladores de 5 V y 3.3 V desde USB y un
+ * driver por pin del microcontrolador. El LED «L» sigue a D13 (búfer en la placa).
+ */
+export function mcuSim(ctx: SimContext, spec: McuSpec, gndPin = 'GND.1'): PartSim {
+  const gnd = ctx.net(gndPin);
+  const elements: Element[] = [new VSource(ctx.net('5V'), gnd, () => 5, () => 0.05), new VSource(ctx.net('3V3'), gnd, () => 3.3, () => 0.2)];
+  const mcuNodes = spec.pinIds.map((id) => ctx.net(id));
+  const analogNodes = spec.analogIds.map((id) => ctx.net(id));
+  if (ctx.mcu) mcuNodes.forEach((node, i) => elements.push(new McuPin(node, i, ctx.mcu!)));
+  const d13 = mcuNodes[13];
+  return { elements, mcuNodes, analogNodes, probe: (v) => ({ l: (d13 < 0 ? 0 : v[d13]) > 2.5 ? 1 : 0 }) };
+}
+
 export const arduinoUno: PartDef = {
   type: 'arduino-uno',
   name: 'Arduino Uno R3',
@@ -211,19 +236,7 @@ export const arduinoUno: PartDef = {
   bounds: () => ({ x: -8, y: 0, w: 278, h: 210 }),
   model: 'MCU',
   thumbScale: 0.62,
-  sim(ctx) {
-    const gnd = ctx.net('GND.1');
-    const v5 = ctx.net('5V');
-    const v33 = ctx.net('3V3');
-    const elements: Element[] = [new VSource(v5, gnd, () => 5, () => 0.05), new VSource(v33, gnd, () => 3.3, () => 0.2)];
-    const mcuNodes = MCU_PIN_IDS.map((id) => ctx.net(id));
-    if (ctx.mcu) mcuNodes.forEach((node, i) => elements.push(new McuPin(node, i, ctx.mcu!)));
-    const d13 = mcuNodes[13];
-    return {
-      elements,
-      mcuNodes,
-      probe: (v) => ({ l: (d13 < 0 ? 0 : v[d13]) > 2.5 ? 1 : 0 }),
-    };
-  },
+  mcu: UNO_MCU,
+  sim: (ctx) => mcuSim(ctx, UNO_MCU),
   Render: UnoRender,
 };

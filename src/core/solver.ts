@@ -199,6 +199,48 @@ export class NPN implements Element {
   }
 }
 
+/**
+ * MOSFET de canal N, modelo de nivel 1 (Shichman-Hodges). Simétrico: si Vds < 0 se
+ * intercambian drenador y fuente. La puerta no consume corriente.
+ */
+export class NMOS implements Element {
+  nonlinear = true;
+  constructor(public d: number, public g: number, public s: number, public vth = 1.6, public k = 12) {}
+  private characteristic(vgs: number, vds: number) {
+    const vov = vgs - this.vth;
+    if (vov <= 0) return { id: 0, gm: 0, gds: 1e-9 };
+    if (vds < vov) {
+      return { id: this.k * (vov * vds - (vds * vds) / 2), gm: this.k * vds, gds: this.k * (vov - vds) + 1e-9 };
+    }
+    return { id: (this.k / 2) * vov * vov, gm: this.k * vov, gds: 1e-9 };
+  }
+  stamp(st: Stamper) {
+    let d = this.d;
+    let s = this.s;
+    if (st.volt(d) < st.volt(s)) [d, s] = [s, d];
+    const vgs = Math.min(st.volt(this.g) - st.volt(s), 40);
+    const vds = st.volt(d) - st.volt(s);
+    const { id, gm, gds } = this.characteristic(vgs, vds);
+    // Corriente que entra por el drenador y sale por la fuente: I(vg, vd, vs).
+    const g = this.g;
+    st.jac(d, g, gm);
+    st.jac(d, d, gds);
+    st.jac(d, s, -gm - gds);
+    st.rhs(d, -(id - gm * vgs - gds * vds));
+    st.jac(s, g, -gm);
+    st.jac(s, d, -gds);
+    st.jac(s, s, gm + gds);
+    st.rhs(s, id - gm * vgs - gds * vds);
+  }
+  currentOf(v: Float64Array) {
+    const vd = volt(v, this.d);
+    const vs = volt(v, this.s);
+    const [hi, lo] = vd >= vs ? [vd, vs] : [vs, vd];
+    const r = this.characteristic(volt(v, this.g) - lo, hi - lo);
+    return vd >= vs ? r.id : -r.id;
+  }
+}
+
 export interface SolveResult {
   v: Float64Array;
   converged: boolean;

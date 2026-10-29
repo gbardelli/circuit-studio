@@ -172,6 +172,11 @@ export class Project {
         return;
       }
       const data: PartData = { id, type: raw.type, x: Number(raw.x) || 0, y: Number(raw.y) || 0, rot: (Number(raw.rot) || 0) as Rotation, props: { ...PARTS[raw.type].defaults, ...(raw.props ?? {}) } };
+      if (Number.isFinite(raw.sx) && Number.isFinite(raw.sy)) {
+        data.sx = Number(raw.sx);
+        data.sy = Number(raw.sy);
+        data.srot = (Number(raw.srot) || 0) as Rotation;
+      }
       this.cache.set(id, { json, data });
       parts.push(data);
     });
@@ -270,7 +275,7 @@ export class Project {
       m.set('props', p);
       this.parts.set(id, m);
       // El sketch nace con la placa, en la misma transacción, para que dos editores no creen dos.
-      if (type === 'arduino-uno') this.code.set(id, new Y.Text(DEFAULT_SKETCH));
+      if (PARTS[type]?.mcu) this.code.set(id, new Y.Text(DEFAULT_SKETCH));
     });
     return id;
   }
@@ -282,6 +287,36 @@ export class Project {
         if (!m) continue;
         if (m.get('x') !== mv.x) m.set('x', mv.x);
         if (m.get('y') !== mv.y) m.set('y', mv.y);
+      }
+    });
+  }
+
+  /** Posición de los símbolos en la vista de esquema. */
+  moveSchematic(moves: { id: string; x: number; y: number }[]) {
+    this.tx(() => {
+      for (const mv of moves) {
+        const m = this.parts.get(mv.id);
+        if (!m) continue;
+        m.set('sx', mv.x);
+        m.set('sy', mv.y);
+      }
+    });
+  }
+
+  /** `current` es la posición de todos los símbolos: los que aún no tenían una fija la reciben,
+   *  para que girar uno no recoloque la disposición automática del resto. */
+  rotateSchematic(ids: string[], current: Map<string, { x: number; y: number }>) {
+    this.tx(() => {
+      for (const [id, at] of current) {
+        const m = this.parts.get(id);
+        if (m && m.get('sx') === undefined) {
+          m.set('sx', at.x);
+          m.set('sy', at.y);
+        }
+      }
+      for (const id of ids) {
+        const m = this.parts.get(id);
+        if (m) m.set('srot', ((Number(m.get('srot')) || 0) + 90) % 360);
       }
     });
   }

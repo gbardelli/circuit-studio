@@ -36,8 +36,8 @@ const server = createServer(async (req, res) => {
       }
     }
     try {
-      const { source } = JSON.parse(body) as { source: string };
-      const result = await compileSketch(String(source ?? ''));
+      const { source, fqbn } = JSON.parse(body) as { source: string; fqbn?: string };
+      const result = await compileSketch(String(source ?? ''), fqbn ?? 'arduino:avr:uno');
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(JSON.stringify(result));
     } catch {

@@ -12,6 +12,7 @@ export interface Toast {
 }
 
 export type Tool = 'select' | 'hand';
+export type View = 'board' | 'schematic';
 
 export interface UiState {
   selection: string[];
@@ -23,6 +24,8 @@ export interface UiState {
   bottomTab: 'code' | 'serial' | null;
   toast: Toast | null;
   tool: Tool;
+  view: View;
+  setView(view: View): void;
   select(parts: string[], wires?: string[]): void;
   setViewport(v: Viewport): void;
   setPlacing(type: string | null): void;
@@ -44,6 +47,8 @@ export const useUi = create<UiState>((set) => ({
   bottomTab: null,
   toast: null,
   tool: 'select',
+  view: 'board',
+  setView: (view) => set({ view }),
   select: (parts, wires = []) => set({ selection: parts, wireSelection: wires }),
   setViewport: (viewport) => set({ viewport }),
   setPlacing: (placing) => set({ placing }),

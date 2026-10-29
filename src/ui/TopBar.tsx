@@ -5,6 +5,7 @@ import { AlertTriangle, Check, Code2, Copy, Cpu, Eye, Globe, HardDrive, Lock, Ke
 import { compileSketch } from '../sim/compile';
 import { useConnection, useEditor, usePeers, useSimStatus, useSnapshot } from './context';
 import { Logo, Wordmark } from './Logo';
+import { PARTS } from '../parts';
 import { useUi } from './store';
 
 export function TopBar() {
@@ -35,10 +36,10 @@ export function TopBar() {
       return;
     }
     setStarting(true);
-    const boards = snapshot.parts.filter((p) => p.type === 'arduino-uno');
+    const boards = snapshot.parts.filter((p) => PARTS[p.type].mcu);
     let noToolchain = false;
     for (const b of boards) {
-      const r = await compileSketch(project.sketch(b.id).toString());
+      const r = await compileSketch(project.sketch(b.id).toString(), PARTS[b.type].mcu!.fqbn);
       if (r.ok && r.hex) {
         engine.setProgram(b.id, r.hex);
       } else if (r.missingToolchain) {
@@ -68,7 +69,7 @@ export function TopBar() {
   };
 
   const t = status.simTime;
-  const board = snapshot.parts.find((p) => p.type === 'arduino-uno');
+  const board = snapshot.parts.find((p) => PARTS[p.type].mcu);
   const codeOpen = useUi((s) => s.codeFor !== null);
 
   return (

@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Code2, Copy, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
+import { CircuitBoard, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
 import { buildNetlist, pinKey } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
@@ -8,6 +8,7 @@ import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
 import { useUi } from './store';
 import { WireShape, roundedPath } from './wires';
+import { buildSchematic, withFrozenPlacement, type SchNet } from './schematic';
 
 interface PinHit {
   part: string;
@@ -62,9 +63,14 @@ export function Canvas() {
   const lastPresence = useRef(0);
   const fitted = useRef(false);
 
-  const partsById = useMemo(() => new Map(snapshot.parts.map((p) => [p.id, p])), [snapshot]);
-  const wiresById = useMemo(() => new Map(snapshot.wires.map((w) => [w.id, w])), [snapshot]);
+  const view = useUi((s) => s.view);
+  const setView = useUi((s) => s.setView);
   const netlist = useMemo(() => buildNetlist(snapshot, PARTS), [snapshot]);
+  // Vista de esquema: símbolos «sch:» con los mismos ids; las conexiones salen de las redes.
+  const sch = useMemo(() => (view === 'schematic' ? buildSchematic(snapshot, netlist) : null), [view, snapshot, netlist]);
+  const scene = useMemo(() => (sch ? { parts: sch.parts, wires: [] as WireData[] } : snapshot), [sch, snapshot]);
+  const partsById = useMemo(() => new Map(scene.parts.map((p) => [p.id, p])), [scene]);
+  const wiresById = useMemo(() => new Map(snapshot.wires.map((w) => [w.id, w])), [snapshot]);
   const z = viewport.zoom;
 
   const toWorldPt = useCallback(
@@ -78,7 +84,7 @@ export function Canvas() {
   // ── Encuadre ───────────────────────────────────────────────────────────────
   const fit = useCallback(() => {
     const svg = svgRef.current;
-    if (!svg || snapshot.parts.length === 0) return;
+    if (!svg || scene.parts.length === 0) return;
     let x0 = Infinity;
     let y0 = Infinity;
     let x1 = -Infinity;
@@ -89,24 +95,30 @@ export function Canvas() {
       x1 = Math.max(x1, x);
       y1 = Math.max(y1, y);
     };
-    for (const p of snapshot.parts) {
+    for (const p of scene.parts) {
       const b = partBounds(p);
       grow(b.x, b.y);
       grow(b.x + b.w, b.y + b.h);
     }
-    for (const w of snapshot.wires) for (const pt of wirePoints(w, partsById)) grow(pt.x, pt.y);
+    for (const w of scene.wires) for (const pt of wirePoints(w, partsById)) grow(pt.x, pt.y);
     const r = svg.getBoundingClientRect();
     if (r.width < 50 || r.height < 50) return;
     const zoom = Math.min(4, Math.max(MIN_ZOOM, Math.min(r.width / (x1 - x0 + 120), r.height / (y1 - y0 + 140))));
     setViewport({ zoom, x: r.width / 2 - ((x0 + x1) / 2) * zoom, y: r.height / 2 - ((y0 + y1) / 2) * zoom });
-  }, [snapshot, partsById, setViewport]);
+  }, [scene, partsById, setViewport]);
 
   useEffect(() => {
-    if (!fitted.current && snapshot.parts.length > 0) {
+    if (!fitted.current && scene.parts.length > 0) {
       fitted.current = true;
       requestAnimationFrame(fit);
     }
-  }, [snapshot, fit]);
+  }, [scene, fit]);
+
+  // Al cambiar de vista se encuadra de nuevo.
+  useEffect(() => {
+    requestAnimationFrame(fit);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
 
   const zoomBy = (factor: number) => {
     const r = svgRef.current!.getBoundingClientRect();
@@ -172,7 +184,7 @@ export function Canvas() {
     (w: Vec, bodyPart: string | null): PinHit | null => {
       let best: PinHit | null = null;
       let bestScore = Infinity;
-      snapshot.parts.forEach((p, order) => {
+      scene.parts.forEach((p, order) => {
         const b = partBounds(p);
         if (w.x < b.x - 8 || w.x > b.x + b.w + 8 || w.y < b.y - 8 || w.y > b.y + b.h + 8) return;
         const local = toLocal(p, w);
@@ -194,7 +206,7 @@ export function Canvas() {
       }
       return hit;
     },
-    [snapshot, pinRadius, partsById],
+    [scene, pinRadius, partsById],
   );
 
   const publishPresence = useCallback(
@@ -379,12 +391,12 @@ export function Canvas() {
     switch (drag.kind) {
       case 'parts':
         if (drag.moved && (drag.dx || drag.dy)) {
-          project.moveParts(
-            drag.ids.flatMap((id) => {
-              const p = partsById.get(id);
-              return p ? [{ id, x: p.x + drag.dx, y: p.y + drag.dy }] : [];
-            }),
-          );
+          const moves = drag.ids.flatMap((id) => {
+            const p = partsById.get(id);
+            return p ? [{ id, x: p.x + drag.dx, y: p.y + drag.dy }] : [];
+          });
+          if (sch) project.moveSchematic(withFrozenPlacement(snapshot.parts, moves));
+          else project.moveParts(moves);
         }
         publishPresence({ drag: null }, true);
         break;
@@ -394,13 +406,13 @@ export function Canvas() {
         const y0 = Math.min(drag.start.y, drag.end.y);
         const y1 = Math.max(drag.start.y, drag.end.y);
         if (x1 - x0 > 2 || y1 - y0 > 2) {
-          const ids = snapshot.parts
+          const ids = scene.parts
             .filter((p) => {
               const b = partBounds(p);
               return b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
             })
             .map((p) => p.id);
-          const wids = snapshot.wires.filter((wi) => wirePoints(wi, partsById).every((pt) => pt.x >= x0 && pt.x <= x1 && pt.y >= y0 && pt.y <= y1)).map((x) => x.id);
+          const wids = scene.wires.filter((wi) => wirePoints(wi, partsById).every((pt) => pt.x >= x0 && pt.x <= x1 && pt.y >= y0 && pt.y <= y1)).map((x) => x.id);
           select(drag.additive ? [...new Set([...selection, ...ids])] : ids, drag.additive ? [...new Set([...wireSelection, ...wids])] : wids);
         }
         break;
@@ -453,7 +465,7 @@ export function Canvas() {
       return;
     }
     const partId = target.closest('[data-part]')?.getAttribute('data-part');
-    if (partId && partsById.get(partId)?.type === 'arduino-uno') openCode(partId, 'code');
+    if (partId && PARTS[partsById.get(partId)?.type ?? '']?.mcu) openCode(partId, 'code');
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
@@ -478,6 +490,7 @@ export function Canvas() {
     const def = PARTS[type];
     const b = def.bounds(def.defaults);
     const id = project.addPart(type, snap(w.x - b.x - b.w / 2), snap(w.y - b.y - b.h / 2));
+    if (sch) project.moveSchematic([{ id, x: snap(w.x), y: snap(w.y) }]);
     select([id], []);
     if (!keepArmed) setPlacing(null);
   };
@@ -505,6 +518,11 @@ export function Canvas() {
     [project, engine],
   );
 
+  const rotateSelection = () => {
+    if (sch) project.rotateSchematic(selection, partsById);
+    else project.rotateParts(selection);
+  };
+
   const deleteSelection = () => {
     project.deleteItems(selection, wireSelection);
     select([], []);
@@ -519,18 +537,18 @@ export function Canvas() {
     const out: Vec[] = [];
     netlist.netOf.forEach((n, key) => {
       if (n === net) {
-        const pos = netlist.pinWorld.get(key);
+        const pos = sch ? sch.pinPos.get(key) : netlist.pinWorld.get(key);
         if (pos) out.push(pos);
       }
     });
     return out.slice(0, 400);
-  }, [hoverPin, netlist, drag]);
+  }, [hoverPin, netlist, drag, sch]);
 
   const insertionMarks = useMemo(() => {
     const ids = drag?.kind === 'parts' ? drag.ids : [];
-    if (ids.length === 0 || drag?.kind !== 'parts') return [] as Vec[];
+    if (sch || ids.length === 0 || drag?.kind !== 'parts') return [] as Vec[];
     const sockets = new Set<string>();
-    for (const p of snapshot.parts) {
+    for (const p of scene.parts) {
       if (ids.includes(p.id)) continue;
       for (const pin of PARTS[p.type].pins(p.props))
         if (pin.kind === 'socket') {
@@ -550,7 +568,7 @@ export function Canvas() {
       }
     }
     return out;
-  }, [drag, snapshot, partsById]);
+  }, [drag, scene, partsById, sch]);
 
   const peerSelections = useMemo(() => {
     const out: { id: string; color: string; name: string; key: string }[] = [];
@@ -573,7 +591,7 @@ export function Canvas() {
     <div className="canvas-wrap" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
       <svg
         ref={svgRef}
-        className={`canvas ${space || tool === 'hand' || drag?.kind === 'pan' ? 'panning' : ''} ${draft ? 'wiring' : ''} ${hoverPin && !hoverWire ? 'on-pin' : ''}`}
+        className={`canvas ${sch ? 'schematic' : ''} ${space || tool === 'hand' || drag?.kind === 'pan' ? 'panning' : ''} ${draft ? 'wiring' : ''} ${hoverPin && !hoverWire ? 'on-pin' : ''}`}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
@@ -592,7 +610,8 @@ export function Canvas() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${z})`}>
-          {snapshot.parts.map((p) => (
+          {sch && <NetLayer nets={sch.nets} />}
+          {scene.parts.map((p) => (
             <PartView key={p.id} part={p} offset={offsets.get(p.id)} onInput={onPartInput} live={simRunning} dragging={draggingIds.includes(p.id)} />
           ))}
 
@@ -605,7 +624,7 @@ export function Canvas() {
           ))}
 
           <g className="wires">
-            {snapshot.wires.map((w) => (
+            {scene.wires.map((w) => (
               <WireView key={w.id} wire={w} points={livePoints(w)} z={z} selected={wireSelection.includes(w.id)} hovered={hoverWire === w.id && !drag} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
             ))}
           </g>
@@ -715,7 +734,7 @@ export function Canvas() {
             <span className="sep" />
             {selection.length > 0 && (
               <>
-                <button className="icon-btn" onClick={() => project.rotateParts(selection)} aria-label="Rotar" title="Rotar · R">
+                <button className="icon-btn" onClick={() => rotateSelection()} aria-label="Rotar" title="Rotar · R">
                   <RotateCw size={15} />
                 </button>
                 <button className="icon-btn" onClick={() => select(project.duplicate(selection, 20, 20), [])} aria-label="Duplicar" title="Duplicar · Ctrl D">
@@ -746,6 +765,15 @@ export function Canvas() {
         )}
       </div>
 
+      <div className="float view-float" role="tablist" aria-label="Vista">
+        <button role="tab" aria-selected={view === 'board'} className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>
+          <CircuitBoard size={14} /> Protoboard
+        </button>
+        <button role="tab" aria-selected={view === 'schematic'} className={view === 'schematic' ? 'on' : ''} onClick={() => setView('schematic')}>
+          <Workflow size={14} /> Esquema
+        </button>
+      </div>
+
       <div className="float zoom-float" role="toolbar" aria-label="Zoom">
         <button className="icon-btn" onClick={() => zoomBy(1 / 1.25)} aria-label="Alejar">
           <Minus size={15} />
@@ -766,13 +794,13 @@ export function Canvas() {
         <div className="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} role="menu">
           {menu.part && (
             <>
-              <button role="menuitem" onClick={() => (project.rotateParts(selection), setMenu(null))}>
+              <button role="menuitem" onClick={() => (rotateSelection(), setMenu(null))}>
                 <RotateCw size={14} /> Rotar <kbd>R</kbd>
               </button>
               <button role="menuitem" onClick={() => (select(project.duplicate(selection, 20, 20), []), setMenu(null))}>
                 <Copy size={14} /> Duplicar <kbd>Ctrl D</kbd>
               </button>
-              {partsById.get(menu.part)?.type === 'arduino-uno' && (
+              {PARTS[partsById.get(menu.part)?.type ?? '']?.mcu && (
                 <button role="menuitem" onClick={() => (openCode(menu.part!, 'code'), setMenu(null))}>
                   <Code2 size={14} /> Abrir código
                 </button>
@@ -955,3 +983,66 @@ const WireView = memo(function WireView({ wire, points, z, selected, hovered, ed
     </g>
   );
 });
+
+// ── Redes en el esquema ──────────────────────────────────────────────────────
+const NetLayer = memo(function NetLayer({ nets }: { nets: SchNet[] }) {
+  return (
+    <g pointerEvents="none">
+      {nets.map((net) =>
+        net.kind === 'wire' ? (
+          <g key={net.id}>
+            {net.segments.map((seg, i) => (
+              <path key={i} d={seg.map((p, j) => `${j ? 'L' : 'M'}${p.x} ${p.y}`).join('')} stroke="var(--sch-wire)" strokeWidth={1.4} fill="none" strokeLinejoin="round" />
+            ))}
+            {junctions(net.segments).map((p, i) => (
+              <circle key={i} cx={p.x} cy={p.y} r={2.2} fill="var(--sch-wire)" />
+            ))}
+          </g>
+        ) : (
+          <g key={net.id}>
+            {net.pins.map((p, i) => (
+              <RailGlyph key={i} at={p} dir={net.dirs[i]} kind={net.kind} label={net.label} />
+            ))}
+          </g>
+        ),
+      )}
+    </g>
+  );
+});
+
+/** Tierra o alimentación: un tramo corto que sale del pin y el símbolo, siempre en vertical. */
+function RailGlyph({ at, dir, kind, label }: { at: Vec; dir: Vec; kind: SchNet['kind']; label?: string }) {
+  const end = { x: at.x + dir.x * 10, y: at.y + dir.y * 10 };
+  const color = kind === 'ground' ? 'var(--sch-ink)' : 'var(--sch-supply)';
+  // Tierra hacia abajo salvo que el pin salga hacia arriba; alimentación al revés.
+  const down = kind === 'ground' ? dir.y >= 0 : dir.y > 0;
+  const s = down ? 1 : -1;
+  return (
+    <g stroke={color} strokeWidth={1.3} strokeLinecap="round" fill="none">
+      <path d={`M${at.x} ${at.y} L${end.x} ${end.y} v${6 * s}`} />
+      {kind === 'ground' ? (
+        <path d={`M${end.x - 7} ${end.y + 6 * s} h14 M${end.x - 4.5} ${end.y + 9.5 * s} h9 M${end.x - 2} ${end.y + 13 * s} h4`} />
+      ) : (
+        <>
+          <path d={`M${end.x - 6} ${end.y + 6 * s} h12`} />
+          <text x={end.x} y={end.y + (down ? 15 : -9)} textAnchor="middle" fontSize={6.5} fontWeight={600} fill={color} stroke="none" fontFamily="Geist, sans-serif">
+            {label}
+          </text>
+        </>
+      )}
+    </g>
+  );
+}
+
+/** Puntos donde se encuentran tres o más tramos: ahí va el punto de unión. */
+function junctions(segments: Vec[][]): Vec[] {
+  const count = new Map<string, { p: Vec; n: number }>();
+  for (const seg of segments)
+    for (const p of [seg[0], seg[seg.length - 1]]) {
+      const k = `${p.x},${p.y}`;
+      const c = count.get(k);
+      if (c) c.n++;
+      else count.set(k, { p, n: 1 });
+    }
+  return [...count.values()].filter((c) => c.n >= 3).map((c) => c.p);
+}

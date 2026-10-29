@@ -18,6 +18,10 @@
   --text-3: #7b8089;
 
   --accent: #3b9eff;
+  --sch-ink: #c9d1dc;
+  --sch-soft: #7b8594;
+  --sch-wire: #6fb4ff;
+  --sch-supply: #ff8f6b;
   --accent-hi: #6cb6ff;
   --accent-soft: rgba(59, 158, 255, 0.14);
   --accent-line: rgba(59, 158, 255, 0.45);
@@ -871,6 +875,55 @@ input[type='range']::-moz-range-thumb {
 .zoom-float {
   left: 12px;
   bottom: 12px;
+}
+.view-float {
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px;
+  gap: 2px;
+}
+.view-float button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 11px;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-3);
+  font: 500 12.5px var(--sans, inherit);
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.view-float button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.view-float button.on {
+  color: var(--text);
+  background: var(--raised-2);
+  box-shadow: 0 0 0 1px var(--line-2), 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.error-screen {
+  display: grid;
+  place-items: center;
+  height: 100vh;
+  background: var(--bg);
+  color: var(--text-2);
+  text-align: center;
+  font-size: 14px;
+}
+.error-screen h1 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 20px;
+  letter-spacing: -0.02em;
+}
+.error-screen p {
+  margin: 0 0 16px;
 }
 .zoom-float .zoom-val {
   min-width: 52px;

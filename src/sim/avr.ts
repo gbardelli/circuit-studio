@@ -1,4 +1,5 @@
-// Emulación del ATmega328P con avr8js: CPU, puertos, temporizadores, USART y ADC.
+// Emulación AVR con avr8js: CPU, puertos, temporizadores, USART y ADC, con un perfil
+// por placa (ATmega328P para Uno y Nano; ATmega2560 para Mega).
 import {
   AVRADC,
   AVRIOPort,
@@ -8,20 +9,102 @@ import {
   PinState,
   adcConfig,
   avrInstruction,
+  portAConfig,
   portBConfig,
   portCConfig,
   portDConfig,
+  portEConfig,
+  portFConfig,
+  portGConfig,
+  portHConfig,
+  portJConfig,
+  portKConfig,
+  portLConfig,
   timer0Config,
   timer1Config,
   timer2Config,
   usart0Config,
+  type ADCConfig,
+  type AVRPortConfig,
+  type AVRTimerConfig,
 } from 'avr8js';
 import type { McuPinMode } from '../parts/types';
 
 export const CLOCK_HZ = 16_000_000;
 
-export function parseIntelHex(hex: string): Uint16Array {
-  const bytes = new Uint8Array(0x8000);
+type Port = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'J' | 'K' | 'L';
+const PORTS: Record<Port, AVRPortConfig> = {
+  A: portAConfig,
+  B: portBConfig,
+  C: portCConfig,
+  D: portDConfig,
+  E: portEConfig,
+  F: portFConfig,
+  G: portGConfig,
+  H: portHConfig,
+  J: portJConfig,
+  K: portKConfig,
+  L: portLConfig,
+};
+
+export type BoardId = 'uno' | 'nano' | 'mega';
+
+interface BoardProfile {
+  flashBytes: number;
+  /** Bytes de datos más allá de los 256 de registros que avr8js reserva (RAMEND + 1 − 0x100). */
+  sramBytes: number;
+  /** Pin Arduino (índice) → [puerto, bit]. */
+  pins: [Port, number][];
+  timers: AVRTimerConfig[];
+  usart: typeof usart0Config;
+  adc: ADCConfig;
+}
+
+const p = (port: Port, bits: number[]) => bits.map((b) => [port, b] as [Port, number]);
+
+const ATMEGA328: Omit<BoardProfile, 'pins'> = {
+  flashBytes: 0x8000,
+  sramBytes: 2048,
+  timers: [timer0Config, timer1Config, timer2Config],
+  usart: usart0Config,
+  adc: adcConfig,
+};
+// D0–D7 = PD0–7, D8–D13 = PB0–5, A0–A5 = PC0–5 (D14–D19).
+const PINS_328: [Port, number][] = [...p('D', [0, 1, 2, 3, 4, 5, 6, 7]), ...p('B', [0, 1, 2, 3, 4, 5]), ...p('C', [0, 1, 2, 3, 4, 5])];
+
+// ATmega2560: vectores de interrupción (n−1)·2 según la tabla del datasheet y salidas de comparación de cada timer.
+const t16 = (base: Partial<AVRTimerConfig>): AVRTimerConfig => ({ ...timer1Config, ...base });
+const MEGA_TIMERS: AVRTimerConfig[] = [
+  { ...timer0Config, compAInterrupt: 0x2a, compBInterrupt: 0x2c, ovfInterrupt: 0x2e, compPortA: portBConfig.PORT, compPinA: 7, compPortB: portGConfig.PORT, compPinB: 5, externalClockPort: portDConfig.PORT, externalClockPin: 7 },
+  t16({ captureInterrupt: 0x20, compAInterrupt: 0x22, compBInterrupt: 0x24, compCInterrupt: 0x26, ovfInterrupt: 0x28, OCRC: 0x8c, compPortA: portBConfig.PORT, compPinA: 5, compPortB: portBConfig.PORT, compPinB: 6, compPortC: portBConfig.PORT, compPinC: 7, externalClockPort: portDConfig.PORT, externalClockPin: 6 }),
+  { ...timer2Config, compAInterrupt: 0x1a, compBInterrupt: 0x1c, ovfInterrupt: 0x1e, compPortA: portBConfig.PORT, compPinA: 4, compPortB: portHConfig.PORT, compPinB: 6 },
+  t16({ captureInterrupt: 0x3e, compAInterrupt: 0x40, compBInterrupt: 0x42, compCInterrupt: 0x44, ovfInterrupt: 0x46, TIFR: 0x38, TCCRA: 0x90, TCCRB: 0x91, TCCRC: 0x92, TCNT: 0x94, ICR: 0x96, OCRA: 0x98, OCRB: 0x9a, OCRC: 0x9c, TIMSK: 0x71, compPortA: portEConfig.PORT, compPinA: 3, compPortB: portEConfig.PORT, compPinB: 4, compPortC: portEConfig.PORT, compPinC: 5, externalClockPort: 0, externalClockPin: 0 }),
+  t16({ captureInterrupt: 0x52, compAInterrupt: 0x54, compBInterrupt: 0x56, compCInterrupt: 0x58, ovfInterrupt: 0x5a, TIFR: 0x39, TCCRA: 0xa0, TCCRB: 0xa1, TCCRC: 0xa2, TCNT: 0xa4, ICR: 0xa6, OCRA: 0xa8, OCRB: 0xaa, OCRC: 0xac, TIMSK: 0x72, compPortA: portHConfig.PORT, compPinA: 3, compPortB: portHConfig.PORT, compPinB: 4, compPortC: portHConfig.PORT, compPinC: 5, externalClockPort: 0, externalClockPin: 0 }),
+  t16({ captureInterrupt: 0x5c, compAInterrupt: 0x5e, compBInterrupt: 0x60, compCInterrupt: 0x62, ovfInterrupt: 0x64, TIFR: 0x3a, TCCRA: 0x120, TCCRB: 0x121, TCCRC: 0x122, TCNT: 0x124, ICR: 0x126, OCRA: 0x128, OCRB: 0x12a, OCRC: 0x12c, TIMSK: 0x73, compPortA: portLConfig.PORT, compPinA: 3, compPortB: portLConfig.PORT, compPinB: 4, compPortC: portLConfig.PORT, compPinC: 5, externalClockPort: 0, externalClockPin: 0 }),
+];
+const PINS_2560: [Port, number][] = [
+  ['E', 0], ['E', 1], ['E', 4], ['E', 5], ['G', 5], ['E', 3], ['H', 3], ['H', 4], ['H', 5], ['H', 6], // D0–D9
+  ['B', 4], ['B', 5], ['B', 6], ['B', 7], ['J', 1], ['J', 0], ['H', 1], ['H', 0], ['D', 3], ['D', 2], // D10–D19
+  ['D', 1], ['D', 0], ...p('A', [0, 1, 2, 3, 4, 5, 6, 7]), ...p('C', [7, 6, 5, 4, 3, 2, 1, 0]), // D20–D37
+  ['D', 7], ['G', 2], ['G', 1], ['G', 0], ...p('L', [7, 6, 5, 4, 3, 2, 1, 0]), ...p('B', [3, 2, 1, 0]), // D38–D53
+  ...p('F', [0, 1, 2, 3, 4, 5, 6, 7]), ...p('K', [0, 1, 2, 3, 4, 5, 6, 7]), // A0–A15 = D54–D69
+];
+
+export const BOARDS: Record<BoardId, BoardProfile> = {
+  uno: { ...ATMEGA328, pins: PINS_328 },
+  nano: { ...ATMEGA328, pins: PINS_328 },
+  mega: {
+    flashBytes: 0x40000,
+    sramBytes: 8192 + 256, // los registros extendidos del 2560 llegan a 0x1FF
+    pins: PINS_2560,
+    timers: MEGA_TIMERS,
+    usart: { ...usart0Config, rxCompleteInterrupt: 0x32, dataRegisterEmptyInterrupt: 0x34, txCompleteInterrupt: 0x36 },
+    adc: { ...adcConfig, adcInterrupt: 0x3a },
+  },
+};
+
+export function parseIntelHex(hex: string, flashBytes = 0x8000): Uint16Array {
+  const bytes = new Uint8Array(flashBytes);
   let base = 0;
   for (const raw of hex.split(/\r?\n/)) {
     const line = raw.trim();
@@ -43,16 +126,9 @@ export function parseIntelHex(hex: string): Uint16Array {
   return new Uint16Array(bytes.buffer);
 }
 
-/** Pin Arduino (0–19) → [puerto, bit]. */
-function locate(index: number): ['B' | 'C' | 'D', number] {
-  if (index < 8) return ['D', index];
-  if (index < 14) return ['B', index - 8];
-  return ['C', index - 14];
-}
-
 export class AvrRunner {
   readonly cpu: CPU;
-  private ports: Record<'B' | 'C' | 'D', AVRIOPort>;
+  private ports = new Map<Port, AVRIOPort>();
   readonly adc: AVRADC;
   readonly usart: AVRUSART;
   /** Se activa cuando cambia la salida de algún pin; el motor resuelve el circuito entonces. */
@@ -60,23 +136,28 @@ export class AvrRunner {
   onSerial: ((char: string) => void) | null = null;
   txActivity = 0;
 
-  constructor(program: Uint16Array) {
-    this.cpu = new CPU(program);
-    new AVRTimer(this.cpu, timer0Config);
-    new AVRTimer(this.cpu, timer1Config);
-    new AVRTimer(this.cpu, timer2Config);
-    this.ports = {
-      B: new AVRIOPort(this.cpu, portBConfig),
-      C: new AVRIOPort(this.cpu, portCConfig),
-      D: new AVRIOPort(this.cpu, portDConfig),
-    };
-    for (const port of Object.values(this.ports)) port.addListener(() => (this.pinsChanged = true));
-    this.adc = new AVRADC(this.cpu, adcConfig);
-    this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
+  constructor(
+    program: Uint16Array,
+    readonly board: BoardProfile = BOARDS.uno,
+  ) {
+    this.cpu = new CPU(program, board.sramBytes);
+    for (const t of board.timers) new AVRTimer(this.cpu, t);
+    for (const port of new Set(board.pins.map(([port]) => port))) {
+      const io = new AVRIOPort(this.cpu, PORTS[port]);
+      io.addListener(() => (this.pinsChanged = true));
+      this.ports.set(port, io);
+    }
+    this.adc = new AVRADC(this.cpu, board.adc);
+    this.usart = new AVRUSART(this.cpu, board.usart, CLOCK_HZ);
     this.usart.onByteTransmit = (b) => {
       this.txActivity = 1;
       this.onSerial?.(String.fromCharCode(b));
     };
+  }
+
+  static fromHex(hex: string, board: BoardId = 'uno') {
+    const profile = BOARDS[board];
+    return new AvrRunner(parseIntelHex(hex, profile.flashBytes), profile);
   }
 
   get seconds() {
@@ -84,8 +165,9 @@ export class AvrRunner {
   }
 
   pinMode(index: number): McuPinMode {
-    const [port, bit] = locate(index);
-    switch (this.ports[port].pinState(bit)) {
+    const loc = this.board.pins[index];
+    if (!loc) return 'input';
+    switch (this.ports.get(loc[0])!.pinState(loc[1])) {
       case PinState.High:
         return 'high';
       case PinState.Low:
@@ -98,8 +180,8 @@ export class AvrRunner {
   }
 
   setInput(index: number, high: boolean) {
-    const [port, bit] = locate(index);
-    this.ports[port].setPin(bit, high);
+    const loc = this.board.pins[index];
+    if (loc) this.ports.get(loc[0])!.setPin(loc[1], high);
   }
 
   setAnalog(channel: number, volts: number) {

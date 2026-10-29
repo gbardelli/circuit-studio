@@ -20,6 +20,10 @@ export interface PartData {
   y: number;
   rot: Rotation;
   props: Props;
+  /** Posición y giro en la vista de esquema (si no hay, se deriva de la de protoboard). */
+  sx?: number;
+  sy?: number;
+  srot?: Rotation;
 }
 
 export interface PinRef {

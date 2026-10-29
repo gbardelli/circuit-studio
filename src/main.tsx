@@ -4,6 +4,7 @@ import { SvgDefs } from './parts/common';
 import { CLOUD } from './cloud';
 import { CloudShell } from './ui/Auth';
 import { Editor } from './ui/Editor';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import './styles.css';
 
@@ -18,6 +19,6 @@ const app = valid ? <Editor room={room} template={template} /> : <Home />;
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SvgDefs />
-    {CLOUD ? <CloudShell>{app}</CloudShell> : app}
+    <ErrorBoundary>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</ErrorBoundary>
   </StrictMode>,
 );

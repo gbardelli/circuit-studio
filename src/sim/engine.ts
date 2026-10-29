@@ -6,7 +6,7 @@ import { Capacitor, Circuit, type Element } from '../core/solver';
 import type { CircuitSnapshot, PartData, Props } from '../core/types';
 import { PARTS } from '../parts';
 import type { McuBridge, PartSim, Visual } from '../parts/types';
-import { AvrRunner, CLOCK_HZ, parseIntelHex } from './avr';
+import { AvrRunner, CLOCK_HZ, type BoardId } from './avr';
 
 const MAX_SEGMENT = 0.001;
 const MAX_SOLVES_PER_FRAME = 6000;
@@ -24,6 +24,7 @@ interface McuRuntime {
   partId: string;
   runner: AvrRunner | null;
   nodes: number[];
+  analogNodes: number[];
   bridge: McuBridge;
   inputs: boolean[];
 }
@@ -83,11 +84,13 @@ export class SimEngine {
     }
   }
 
-  start() {
+  /** `manual`: sin requestAnimationFrame; el llamador avanza con `tick()` (pruebas, servidor). */
+  start(opts: { manual?: boolean } = {}) {
     if (this.running) return;
     this.running = true;
     this.simTime = 0;
     this.rebuild(true);
+    if (opts.manual) return;
     this.last = performance.now();
     const loop = (now: number) => {
       this.frame(now);
@@ -218,14 +221,15 @@ export class SimEngine {
       if (!def?.sim) continue;
       const props = { ...p.props };
       let mcu: McuRuntime | undefined;
-      if (p.type === 'arduino-uno') {
+      if (def.mcu) {
         const prev = prevMcus.get(p.id);
         const hex = this.programs.get(p.id);
-        const runner = !resetMcu && prev?.runner ? prev.runner : hex ? this.createRunner(p.id, hex) : null;
+        const runner = !resetMcu && prev?.runner ? prev.runner : hex ? this.createRunner(p.id, hex, def.mcu.board) : null;
         mcu = {
           partId: p.id,
           runner,
           nodes: [],
+          analogNodes: [],
           inputs: [],
           bridge: {
             get running() {
@@ -241,11 +245,13 @@ export class SimEngine {
           const net = netlist.netOf.get(pinKey(p.id, pin));
           return net === undefined ? -1 : nodeOf(net);
         },
+        node: () => count++,
         input: (key) => this.inputs.get(`${p.id}.${key}`),
         mcu: mcu?.bridge,
       });
       if (mcu) {
         mcu.nodes = sim.mcuNodes ?? [];
+        mcu.analogNodes = sim.analogNodes ?? [];
         mcus.push(mcu);
       }
       elements.push(...sim.elements);
@@ -262,26 +268,43 @@ export class SimEngine {
     this.dirty = false;
   }
 
-  private createRunner(partId: string, hex: string) {
-    const runner = new AvrRunner(parseIntelHex(hex));
+  private createRunner(partId: string, hex: string, board: BoardId) {
+    const runner = AvrRunner.fromHex(hex, board);
     runner.onSerial = (ch) => this.serialListeners.forEach((l) => l(partId, ch));
     return runner;
   }
 
   // ── Bucle ──────────────────────────────────────────────────────────────────
   private frame(now: number) {
-    const circuit = this.circuit;
-    if (!circuit) return;
     const realDt = Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
+    const { advanced, converged } = this.advance(realDt, 24);
+    this.publish(realDt > 0 ? advanced / realDt : 1, converged);
+  }
+
+  /** Avanza la simulación `seconds` de tiempo simulado y publica los valores visibles. */
+  tick(seconds: number) {
+    const { converged } = this.advance(seconds, Infinity);
+    this.publish(1, converged);
+  }
+
+  private advance(span: number, budgetMs: number) {
+    const circuit = this.circuit;
+    if (!circuit) return { advanced: 0, converged: true };
     const started = performance.now();
-    const target = this.simTime + realDt;
+    const from = this.simTime;
+    const target = this.simTime + span;
     let solves = 0;
     let converged = true;
     const active = this.mcus.filter((m) => m.runner);
 
     while (this.simTime < target - 1e-9) {
       let segEnd = Math.min(target, this.simTime + MAX_SEGMENT);
+      // Eventos programados por piezas (eco de un HC-SR04…): el segmento termina justo ahí.
+      for (const rt of this.parts.values()) {
+        const at = rt.sim.nextEvent?.();
+        if (at != null && at > this.simTime + 1e-12 && at < segEnd) segEnd = at;
+      }
       let changed = false;
       for (const m of active) {
         const stopped = m.runner!.run(Math.round(segEnd * CLOCK_HZ));
@@ -293,6 +316,7 @@ export class SimEngine {
       const dt = segEnd - this.simTime;
       if (dt > 0) this.accumulate(circuit.v, dt);
       this.simTime = segEnd;
+      for (const rt of this.parts.values()) if (rt.sim.changed?.()) changed = true;
       if ((changed || this.dirty || this.hasCapacitors) && solves < MAX_SOLVES_PER_FRAME) {
         const r = circuit.solve(this.hasCapacitors ? Math.max(dt, 1e-7) : 0);
         converged &&= r.converged;
@@ -300,14 +324,14 @@ export class SimEngine {
         this.dirty = false;
         this.syncMcuInputs();
       }
-      if (performance.now() - started > 24) break; // no bloquear la interfaz
+      if (performance.now() - started > budgetMs) break; // no bloquear la interfaz
     }
-    if (active.length === 0 && solves === 0 && this.dirty) {
+    if (solves === 0 && this.dirty) {
       circuit.solve(0);
       this.dirty = false;
+      this.syncMcuInputs();
     }
-    const advanced = this.simTime - (target - realDt);
-    this.publish(realDt > 0 ? advanced / realDt : 1, converged);
+    return { advanced: this.simTime - from, converged };
   }
 
   private syncMcuInputs() {
@@ -325,8 +349,8 @@ export class SimEngine {
             m.runner!.setInput(i, high);
           }
         }
-        if (i >= 14) m.runner!.setAnalog(i - 14, volts);
       });
+      m.analogNodes.forEach((node, ch) => m.runner!.setAnalog(ch, node < 0 ? 0 : v[node]));
     }
   }
 

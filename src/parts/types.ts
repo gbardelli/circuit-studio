@@ -32,6 +32,8 @@ export interface McuBridge {
 export interface SimContext {
   props: Props;
   net(pin: string): number;
+  /** Nodo interno de la pieza (p. ej. entre el LED y la resistencia de una retroiluminación). */
+  node(): number;
   /** Entradas locales del usuario durante la simulación (botón pulsado, etc.). */
   input(key: string): number | boolean | undefined;
   mcu?: McuBridge;
@@ -46,8 +48,14 @@ export interface PartSim {
     sample(v: Float64Array, dt: number): void;
     read(): Visual;
   };
-  /** Nodo de cada pin del microcontrolador (índice Arduino 0–19), para ADC y entradas. */
+  /** Próximo instante (tiempo simulado) en que la pieza cambiará sola; el motor corta ahí el segmento. */
+  nextEvent?(): number | null;
+  /** True si la pieza cambió de estado desde la última consulta y hay que resolver el circuito. */
+  changed?(): boolean;
+  /** Nodo de cada pin digital del microcontrolador (por índice Arduino), para leer entradas. */
   mcuNodes?: number[];
+  /** Nodo de cada entrada analógica (A0, A1…), para el ADC. */
+  analogNodes?: number[];
 }
 
 export interface Field {
@@ -62,8 +70,19 @@ export interface Field {
   hint?: string;
 }
 
+/** Placa programable: perfil del emulador, placa para el compilador y pines por índice Arduino. */
+export interface McuSpec {
+  board: 'uno' | 'nano' | 'mega';
+  fqbn: string;
+  /** Índice Arduino (D0, D1…) → id del pin en la pieza. */
+  pinIds: string[];
+  /** Canal analógico (A0, A1…) → id del pin. */
+  analogIds: string[];
+}
+
 export interface PartDef {
   type: string;
+  mcu?: McuSpec;
   name: string;
   category: Category;
   description: string;

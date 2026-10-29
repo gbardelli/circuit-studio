@@ -24,7 +24,10 @@ export function compilerAvailable() {
   return existsSync(bin) && existsSync(config);
 }
 
+export const FQBNS = ['arduino:avr:uno', 'arduino:avr:nano:cpu=atmega328', 'arduino:avr:mega:cpu=atmega2560'];
+
 export async function compileSketch(source: string, board = 'arduino:avr:uno'): Promise<CompileResult> {
+  if (!FQBNS.includes(board)) return { ok: false, stdout: '', stderr: `Placa no soportada: ${board}` };
   if (source.length > MAX_SOURCE) return { ok: false, stdout: '', stderr: 'El sketch supera el tamaño máximo (200 KB).' };
   if (!compilerAvailable()) {
     return {

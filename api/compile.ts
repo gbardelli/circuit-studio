@@ -10,16 +10,17 @@ import { redis } from './_lib/redis.js';
 
 export const maxDuration = 300;
 
-const BASE = 'cs-arduino-toolchain-v1';
+const BASE = 'cs-arduino-toolchain-v2'; // v2: añade LiquidCrystal
 const HOME = '/vercel/sandbox/cs';
 const ENV = `export ARDUINO_DIRECTORIES_DATA=${HOME}/data ARDUINO_DIRECTORIES_USER=${HOME}/user ARDUINO_DIRECTORIES_DOWNLOADS=${HOME}/dl;`;
 const SETUP = `set -e; mkdir -p ${HOME} && cd ${HOME}; ${ENV}
 curl -fsSL https://github.com/arduino/arduino-cli/releases/download/v1.5.1/arduino-cli_1.5.1_Linux_64bit.tar.gz | tar xz
 ./arduino-cli core update-index
 ./arduino-cli core install arduino:avr
-./arduino-cli lib install Servo
+./arduino-cli lib install Servo LiquidCrystal
 rm -rf ${HOME}/dl && touch ${HOME}/.ready`;
 const MAX_SOURCE = 200_000;
+const FQBNS = ['arduino:avr:uno', 'arduino:avr:nano:cpu=atmega328', 'arduino:avr:mega:cpu=atmega2560'];
 
 async function ensureBase() {
   let base: Sandbox;
@@ -52,12 +53,13 @@ async function ensureBase() {
 export async function POST(req: Request) {
   const user = await requireUser(req);
   if (!user) return json({ ok: false, stdout: '', stderr: 'Inicia sesión para compilar.' }, 401);
-  const { source } = (await req.json().catch(() => ({}))) as { source?: string };
+  const { source, fqbn = 'arduino:avr:uno' } = (await req.json().catch(() => ({}))) as { source?: string; fqbn?: string };
   const code = String(source ?? '');
+  if (!FQBNS.includes(fqbn)) return json({ ok: false, stdout: '', stderr: `Placa no soportada: ${fqbn}` }, 400);
   if (code.length > MAX_SOURCE) return json({ ok: false, stdout: '', stderr: 'El sketch supera 200 KB.' }, 413);
 
   const { pub } = await redis();
-  const key = `hex:${createHash('sha256').update(code).digest('hex')}`;
+  const key = `hex:${createHash('sha256').update(fqbn).update('\0').update(code).digest('hex')}`;
   const cached = await pub.get(key);
   if (cached) return json(JSON.parse(cached));
 
@@ -67,7 +69,7 @@ export async function POST(req: Request) {
   await pub.expire(rate, 120);
 
   try {
-    const result = await compileInSandbox(code);
+    const result = await compileInSandbox(code, fqbn);
     if (result.ok) await pub.set(key, JSON.stringify(result), { EX: 7 * 24 * 3600 });
     return json(result);
   } catch (err) {
@@ -77,12 +79,12 @@ export async function POST(req: Request) {
 }
 
 /** Compila en un clon desechable de la sandbox base. */
-export async function compileInSandbox(code: string) {
+export async function compileInSandbox(code: string, fqbn = 'arduino:avr:uno') {
   await ensureBase();
   const box = await Sandbox.fork({ sourceSandbox: BASE, persistent: false, timeout: 3 * 60_000 });
   try {
     await box.writeFiles([{ path: `${HOME}/sketch/sketch.ino`, content: code }]);
-    const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn arduino:avr:uno --output-dir ${HOME}/out ${HOME}/sketch`]);
+    const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn ${fqbn} --output-dir ${HOME}/out ${HOME}/sketch`]);
     const stdout = await run.stdout();
     const stderr = (await run.stderr()).split(`${HOME}/sketch/`).join('');
     if (run.exitCode !== 0) return { ok: false, stdout, stderr };

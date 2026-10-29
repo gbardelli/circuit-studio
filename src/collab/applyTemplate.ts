@@ -29,6 +29,6 @@ export function applyTemplate(project: Project, t: Template) {
   for (const w of snap.wires) {
     project.addWire({ ...w.a, part: ids.get(w.a.part!) }, { ...w.b, part: ids.get(w.b.part!) }, w.points, w.color);
   }
-  const uno = t.parts.find((p) => p.type === 'arduino-uno');
+  const uno = t.parts.find((p) => PARTS[p.type].mcu);
   if (uno && t.sketch) project.setSketch(ids.get(uno.key)!, t.sketch);
 }

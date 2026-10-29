@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parseSI, resistorBands, BAND_COLORS } from './units';
-import { Circuit, Resistor, VSource, Capacitor, NPN } from './solver';
+import { Circuit, Resistor, VSource, Capacitor, NPN, NMOS } from './solver';
 import { buildNetlist, pinKey } from './netlist';
 import { PARTS } from '../parts';
 import { ledDiode } from '../parts/outputs';
@@ -58,6 +58,24 @@ describe('solver MNA', () => {
     expect(r.v[1]).toBeLessThan(0.85);
     expect(r.v[2]).toBeLessThan(0.3); // saturación: Vce baja
     expect(q.currents(r.v).ic).toBeGreaterThan(0.02);
+  });
+
+  it('MOSFET N: con 5 V en puerta conduce un motor de 20 Ω desde 9 V', () => {
+    // 0 = 9 V, 1 = puerta, 2 = drenador
+    const q = new NMOS(2, 1, -1);
+    const c = new Circuit(3, [new VSource(0, -1, () => 9, () => 0.01), new VSource(1, -1, () => 5, () => 25), new Resistor(0, 2, () => 20), q]);
+    const r = c.solve(0);
+    expect(r.converged).toBe(true);
+    expect(q.currentOf(r.v)).toBeGreaterThan(0.43);
+    expect(r.v[2]).toBeLessThan(0.1);
+  });
+
+  it('MOSFET N: con la puerta a 0 V no conduce', () => {
+    const q = new NMOS(2, 1, -1);
+    const c = new Circuit(3, [new VSource(0, -1, () => 9, () => 0.01), new VSource(1, -1, () => 0, () => 25), new Resistor(0, 2, () => 20), q]);
+    const r = c.solve(0);
+    expect(Math.abs(q.currentOf(r.v))).toBeLessThan(1e-6);
+    expect(r.v[2]).toBeGreaterThan(8.9);
   });
 
   it('carga RC: tras τ el condensador alcanza ~63 %', () => {

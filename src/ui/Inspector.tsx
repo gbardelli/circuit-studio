@@ -237,7 +237,7 @@ function PartInspector({ part }: { part: PartData }) {
             ))}
           </div>
         )}
-        {part.type === 'arduino-uno' && (
+        {def.mcu && (
           <div className="insp-section">
             <h3>Programa</h3>
             <div className="actions">
@@ -336,8 +336,8 @@ function FieldEditor({ field, value, onChange }: { field: Field; value: unknown;
         <label htmlFor={id}>{field.label}</label>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <input id={id} type="range" min={field.min} max={field.max} step={field.step} value={v} style={{ ['--fill' as string]: `${pct}%` }} onChange={(e) => onChange(Number(e.target.value))} />
-          <span className="mono muted" style={{ width: 34, textAlign: 'right', fontSize: 12 }}>
-            {Math.round(pct)}%
+          <span className="mono muted" style={{ minWidth: 34, textAlign: 'right', fontSize: 12, whiteSpace: 'nowrap' }}>
+            {field.unit ? `${Math.round(v)} ${field.unit}` : `${Math.round(pct)}%`}
           </span>
         </div>
       </div>

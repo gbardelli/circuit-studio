@@ -167,7 +167,7 @@ function buildGroups(favs: string[], recent: string[]) {
 
 /** Etiqueta solo cuando dice algo útil antes de colocar la pieza. */
 export function partTag(def: PartDef): { text: string; tone: 'accent' | 'green' | 'neutral' } | null {
-  if (def.type === 'arduino-uno') return { text: 'Programable', tone: 'accent' };
+  if (def.mcu) return { text: 'Programable', tone: 'accent' };
   if (['potentiometer', 'pushbutton', 'slide-switch', 'ldr'].includes(def.type)) return { text: 'Se toca al simular', tone: 'green' };
   if (def.type === 'battery-9v') return { text: '9 V', tone: 'neutral' };
   if (def.type === 'aa-pack') return { text: '3 V · 6 V', tone: 'neutral' };
