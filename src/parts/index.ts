@@ -8,6 +8,7 @@ import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
 import { diode, hcsr04, lcd1602, mosfet, relay, tmp36 } from './extra';
 import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './misc';
 import { CHIPS } from './chips';
+import { oscilloscope } from './scope';
 import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
 
 export const PART_LIST: PartDef[] = [
@@ -46,6 +47,7 @@ export const PART_LIST: PartDef[] = [
   battery9v,
   aaPack,
   multimeter,
+  oscilloscope,
 ];
 
 export const PARTS: Record<string, PartDef> = Object.fromEntries(PART_LIST.map((d) => [d.type, d]));

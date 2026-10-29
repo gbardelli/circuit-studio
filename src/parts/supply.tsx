@@ -222,6 +222,9 @@ export const clockGen: PartDef = {
       tracker: {
         sample(_v, dt) {
           t += dt;
+          // Si se sube la frecuencia en marcha, el semiperiodo pendiente se acorta al nuevo.
+          const half = period() * (high ? duty() : 1 - duty());
+          if (next - t > half) next = t + half;
           while (t >= next - 1e-12) {
             high = !high;
             next += period() * (high ? duty() : 1 - duty());
