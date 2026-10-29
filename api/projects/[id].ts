@@ -1,5 +1,5 @@
-import { json, requireUser } from '../_lib/auth';
-import { ready, roleFor, sql, type LinkAccess } from '../_lib/db';
+import { json, requireUser } from '../_lib/auth.js';
+import { ready, roleFor, sql, type LinkAccess } from '../_lib/db.js';
 
 const idOf = (req: Request) => decodeURIComponent(new URL(req.url).pathname.split('/').pop() ?? '');
 

@@ -1,5 +1,5 @@
-import { json, requireUser } from '../_lib/auth';
-import { ready, sql } from '../_lib/db';
+import { json, requireUser } from '../_lib/auth.js';
+import { ready, sql } from '../_lib/db.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 

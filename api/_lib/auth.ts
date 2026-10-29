@@ -1,6 +1,6 @@
 // Sesiones de Clerk: el cliente envía su token de sesión (JWT corto) y aquí se verifica.
 import { createClerkClient, verifyToken } from '@clerk/backend';
-import type { Member } from './db';
+import type { Member } from './db.js';
 
 const secretKey = process.env.CLERK_SECRET_KEY ?? '';
 const clerk = createClerkClient({ secretKey });

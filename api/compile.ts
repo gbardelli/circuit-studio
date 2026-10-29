@@ -5,8 +5,8 @@
 // · Los .hex se guardan en Redis por hash del código: recompilar lo mismo es instantáneo.
 import { createHash } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
-import { json, requireUser } from './_lib/auth';
-import { redis } from './_lib/redis';
+import { json, requireUser } from './_lib/auth.js';
+import { redis } from './_lib/redis.js';
 
 export const maxDuration = 300;
 

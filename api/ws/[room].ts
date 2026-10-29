@@ -2,9 +2,9 @@
 // Protocolo y-websocket; se verifica la sesión y el rol antes de aceptar la conexión.
 import http from 'node:http';
 import { WebSocketServer } from 'ws';
-import { authenticate } from '../_lib/auth';
-import { roleFor } from '../_lib/db';
-import { getRoom } from '../_lib/room';
+import { authenticate } from '../_lib/auth.js';
+import { roleFor } from '../_lib/db.js';
+import { getRoom } from '../_lib/room.js';
 
 const ROOM_RE = /^[A-Za-z0-9_-]{8,64}$/;
 const server = http.createServer((_req, res) => {

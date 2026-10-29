@@ -7,7 +7,8 @@ let connecting: Promise<void> | null = null;
 /** Un cliente para comandos y publicación, y otro dedicado a suscripciones (Redis lo exige). */
 export async function redis() {
   if (!connecting) {
-    pub = createClient({ url: process.env.REDIS_URL });
+    // Redis Cloud publica REDIS_URL; Upstash (plan gratuito) publica KV_URL (rediss://).
+    pub = createClient({ url: process.env.REDIS_URL ?? process.env.KV_URL });
     sub = pub.duplicate();
     pub.on('error', (e) => console.error('redis', e));
     sub.on('error', (e) => console.error('redis sub', e));

@@ -9,9 +9,9 @@ import * as syncProtocol from 'y-protocols/sync';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import * as encoding from 'lib0/encoding';
 import * as decoding from 'lib0/decoding';
-import { redis } from './redis';
+import { redis } from './redis.js';
 import type { WebSocket } from 'ws';
-import { sql, type Role } from './db';
+import { sql, type Role } from './db.js';
 
 const MSG_SYNC = 0;
 const MSG_AWARENESS = 1;
