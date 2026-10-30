@@ -38,6 +38,9 @@ export interface UiState {
   view: View;
   compactPanel: 'library' | 'inspector' | null;
   setCompactPanel(panel: 'library' | 'inspector' | null): void;
+  /** Paneles laterales recogidos en pantallas anchas (se recuerda en este navegador). */
+  collapsed: { library: boolean; inspector: boolean };
+  togglePanel(panel: 'library' | 'inspector'): void;
   setView(view: View): void;
   libDrag: LibDrag | null;
   setLibDrag(d: LibDrag | null): void;
@@ -51,6 +54,16 @@ export interface UiState {
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+const PANELS_KEY = 'cs-panels';
+function readPanels(): UiState['collapsed'] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PANELS_KEY) ?? '{}') as Partial<UiState['collapsed']>;
+    return { library: Boolean(saved.library), inspector: Boolean(saved.inspector) };
+  } catch {
+    return { library: false, inspector: false };
+  }
+}
 
 export const useUi = create<UiState>((set) => ({
   selection: [],
@@ -67,6 +80,17 @@ export const useUi = create<UiState>((set) => ({
   view: 'board',
   compactPanel: null,
   setCompactPanel: (compactPanel) => set({ compactPanel }),
+  collapsed: readPanels(),
+  togglePanel: (panel) =>
+    set((s) => {
+      const collapsed = { ...s.collapsed, [panel]: !s.collapsed[panel] };
+      try {
+        localStorage.setItem(PANELS_KEY, JSON.stringify(collapsed));
+      } catch {
+        /* sin persistencia */
+      }
+      return { collapsed };
+    }),
   setView: (view) => set({ view }),
   libDrag: null,
   setLibDrag: (libDrag) => set({ libDrag }),

@@ -104,6 +104,7 @@ function EditorShell() {
   const snapshot = useSnapshot();
   const toast = useUi((s) => s.toast);
   const compactPanel = useUi((s) => s.compactPanel);
+  const collapsed = useUi((s) => s.collapsed);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
 
   useAutoVersions(project, snapshot);
@@ -128,6 +129,11 @@ function EditorShell() {
       const ui = useUi.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (mod && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+        ui.togglePanel(e.key === '[' ? 'library' : 'inspector');
+        return;
+      }
       if (mod && key === 'z' && !e.shiftKey) {
         e.preventDefault();
         project.undo.undo();
@@ -181,7 +187,7 @@ function EditorShell() {
   }, [shortcuts]);
 
   return (
-    <div className="app" data-panel={compactPanel ?? ''}>
+    <div className="app" data-panel={compactPanel ?? ''} data-lib={collapsed.library ? 'closed' : 'open'} data-insp={collapsed.inspector ? 'closed' : 'open'}>
       <TopBar />
       <div className="compact-panels float" role="toolbar" aria-label="Paneles">
         <button className={`icon-btn ${compactPanel === 'library' ? 'on' : ''}`} aria-label="Componentes" aria-pressed={compactPanel === 'library'} title="Componentes" onClick={() => setCompactPanel(compactPanel === 'library' ? null : 'library')}>

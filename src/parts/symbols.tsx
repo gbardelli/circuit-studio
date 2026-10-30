@@ -1,7 +1,7 @@
 // Símbolos esquemáticos (IEC 60617) para la vista de esquema. Cada pieza del circuito se
 // proyecta en una pieza «sch:<tipo>» con los mismos ids de pin; así selección, simulación y
 // cables funcionan igual en las dos vistas.
-import type { FC } from 'react';
+import { createContext, useContext, type FC } from 'react';
 import type { PinDef, Props } from '../core/types';
 import type { Bounds, PartDef, RenderProps } from './types';
 import { LED_COLORS } from './outputs';
@@ -20,11 +20,18 @@ interface Symbol {
 
 const pin = (id: string, x: number, y: number, label?: string): PinDef => ({ id, x, y, kind: 'leg', label: label ?? id });
 const lead = (x1: number, y1: number, x2: number, y2: number) => <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={INK} strokeWidth={SW} strokeLinecap="round" />;
-const Name = ({ x, y, text, anchor = 'middle' }: { x: number; y: number; text: string; anchor?: 'start' | 'middle' | 'end' }) => (
-  <text x={x} y={y} textAnchor={anchor} fontSize="6.5" fill={SOFT} fontFamily={FONT}>
-    {text}
-  </text>
-);
+/** Giro del símbolo en el esquema: con 180° los textos se dan la vuelta para leerse derechos. */
+const Turned = createContext(0);
+const upright = (turn: number, x: number, y: number) => (turn === 180 ? `rotate(180 ${x} ${y - 2.2})` : undefined);
+const Name = ({ x, y, text, anchor = 'middle' }: { x: number; y: number; text: string; anchor?: 'start' | 'middle' | 'end' }) => {
+  const turn = useContext(Turned);
+  const flipped = turn === 180 && anchor !== 'middle' ? (anchor === 'start' ? 'end' : 'start') : anchor;
+  return (
+    <text x={x} y={y} textAnchor={flipped} fontSize="6.5" fill={SOFT} fontFamily={FONT} transform={upright(turn, x, y)}>
+      {text}
+    </text>
+  );
+};
 const fmtR = (ohms: number) => (ohms >= 1e6 ? `${+(ohms / 1e6).toPrecision(3)}M` : ohms >= 1e3 ? `${+(ohms / 1e3).toPrecision(3)}k` : `${+ohms.toPrecision(3)}`) + 'Ω';
 
 /** Flechas de luz (LED: salen; LDR: entran). */
@@ -239,52 +246,120 @@ const BUZZER_SYM: Symbol = {
 };
 
 /**
- * Caja genérica para placas y módulos: pines repartidos a izquierda y derecha. Con
- * `__pins` (lista de ids conectados) solo se dibujan esos, para que una placa de 70
- * pines no ocupe media pantalla.
+ * Símbolo funcional para integrados, placas y módulos (como en KiCad o Altium): entradas a la
+ * izquierda, salidas a la derecha, cada puerta o biestable en su franja y la alimentación
+ * implícita, anotada dentro de la caja. El esquema calcula las filas y las pasa en las props:
+ * `__left` y `__right` (ids por fila, vacío = hueco), `__num` (número de patilla), `__power`
+ * (nota de alimentación), `__ref` (designador). Sin ellas (vista previa), reparte los pines.
  */
 function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
-  const visible = (props: Props) => {
-    const list = allPins(props);
-    const only = typeof props.__pins === 'string' ? new Set(props.__pins.split(',').filter(Boolean)) : null;
-    if (!only || list.length <= 24) return list;
-    const shown = only.size ? only : new Set(['5V', 'GND.1', 'D2', 'D9', 'A0']);
-    return list.filter((p) => shown.has(p.id));
+  const rows = (props: Props) => {
+    if (typeof props.__left === 'string' && typeof props.__right === 'string') {
+      const left = props.__left.split(',');
+      const right = props.__right.split(',');
+      const n = Math.max(left.length, right.length, 1);
+      return { left: [...left, ...Array(n - left.length).fill('')], right: [...right, ...Array(n - right.length).fill('')], n };
+    }
+    const ids = allPins(props).map((p) => p.id);
+    const half = Math.ceil(ids.length / 2);
+    const left = ids.slice(0, half);
+    const right = ids.slice(half);
+    return { left, right: [...right, ...Array(left.length - right.length).fill('')], n: left.length };
   };
-  const layout = (props: Props) => {
-    const pins = visible(props);
-    const half = Math.ceil(pins.length / 2);
-    const rows = Math.max(half, 1);
-    const height = rows * 10 + 10;
-    return {
-      pins: pins.map((p, i) => (i < half ? pin(p.id, 0, 10 + i * 10, p.label) : pin(p.id, 80, 10 + (i - half) * 10, p.label))),
-      height,
-    };
+  const PITCH = 10;
+  const shape = (props: Props) => {
+    const r = rows(props);
+    const names = new Map(allPins(props).map((p) => [p.id, pinName(p)]));
+    const longest = (list: string[]) => Math.max(0, ...list.map((id) => (names.get(id) ?? '').length));
+    const width = Math.max(50, Math.ceil(((longest(r.left) + longest(r.right)) * 3.7 + 22) / 10) * 10);
+    return { ...r, names, width, height: r.n * PITCH + PITCH };
   };
   return {
-    pins: (props) => layout(props).pins,
-    bounds: (props) => ({ x: -2, y: -12, w: 84, h: layout(props).height + 14 }),
+    pins: (props) => {
+      const { left, right, width } = shape(props);
+      const out: PinDef[] = [];
+      left.forEach((id, i) => id && out.push(pin(id, 0, PITCH + i * PITCH)));
+      right.forEach((id, i) => id && out.push(pin(id, width + 20, PITCH + i * PITCH)));
+      return out;
+    },
+    bounds: (props) => {
+      const { width, height } = shape(props);
+      return { x: -2, y: -16, w: width + 24, h: height + 16 + (props.__power ? 10 : 0) };
+    },
     Render: ({ part }) => {
-      const { pins, height } = layout(part.props);
+      const { left, right, names, width, height } = shape(part.props);
+      const num = new Map(String(part.props.__num ?? '').split(',').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
+      const side = (list: string[], x: number, toward: number, anchor: 'start' | 'end') =>
+        list.map(
+          (id, i) =>
+            id && (
+              <g key={id}>
+                {lead(x, PITCH + i * PITCH, toward, PITCH + i * PITCH)}
+                <text x={anchor === 'start' ? toward + 3 : toward - 3} y={PITCH + i * PITCH + 2.1} textAnchor={anchor} fontSize="5.6" fill={INK} fontFamily={FONT}>
+                  {names.get(id)}
+                </text>
+                {num.get(id) && (
+                  <text x={(x + toward) / 2} y={PITCH + i * PITCH - 2} textAnchor="middle" fontSize="4.2" fill={SOFT} fontFamily={FONT}>
+                    {num.get(id)}
+                  </text>
+                )}
+              </g>
+            ),
+        );
       return (
         <g>
-          <rect x={10} y={0} width={60} height={height} rx={2} fill="var(--sch-fill, rgba(255,255,255,0.02))" stroke={INK} strokeWidth={SW} />
-          <text x={40} y={-4} textAnchor="middle" fontSize="7" fontWeight={600} fill={INK} fontFamily={FONT}>
+          <rect x={10} y={0} width={width} height={height} rx={1.5} fill="var(--sch-fill, rgba(255,255,255,0.025))" stroke={INK} strokeWidth={SW} />
+          {part.props.__ref ? (
+            <text x={10} y={-4} fontSize="6.6" fontWeight={600} fill={INK} fontFamily={FONT}>
+              {String(part.props.__ref)}
+            </text>
+          ) : null}
+          <text x={width + 10} y={-4} textAnchor="end" fontSize="6" fill={SOFT} fontFamily={FONT}>
             {title}
           </text>
-          {pins.map((p) => (
-            <g key={p.id}>
-              {lead(p.x, p.y, p.x === 0 ? 10 : 70, p.y)}
-              <text x={p.x === 0 ? 13 : 67} y={p.y + 2.2} textAnchor={p.x === 0 ? 'start' : 'end'} fontSize="5.6" fill={SOFT} fontFamily={FONT}>
-                {p.id.replace(/\.\d+$/, '')}
-              </text>
-            </g>
-          ))}
+          {side(left, 0, 10, 'start')}
+          {side(right, width + 20, width + 10, 'end')}
+          {part.props.__power ? (
+            <text x={10 + width / 2} y={height + 8} textAnchor="middle" fontSize="4.6" fill={SOFT} fontFamily={FONT}>
+              {String(part.props.__power)}
+            </text>
+          ) : null}
         </g>
       );
     },
   };
 }
+
+/** Nombre corto de la patilla tal como en la hoja de datos (Q̅, P̅L…), sin «· patilla n». */
+function pinName(p: PinDef) {
+  return (p.label ?? p.id).split(' · ')[0].replace(/.d+$/, '');
+}
+
+/** Interruptores DIP: cada uno en su fila, de nA (izquierda) a nB (derecha). */
+const dipSymbol = (count: number): Symbol => ({
+  pins: () => Array.from({ length: count }, (_, i) => [pin(`${i + 1}A`, 0, i * 20), pin(`${i + 1}B`, 40, i * 20)]).flat(),
+  bounds: () => ({ x: -2, y: -16, w: 44, h: count * 20 + 12 }),
+  Render: ({ part }) => (
+    <g>
+      {Array.from({ length: count }, (_, i) => {
+        const on = Boolean(part.props[`s${i + 1}`]);
+        const y = i * 20;
+        return (
+          <g key={i}>
+            {lead(0, y, 12, y)}
+            {lead(28, y, 40, y)}
+            <circle cx={12} cy={y} r={1.6} fill={INK} />
+            <circle cx={28} cy={y} r={1.6} fill={INK} />
+            <line x1={12} y1={y} x2={27} y2={on ? y - 1 : y - 7} stroke={INK} strokeWidth={SW} />
+            <text x={20} y={y + 8} textAnchor="middle" fontSize="4.6" fill={SOFT} fontFamily={FONT}>
+              {i + 1}
+            </text>
+          </g>
+        );
+      })}
+    </g>
+  ),
+});
 
 const SYMBOLS: Record<string, (orig: PartDef) => Symbol> = {
   'bench-supply': () => ({
@@ -311,9 +386,37 @@ const SYMBOLS: Record<string, (orig: PartDef) => Symbol> = {
   'mosfet-n': () => transistor(true),
   'dc-motor': () => MOTOR_SYM,
   buzzer: () => BUZZER_SYM,
+  'dip-switch-4': () => dipSymbol(4),
+  'dip-switch-6': () => dipSymbol(6),
+  'dip-switch-8': () => dipSymbol(8),
 };
 
 export const SCH_PREFIX = 'sch:';
+
+/** Designador (R3, SW1…) en la esquina del símbolo discreto. */
+function withRef(sym: Symbol): FC<RenderProps> {
+  const Render = sym.Render;
+  return function Discrete(props: RenderProps) {
+    const ref = props.part.props.__ref;
+    const b = sym.bounds(props.part.props);
+    const turn = props.part.rot;
+    // Con el símbolo girado 180°, el designador va en la esquina opuesta para quedar arriba a la izquierda.
+    const rx = turn === 180 ? b.x + b.w - 2 : b.x + 2;
+    const ry = turn === 180 ? b.y + b.h + 6 : b.y - 2;
+    return (
+      <Turned.Provider value={turn}>
+        <g>
+          <Render {...props} />
+          {ref ? (
+            <text x={rx} y={ry} fontSize="6.2" fontWeight={600} fill={INK} fontFamily={FONT} transform={upright(turn, rx, ry)}>
+              {String(ref)}
+            </text>
+          ) : null}
+        </g>
+      </Turned.Provider>
+    );
+  };
+}
 
 /** Definición «sch:<tipo>» derivada de la pieza: mismos pines (ids), símbolo propio. */
 export function schematicDef(orig: PartDef): PartDef {
@@ -327,6 +430,6 @@ export function schematicDef(orig: PartDef): PartDef {
     },
     bounds: sym.bounds,
     internal: undefined,
-    Render: sym.Render,
+    Render: SYMBOLS[orig.type] ? withRef(sym) : sym.Render,
   };
 }

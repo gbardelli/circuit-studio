@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { UserButton } from '@clerk/react';
 import { CLOUD, api, type LinkAccess } from '../cloud';
-import { AlertTriangle, Check, Code2, Copy, Cpu, Eye, Globe, HardDrive, Lock, Keyboard, Link2, Loader2, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
+import { AlertTriangle, Check, Code2, Copy, Cpu, Eye, Globe, HardDrive, Lock, Keyboard, Link2, Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
 import { compileSketch } from '../sim/compile';
 import { useConnection, useEditor, usePeers, useSimStatus, useSnapshot } from './context';
 import { Logo, Wordmark } from './Logo';
@@ -104,6 +104,7 @@ export function TopBar() {
           <Logo size={26} />
           <Wordmark size={15} />
         </a>
+        <PanelToggle panel="library" />
         <span className="crumb-sep">/</span>
         <input
           className="project-name"
@@ -149,6 +150,7 @@ export function TopBar() {
             <Eye size={12} /> Solo lectura
           </span>
         )}
+        <PanelToggle panel="inspector" />
         <div className="avatars" aria-label={`${peers.length + 1} personas en el circuito`}>
           {peers.slice(0, 5).map((p) => (
             <Avatar key={p.clientId} name={p.user.name} color={p.user.color} image={p.user.image} />
@@ -170,6 +172,20 @@ export function TopBar() {
         {CLOUD && <UserButton />}
       </div>
     </header>
+  );
+}
+
+/** Recoge o despliega un panel lateral (Ctrl+[ y Ctrl+]). */
+function PanelToggle({ panel }: { panel: 'library' | 'inspector' }) {
+  const closed = useUi((s) => s.collapsed[panel]);
+  const toggle = useUi((s) => s.togglePanel);
+  const left = panel === 'library';
+  const Icon = left ? (closed ? PanelLeftOpen : PanelLeftClose) : closed ? PanelRightOpen : PanelRightClose;
+  const what = left ? 'componentes' : 'propiedades';
+  return (
+    <button className="icon-btn panel-toggle" onClick={() => toggle(panel)} aria-pressed={!closed} aria-label={`${closed ? 'Mostrar' : 'Ocultar'} el panel de ${what}`} title={`${closed ? 'Mostrar' : 'Ocultar'} ${what} · Ctrl+${left ? '[' : ']'}`}>
+      <Icon size={16} />
+    </button>
   );
 }
 

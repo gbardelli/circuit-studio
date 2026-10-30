@@ -28,6 +28,33 @@ export const GIGA_PINS = {
   dest: ['D47', 'D49', 'D51'],
 };
 
+/** «pin=NOMBRE;…» de cada pieza que gobierna una señal. */
+export const NET_NAMES: Record<string, string> = {
+  ...Object.fromEntries([1, 2, 3, 4].flatMap((f) => [[`pp${f}`, `2a=PP${f};2b=PP${f}`], [`call${f}`, `2a=LL${f};2b=LL${f}`]])),
+  sp: '1B=SP1;2B=SP2;3B=SP3;4B=SP4',
+  reset: '2a=/RESET;2b=/RESET',
+  u1: '1Y=/PED1;2Y=/PED2;3Y=/PED3;4Y=/PED4',
+  u2: 'A0=/SEL0;A1=/SEL1;A2=/SEL2;GS=/SOLICITUD',
+  u3: '1Y=SEL0;4Y=SEL1;5Y=SEL2;2Y=SOLICITUD;3Y=/ACEPTAR;6Y=RESET',
+  u4: 'OUT=CLK',
+  u5: '1Q=OCUPADO;1QN=/OCUPADO;2Q=VÁLIDO',
+  u6: '4Y=ACEPTAR;1Y=MANTENER',
+  u7: '1Y=OCUPADO_SIG;4Y=VÁLIDO_SIG',
+  u8: 'Q0=DEST0;Q1=DEST1;Q2=DEST2',
+  u9: 'A0=/SEN0;A1=/SEN1;A2=/SEN2;GS=/SENSOR',
+  u10: '4Y=SEN0;1Y=SEN1;2Y=SEN2;5Y=SENSOR;6Y=/LLEGÓ',
+  u11: 'Q0=PISO0;Q1=PISO1;Q2=PISO2',
+  u12: 'OAGTB=DEST>PISO;OALTB=DEST<PISO;OAEQB=DEST=PISO',
+  u13: '1Y=LLEGÓ;2Y=SUBIR;4Y=BAJAR',
+  u14: 'SA=SEG_A;SB=SEG_B;SC=SEG_C;SD=SEG_D;SE=SEG_E;SF=SEG_F;SG=SEG_G',
+  u15: 'OUT=CLK_1HZ',
+  u16: 'Q0=CNT0;Q1=CNT1;Q2=CNT2;Q3=CNT3;TCD=/PRÉSTAMO',
+  u17: 'SA=T_A;SB=T_B;SC=T_C;SD=T_D;SE=T_E;SF=T_F;SG=T_G',
+  u18: '1Y=/CLK_1HZ;2Y=CARGA;3Y=/CARGA',
+  screen: 'TX=NX_TX',
+  giga: 'D18=NX_RX',
+};
+
 export function elevatorTemplate(): Template {
   const r = new Bench();
   const [B1, B2, B3, B4, B5] = ['b1', 'b2', 'b3', 'b4', 'b5'];
@@ -342,6 +369,9 @@ export function elevatorTemplate(): Template {
     { x: -556, y: -25 },
     { x: -556, y: b.y },
   ]);
+
+  // Nombres de las señales para el esquema: las etiquetas de red se leen como en el plano.
+  for (const p of r.parts) if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
 
   return r.template({
     id: 'elevator-course',

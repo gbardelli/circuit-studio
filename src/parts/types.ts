@@ -134,4 +134,8 @@ export interface PartDef {
   Render: FC<RenderProps>;
   /** Escala de la miniatura en la biblioteca. */
   thumbScale?: number;
+  /** Papel eléctrico de cada patilla: ordena el símbolo del esquema y el flujo de la señal. */
+  pinRole?(pinId: string): PinRole;
 }
+
+export type PinRole = 'in' | 'out' | 'bidir' | 'passive' | 'power' | 'ground' | 'nc';

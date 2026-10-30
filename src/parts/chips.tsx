@@ -254,6 +254,13 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
     bounds: () => ({ x: -6, y: -2, w: (half - 1) * PITCH + 12, h: ROW + 4 }),
     internal: groups.size ? () => [...groups.values()] : undefined,
     ground: [pinIds(spec.pins)[spec.pins.indexOf(spec.gnd)]],
+    pinRole: (id) => {
+      const name = id.replace(/.d+$/, '');
+      if (name === spec.vcc) return 'power';
+      if (name === spec.gnd) return 'ground';
+      if (name === 'NC') return 'nc';
+      return spec.outputs.includes(name) ? 'out' : 'in';
+    },
     model: 'Comportamental',
     sim: chipSim(spec),
     Render,

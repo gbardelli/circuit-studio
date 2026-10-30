@@ -11,7 +11,7 @@ import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath } from './wires';
-import { buildSchematic, withFrozenPlacement, type SchNet } from './schematic';
+import { buildSchematic, flagWidth, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
 
 interface PinHit {
   part: string;
@@ -143,11 +143,17 @@ export function Canvas() {
       grow(b.x + b.w, b.y + b.h);
     }
     for (const w of scene.wires) for (const pt of wirePoints(w, partsById)) grow(pt.x, pt.y);
+    // En el esquema se encuadra la hoja entera, con su marco y su cajetín.
+    if (sch) {
+      grow(sch.sheet.x, sch.sheet.y);
+      grow(sch.sheet.x + sch.sheet.w, sch.sheet.y + sch.sheet.h);
+    }
     const r = svg.getBoundingClientRect();
     if (r.width < 50 || r.height < 50) return;
-    const zoom = Math.min(4, Math.max(MIN_ZOOM, Math.min(r.width / (x1 - x0 + 120), r.height / (y1 - y0 + 140))));
+    const pad = sch ? 40 : 120;
+    const zoom = Math.min(4, Math.max(MIN_ZOOM, Math.min(r.width / (x1 - x0 + pad), r.height / (y1 - y0 + pad + 20))));
     setViewport({ zoom, x: r.width / 2 - ((x0 + x1) / 2) * zoom, y: r.height / 2 - ((y0 + y1) / 2) * zoom });
-  }, [scene, partsById, setViewport]);
+  }, [scene, sch, partsById, setViewport]);
 
   useEffect(() => {
     if (!fitted.current && scene.parts.length > 0) {
@@ -799,6 +805,7 @@ export function Canvas() {
         </defs>
         <rect width="100%" height="100%" fill="url(#grid)" />
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${z})`}>
+          {sch && <SheetFrame sheet={sch.sheet} title={project.name} />}
           {sch && <NetLayer nets={sch.nets} selected={selectedNets} />}
           {scene.parts.map((p) => (
             <PartView key={p.id} part={p} offset={offsets.get(p.id)} onInput={onPartInput} live={simRunning} dragging={draggingIds.includes(p.id)} />
@@ -1291,8 +1298,8 @@ const NetLayer = memo(function NetLayer({ nets, selected }: { nets: SchNet[]; se
                   </g>
                 );
               })}
-              {junctions(net.segments).map((p, i) => (
-                <circle key={i} cx={p.x} cy={p.y} r={2.2} className="dot" fill="var(--sch-wire)" pointerEvents="none" />
+              {(net.dots ?? junctions(net.segments)).map((p, i) => (
+                <circle key={i} cx={p.x} cy={p.y} r={2.1} className="dot" fill="var(--sch-wire)" pointerEvents="none" />
               ))}
             </>
           ) : (
@@ -1300,14 +1307,117 @@ const NetLayer = memo(function NetLayer({ nets, selected }: { nets: SchNet[]; se
           )}
         </g>
       ))}
+      {/* Las etiquetas, encima de todos los cables. */}
+      {nets.map(
+        (net) =>
+          net.flags && (
+            <g key={`flags${net.id}`} className={`sch-net ${selected.has(net.id) ? 'on' : ''}`} data-net={net.id}>
+              {net.flags.map((f, i) => (
+                <NetFlag key={i} flag={f} />
+              ))}
+            </g>
+          ),
+      )}
+    </g>
+  );
+});
+
+/**
+ * Etiqueta de red: una banderola con el nombre en la punta del pin. Dos banderolas con el mismo
+ * nombre están unidas, como en cualquier programa de esquemas.
+ */
+function NetFlag({ flag }: { flag: SchFlag }) {
+  const w = flagWidth(flag.text) - 4;
+  const h = 9;
+  const right = flag.dir.x >= 0;
+  const { x, y } = flag.at;
+  // Punta hacia el pin y caja hacia fuera.
+  const d = right
+    ? `M${x} ${y} l4 ${-h / 2} h${w} v${h} h${-w} z`
+    : `M${x} ${y} l-4 ${-h / 2} h${-w} v${h} h${w} z`;
+  return (
+    <g className="net-flag" pointerEvents="none">
+      <path d={d} fill="var(--sch-flag-fill)" stroke="var(--sch-wire)" strokeWidth={0.8} strokeLinejoin="round" className="seg" />
+      <text x={right ? x + 4 + w / 2 : x - 4 - w / 2} y={y + 2} textAnchor="middle" fontSize={5.6} fontWeight={600} fill="var(--sch-flag-ink)" fontFamily="Geist, sans-serif">
+        {flag.text}
+      </text>
+    </g>
+  );
+}
+
+/** Marco de la hoja con zonas y cajetín, como un plano. */
+const SheetFrame = memo(function SheetFrame({ sheet, title }: { sheet: { x: number; y: number; w: number; h: number }; title: string }) {
+  const { x, y, w, h } = sheet;
+  const m = 10;
+  const zoneW = 200;
+  const cols = Math.max(1, Math.round(w / zoneW));
+  const rows = Math.max(1, Math.round(h / zoneW));
+  const tbW = 230;
+  const tbH = 58;
+  const tx = x + w - m - tbW;
+  const ty = y + h - m - tbH;
+  const date = new Date().toLocaleDateString('es', { day: '2-digit', month: 'short', year: 'numeric' });
+  const mono = { fontFamily: 'Geist, sans-serif' };
+  return (
+    <g className="sheet" pointerEvents="none">
+      <rect x={x} y={y} width={w} height={h} fill="var(--sch-paper)" stroke="var(--sch-frame)" strokeWidth={1} rx={2} />
+      <rect x={x + m} y={y + m} width={w - 2 * m} height={h - 2 * m} fill="none" stroke="var(--sch-frame)" strokeWidth={0.6} />
+      {Array.from({ length: cols }, (_, i) => (
+        <g key={`c${i}`} fill="var(--sch-frame-ink)" fontSize={5} textAnchor="middle" {...mono}>
+          {i > 0 && <path d={`M${x + (w / cols) * i} ${y} v${m} M${x + (w / cols) * i} ${y + h - m} v${m}`} stroke="var(--sch-frame)" strokeWidth={0.6} />}
+          <text x={x + (w / cols) * (i + 0.5)} y={y + 7}>{i + 1}</text>
+          <text x={x + (w / cols) * (i + 0.5)} y={y + h - 3}>{i + 1}</text>
+        </g>
+      ))}
+      {Array.from({ length: rows }, (_, i) => (
+        <g key={`r${i}`} fill="var(--sch-frame-ink)" fontSize={5} textAnchor="middle" {...mono}>
+          {i > 0 && <path d={`M${x} ${y + (h / rows) * i} h${m} M${x + w - m} ${y + (h / rows) * i} h${m}`} stroke="var(--sch-frame)" strokeWidth={0.6} />}
+          <text x={x + 5} y={y + (h / rows) * (i + 0.5) + 2}>{String.fromCharCode(65 + i)}</text>
+          <text x={x + w - 5} y={y + (h / rows) * (i + 0.5) + 2}>{String.fromCharCode(65 + i)}</text>
+        </g>
+      ))}
+      <g {...mono}>
+        <rect x={tx} y={ty} width={tbW} height={tbH} fill="var(--sch-paper)" stroke="var(--sch-frame)" strokeWidth={0.8} />
+        <path d={`M${tx} ${ty + 24} h${tbW} M${tx} ${ty + 41} h${tbW} M${tx + 120} ${ty + 24} v17 M${tx + 165} ${ty + 24} v17`} stroke="var(--sch-frame)" strokeWidth={0.6} />
+        <text x={tx + 8} y={ty + 9} fontSize={4.6} fill="var(--sch-frame-ink)">TÍTULO</text>
+        <text x={tx + 8} y={ty + 19} fontSize={8.5} fontWeight={600} fill="var(--sch-ink)">{title.length > 40 ? title.slice(0, 39) + '…' : title}</text>
+        <text x={tx + 8} y={ty + 30} fontSize={4.6} fill="var(--sch-frame-ink)">DOCUMENTO</text>
+        <text x={tx + 8} y={ty + 37.5} fontSize={6} fill="var(--sch-ink)">Esquema eléctrico</text>
+        <text x={tx + 126} y={ty + 30} fontSize={4.6} fill="var(--sch-frame-ink)">HOJA</text>
+        <text x={tx + 126} y={ty + 37.5} fontSize={6} fill="var(--sch-ink)">1 de 1</text>
+        <text x={tx + 171} y={ty + 30} fontSize={4.6} fill="var(--sch-frame-ink)">FECHA</text>
+        <text x={tx + 171} y={ty + 37.5} fontSize={6} fill="var(--sch-ink)">{date}</text>
+        <text x={tx + 8} y={ty + 51.5} fontSize={4.8} fill="var(--sch-frame-ink)">Alimentación de los CI implícita: VCC/VDD a +V, GND/VSS a masa.</text>
+      </g>
     </g>
   );
 });
 
 /** Tierra o alimentación: un tramo corto que sale del pin y el símbolo, siempre en vertical. */
 function RailGlyph({ at, dir, kind, label }: { at: Vec; dir: Vec; kind: SchNet['kind']; label?: string }) {
-  const end = { x: at.x + dir.x * 10, y: at.y + dir.y * 10 };
   const color = kind === 'ground' ? 'var(--sch-ink)' : 'var(--sch-supply)';
+  if (dir.x !== 0) {
+    // Pin lateral: el símbolo va tumbado y compacto, cabe en la separación entre patillas.
+    const s = Math.sign(dir.x);
+    const end = { x: at.x + s * 8, y: at.y };
+    return (
+      <g stroke={color} strokeWidth={1.1} strokeLinecap="round" fill="none" className="seg-group">
+        <rect x={Math.min(at.x, end.x + s * 26) - 2} y={at.y - 5} width={30} height={10} fill="transparent" stroke="none" pointerEvents="all" />
+        <path d={`M${at.x} ${at.y} H${end.x}`} />
+        {kind === 'ground' ? (
+          <path d={`M${end.x} ${at.y - 4} v8 M${end.x + s * 2.4} ${at.y - 2.6} v5.2 M${end.x + s * 4.8} ${at.y - 1.2} v2.4`} />
+        ) : (
+          <>
+            <path d={`M${end.x} ${at.y - 3.5} v7`} strokeWidth={1.4} />
+            <text x={end.x + s * 3} y={at.y + 2} textAnchor={s > 0 ? 'start' : 'end'} fontSize={5.4} fontWeight={600} fill={color} stroke="none" fontFamily="Geist, sans-serif">
+              {label}
+            </text>
+          </>
+        )}
+      </g>
+    );
+  }
+  const end = { x: at.x + dir.x * 10, y: at.y + dir.y * 10 };
   // Tierra hacia abajo salvo que el pin salga hacia arriba; alimentación al revés.
   const down = kind === 'ground' ? dir.y >= 0 : dir.y > 0;
   const s = down ? 1 : -1;
