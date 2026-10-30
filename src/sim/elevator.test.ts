@@ -25,6 +25,12 @@ function fixture(hex?: string) {
   const busy = () => bit('u5', '1Q');
   const valid = () => bit('u5', '2Q');
   const up = () => bit('u13', '2Y');
+  const count = () => [0, 1, 2, 3].reduce((v, n) => v | (bit('u16', `Q${n}`) ? 1 << n : 0), 0);
+  const seconds = () => {
+    const v = engine.getVisual('seg2');
+    const on = SEGMENTS.filter((s) => Number(v?.[s] ?? 0) > 0.001).join('');
+    return on === '' ? null : ({ abcdef: 0, bc: 1, abdeg: 2, abcdg: 3 } as Record<string, number>)[on] ?? on;
+  };
   const down = () => bit('u13', '4Y');
   const digit = () => {
     const v = engine.getVisual('seg');
@@ -44,7 +50,7 @@ function fixture(hex?: string) {
     engine.setInput(id, 'pressed', false);
     tick();
   };
-  return { engine, snapshot, tick, bit, value, busy, valid, up, down, digit, floor, press };
+  return { engine, snapshot, tick, bit, value, busy, valid, up, down, digit, floor, press, count, seconds };
 }
 
 describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)', () => {
@@ -100,6 +106,36 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     h.engine.stop();
   }, 60_000);
 
+  it('cuenta regresiva: 3-2-1 cada segundo por piso, fija en 3 y apagada en reposo', () => {
+    const h = fixture();
+    h.floor(1);
+    h.tick(0.5);
+    expect(h.count()).toBe(3);
+    expect(h.seconds()).toBe(null);
+    h.press('pp3');
+    // Muestras cada 0,1 s durante dos pisos: los valores y cuándo cambian.
+    const changes: [number, number][] = [];
+    for (let t = 0; t < 6.4; t += 0.1) {
+      h.tick(0.1);
+      const c = h.count();
+      if (!changes.length || changes[changes.length - 1][1] !== c) changes.push([Math.round(t * 10) / 10, c]);
+    }
+    expect(changes.map(([, c]) => c).slice(0, 8)).toEqual([3, 2, 1, 0, 3, 2, 1, 0]);
+    // Un piso cada 3 s: de un 0 al siguiente.
+    const zeros = changes.filter(([, c]) => c === 0).map(([t]) => t);
+    expect(zeros[1] - zeros[0]).toBeGreaterThan(2.7);
+    expect(zeros[1] - zeros[0]).toBeLessThan(3.3);
+    // Primer piso algo más corto (~2,5 s): el primer ciclo del 555 arranca con el condensador vacío.
+    expect(zeros[0]).toBeGreaterThan(1.8);
+    // Al llegar se para en 3 y el display se apaga.
+    h.floor(3);
+    h.tick(0.6);
+    expect(h.busy()).toBe(false);
+    expect(h.count()).toBe(3);
+    expect(h.seconds()).toBe(null);
+    h.engine.stop();
+  }, 60_000);
+
   it('el RESET borra destino, estado y display', () => {
     const h = fixture();
     h.floor(1);
@@ -132,7 +168,7 @@ describe.skipIf(!compilerAvailable())('ascensor con el GIGA: pantalla táctil y 
       h.tick(0.3);
     };
     const waitIdle = () => {
-      for (let i = 0; i < 100 && (h.busy() || h.up() || h.down()); i++) h.tick(0.1);
+      for (let i = 0; i < 160 && (h.busy() || h.up() || h.down()); i++) h.tick(0.1);
       expect(h.busy()).toBe(false);
     };
     const callButton = (f: number) => tap(104 + (f - 1) * 52 + 24, 190);

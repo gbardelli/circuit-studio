@@ -5,8 +5,9 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 // La lógica obligatoria la hacen los integrados: memoria del destino (U8), bloqueo (U5-U7),
 // piso actual (U11), comparación (U12), LEDs LS/LB y display (U14). El GIGA no decide nada:
 //  1. Llamadas desde la pantalla táctil: pulsa la línea del piso como un botón más.
-//  2. Motor de la cabina: mientras los CI piden SUBIR o BAJAR, mueve la cabina activando
-//     el sensor del piso al que llega (MANUAL: lo haces tú con el DIP SP1-SP4).
+//  2. Motor de la cabina: el ritmo lo marca la cuenta regresiva de los CI (U16, 3 s por
+//     piso). Cuando llega a 0, la cabina alcanza el siguiente piso y el GIGA activa su
+//     sensor (MANUAL: lo haces tú con el DIP SP1-SP4 cuando el display marca 0).
 //  3. Pantalla: piso actual, destino, sentido y la cabina moviéndose por el hueco.
 //
 // Todo a 3,3 V. Llamadas y sensores en drenador abierto: INPUT suelta la línea (la sube el
@@ -20,10 +21,11 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 
 const int CALL[4]   = {23, 25, 27, 29};  // llamada de piso 1-4
 const int SENSOR[4] = {31, 33, 35, 37};  // sensor de planta 1-4
-const int UP = 39, DOWN = 41, BUSY = 43, VALID = 45;
+const int COUNT[2] = {39, 41};           // cuenta regresiva de U16 (Q0, Q1): 3, 2, 1, 0
+const int BUSY = 43, VALID = 45;
 const int DEST[3] = {47, 49, 51};        // destino guardado en U8 (Q0-Q2)
 
-const unsigned long TRAVEL_MS = 1400;    // de un piso al siguiente
+const unsigned long FLOOR_MS  = 3000;    // lo que tarda la cuenta de U16 en un piso
 const unsigned long SETTLE_MS = 250;     // deja que los CI lean el sensor nuevo
 const unsigned long DOORS_MS  = 1500;    // puertas abiertas al llegar
 const unsigned long PULSE_MS  = 200;     // pulsación de una llamada táctil
@@ -38,11 +40,12 @@ const int SX = 30, SY = 38, SW = 62, SLOT = 48;
 bool autoMode = true;
 int floorNow = 1;        // planta de la cabina
 int dir = 0;             // +1 sube, -1 baja, 0 parada
-unsigned long travelStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};
+unsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};
 bool wasBusy = false;
+int lastCount = 3;
 
 // Lo último que se dibujó: solo se envía lo que cambia
-int shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -1, shownCalls = -1, shownMode = -1;
+int shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -100, shownCalls = -1, shownMode = -1;
 bool shownDoors = false;
 
 byte packet[9], used = 0;
@@ -82,15 +85,27 @@ int readDest() {
   return digitalRead(DEST[0]) | (digitalRead(DEST[1]) << 1) | (digitalRead(DEST[2]) << 2);
 }
 
-void motor(unsigned long now) {
+int readCount() {
+  return digitalRead(COUNT[0]) | (digitalRead(COUNT[1]) << 1);
+}
+
+// Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.
+int wanted(bool busy, bool valid, int dest) {
+  if (!busy || !valid || dest < 1 || dest > 4 || dest == floorNow) return 0;
+  return dest > floorNow ? 1 : -1;
+}
+
+void motor(unsigned long now, bool busy, bool valid, int dest, int count) {
+  bool reached = count == 0 && lastCount != 0;  // la cuenta de U16 acaba de llegar a 0
+  if (count != lastCount) lastCount = count;
   if (!autoMode) { int s = readSensors(); if (s) floorNow = s; dir = 0; return; }
   if (dir != 0) {
-    if (now - travelStart >= TRAVEL_MS) { floorNow += dir; dir = 0; driveSensors(); settleUntil = now + SETTLE_MS; }
+    if (reached) { floorNow += dir; dir = 0; driveSensors(); settleUntil = now + SETTLE_MS; segStart = now; }
     return;
   }
-  if ((long)(now - settleUntil) < 0 || (long)(now - doorsUntil) < 0) return;
-  if (digitalRead(UP) && floorNow < 4) { dir = 1; travelStart = now; driveSensors(); }
-  else if (digitalRead(DOWN) && floorNow > 1) { dir = -1; travelStart = now; driveSensors(); }
+  if ((long)(now - settleUntil) < 0) return;
+  dir = wanted(busy, valid, dest);
+  if (dir != 0) { doorsUntil = 0; driveSensors(); }   // cierra puertas y sale de la planta
 }
 
 // ── Pantalla ───────────────────────────────────────────────────────────────
@@ -129,14 +144,13 @@ void drawShaft(int cab, bool doors) {
   else fill(SX + SW / 2 - 1, cab + 4, 2, SLOT - 16, RULE);
 }
 
-void render(unsigned long now) {
-  bool busy = digitalRead(BUSY), valid = digitalRead(VALID);
-  bool up = digitalRead(UP), down = digitalRead(DOWN);
+void render(unsigned long now, bool busy, bool valid, int dest, int count) {
   bool doors = (long)(now - doorsUntil) < 0;
-  int dest = valid ? readDest() : 0;
+  int heading = dir != 0 ? dir : wanted(busy, valid, dest);
 
-  long travel = dir == 0 ? 0 : (long)((now - travelStart) * SLOT / TRAVEL_MS);
-  if (travel > SLOT) travel = SLOT;
+  // La cabina avanza al ritmo de la cuenta: llega justo cuando U16 marca 0.
+  long travel = dir == 0 ? 0 : (long)((now - segStart) * SLOT / FLOOR_MS);
+  if (travel > SLOT - 2) travel = SLOT - 2;
   int cab = SY + (4 - floorNow) * SLOT + 4 - dir * travel;
   if (cab != shownCab || doors != shownDoors) { drawShaft(cab, doors); shownCab = cab; shownDoors = doors; }
 
@@ -147,14 +161,22 @@ void render(unsigned long now) {
     shownFloor = shown;
   }
 
-  int status = up || dir > 0 ? 1 : down || dir < 0 ? 2 : doors ? 3 : busy ? 4 : 0;
-  if (status != shownStatus) {
+  int status = heading > 0 ? 1 : heading < 0 ? 2 : doors ? 3 : busy ? 4 : 0;
+  // Con el ascensor en marcha, los segundos de la cuenta regresiva acompañan al sentido.
+  int key = status * 8 + (status == 1 || status == 2 ? count : 7);
+  if (key != shownStatus) {
     const char* label[] = {"EN ESPERA", "SUBIENDO", "BAJANDO", "PUERTAS", "ESPERANDO"};
     unsigned color[] = {DIM, GREEN, RED, BLUE, AMBER};
-    fill(196, 56, 110, 34, CARD);
-    arrow(204, 58, status, color[status]);
+    if (status != shownStatus / 8) {
+      fill(196, 56, 110, 34, CARD);
+      arrow(204, 58, status, color[status]);
+    }
+    if (status == 1 || status == 2) {
+      snprintf(buf, sizeof buf, "%d s", count);
+      text(240, 58, 66, 32, 2, TEXT, CARD, 0, buf);
+    }
     text(196, 92, 110, 22, 0, color[status], CARD, 0, label[status]);
-    shownStatus = status;
+    shownStatus = key;
   }
 
   if (dest != shownDest) {
@@ -203,7 +225,7 @@ void touch(int x, int y, unsigned long now) {
 
 void setup() {
   for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }
-  pinMode(UP, INPUT); pinMode(DOWN, INPUT); pinMode(BUSY, INPUT); pinMode(VALID, INPUT);
+  pinMode(COUNT[0], INPUT); pinMode(COUNT[1], INPUT); pinMode(BUSY, INPUT); pinMode(VALID, INPUT);
   for (int i = 0; i < 3; i++) pinMode(DEST[i], INPUT);
   delay(400);                           // la Nextion tarda en arrancar tras recibir 5 V
   NEXTION.begin(9600);                  // y lo hace a 9600 baudios
@@ -231,11 +253,13 @@ void loop() {
     }
   }
 
-  bool busy = digitalRead(BUSY);
+  bool busy = digitalRead(BUSY), valid = digitalRead(VALID);
+  int dest = valid ? readDest() : 0, count = readCount();
+  if (!wasBusy && busy) segStart = now;                // empieza la cuenta: la cabina sale
   if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas
   wasBusy = busy;
 
-  motor(now);
-  render(now);
+  motor(now, busy, valid, dest, count);
+  render(now, busy, valid, dest, count);
 }
 `;
