@@ -15,6 +15,7 @@ import { rememberProject } from './Home';
 import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
 import { useStartupTask } from './Startup';
+import { useAutoVersions } from './History';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -104,6 +105,8 @@ function EditorShell() {
   const toast = useUi((s) => s.toast);
   const compactPanel = useUi((s) => s.compactPanel);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
+
+  useAutoVersions(project, snapshot);
 
   // El motor sigue al documento: cambios de topología reconstruyen, cambios de valores no.
   useEffect(() => engine.update(snapshot), [engine, snapshot]);

@@ -126,7 +126,9 @@ export class Project {
       });
     }
     this.setPresence({ user: this.user, cursor: null, selection: [], drag: null });
-    this.undo = new Y.UndoManager([this.parts, this.wires], { trackedOrigins: new Set([LOCAL_ORIGIN]), captureTimeout: 400 });
+    // El código entra en el ámbito para deshacer una restauración entera; lo que se teclea en el
+    // editor de código llega con el origen de su enlace y conserva su propio deshacer.
+    this.undo = new Y.UndoManager([this.parts, this.wires, this.code], { trackedOrigins: new Set([LOCAL_ORIGIN]), captureTimeout: 400 });
     this.doc.on('afterTransaction', () => {
       this.stale = true;
       this.emit();
@@ -214,6 +216,45 @@ export class Project {
 
   get name() {
     return String(this.meta.get('name') ?? 'Proyecto sin título');
+  }
+
+  // ── Historial ────────────────────────────────────────────────────────────────
+  /** El documento entero como actualización de Yjs: es lo que guarda una versión. */
+  encodeState(): Uint8Array {
+    return Y.encodeStateAsUpdate(this.doc);
+  }
+
+  /**
+   * Deja el circuito como estaba en una versión: piezas, cables y código. El nombre se conserva.
+   * Es una edición más del documento compartido: llega a todos y se deshace con Ctrl+Z.
+   */
+  restore(state: Uint8Array) {
+    if (this.readOnly) return;
+    const old = new Y.Doc();
+    Y.applyUpdate(old, state);
+    const copy = (src: Y.Map<unknown>) => {
+      const m = new Y.Map<unknown>();
+      src.forEach((v, k) => {
+        if (v instanceof Y.Map) {
+          const inner = new Y.Map<unknown>();
+          v.forEach((iv, ik) => inner.set(ik, iv));
+          m.set(k, inner);
+        } else m.set(k, v);
+      });
+      return m;
+    };
+    // Un paso propio de deshacer: Ctrl+Z vuelve justo a lo que había antes de restaurar.
+    this.undo.stopCapturing();
+    this.tx(() => {
+      for (const k of [...this.parts.keys()]) this.parts.delete(k);
+      for (const k of [...this.wires.keys()]) this.wires.delete(k);
+      for (const k of [...this.code.keys()]) this.code.delete(k);
+      old.getMap<Y.Map<unknown>>('parts').forEach((m, k) => this.parts.set(k, copy(m) as YPart));
+      old.getMap<Y.Map<unknown>>('wires').forEach((m, k) => this.wires.set(k, copy(m)));
+      old.getMap<Y.Text>('code').forEach((t, k) => this.code.set(k, new Y.Text(t.toString())));
+    });
+    this.undo.stopCapturing();
+    old.destroy();
   }
 
   peers(): Presence[] {

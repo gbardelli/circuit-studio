@@ -31,6 +31,22 @@ export function ready() {
       PRIMARY KEY (project_id, user_id)
     )`;
     await sql`CREATE INDEX IF NOT EXISTS members_user_idx ON members (user_id)`;
+    // Historial: instantáneas del documento Yjs (automáticas, con nombre y previas a restaurar).
+    await sql`CREATE TABLE IF NOT EXISTS project_versions (
+      id bigserial PRIMARY KEY,
+      project_id text NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      kind text NOT NULL,
+      label text,
+      author_id text,
+      author_name text,
+      state text NOT NULL,
+      hash text NOT NULL,
+      preview jsonb,
+      parts int NOT NULL DEFAULT 0,
+      wires int NOT NULL DEFAULT 0,
+      created_at timestamptz NOT NULL DEFAULT now()
+    )`;
+    await sql`CREATE INDEX IF NOT EXISTS project_versions_idx ON project_versions (project_id, created_at DESC)`;
   })().catch((err) => {
     migrated = null;
     throw err;

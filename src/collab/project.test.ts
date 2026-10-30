@@ -117,3 +117,45 @@ describe('shared project operations', () => {
     expect(reloaded.snapshot()).toEqual(expected);
   });
 });
+
+describe('historial', () => {
+  it('restaurar una versión devuelve piezas, cables y código, llega al otro editor y se deshace', async () => {
+    const a = open();
+    const b = open();
+    await Promise.all([synced(a), synced(b)]);
+    const uno = a.addPart('arduino-uno', 0, 0);
+    const led = a.addPart('led', 300, 100, { color: 'green' });
+    a.addWire({ part: uno, pin: 'D13', x: 0, y: 0 }, { part: led, pin: 'A', x: 0, y: 0 }, [], '#f2862e');
+    a.setSketch(uno, 'void setup(){}\nvoid loop(){}\n');
+    const version = a.encodeState();
+    // Después de guardar la versión: se borra el LED y se cambia el código.
+    a.deleteItems([led], []);
+    a.setSketch(uno, '// otro programa\n');
+    a.addPart('resistor', 500, 0);
+    exchange(a, b);
+    expect(b.snapshot().parts.map((p) => p.type).sort()).toEqual(['arduino-uno', 'resistor']);
+
+    a.restore(version);
+    exchange(a, b);
+    for (const p of [a, b]) {
+      const snap = p.snapshot();
+      expect(snap.parts.map((q) => q.type).sort()).toEqual(['arduino-uno', 'led']);
+      expect(snap.parts.find((q) => q.type === 'led')!.props.color).toBe('green');
+      expect(snap.wires).toHaveLength(1);
+      expect(p.sketch(uno).toString()).toContain('void loop');
+    }
+    // Restaurar es una edición más: Ctrl+Z vuelve al circuito de antes.
+    a.undo.undo();
+    expect(a.snapshot().parts.map((q) => q.type).sort()).toEqual(['arduino-uno', 'resistor']);
+    expect(a.sketch(uno).toString()).toBe('// otro programa\n');
+  });
+
+  it('un lector no puede restaurar', async () => {
+    const viewer = open('viewer');
+    await synced(viewer);
+    const other = new Y.Doc();
+    other.getMap('parts').set('x', new Y.Map());
+    viewer.restore(Y.encodeStateAsUpdate(other));
+    expect(viewer.snapshot().parts).toHaveLength(0);
+  });
+});

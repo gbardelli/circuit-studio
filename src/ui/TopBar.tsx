@@ -7,6 +7,7 @@ import { useConnection, useEditor, usePeers, useSimStatus, useSnapshot } from '.
 import { Logo, Wordmark } from './Logo';
 import { PARTS } from '../parts';
 import { useUi } from './store';
+import { HistoryIcon, HistoryPanel } from './History';
 
 export function TopBar() {
   const { project, engine } = useEditor();
@@ -21,6 +22,7 @@ export function TopBar() {
   const [starting, setStarting] = useState(false);
   // `?share=1` (desde el menú de la portada) abre directamente el panel de miembros y acceso.
   const [shareOpen, setShareOpen] = useState(() => CLOUD && new URLSearchParams(location.search).has('share'));
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [name, setName] = useState(project.name);
   const [, force] = useState(0);
 
@@ -152,6 +154,12 @@ export function TopBar() {
             <Avatar key={p.clientId} name={p.user.name} color={p.user.color} image={p.user.image} />
           ))}
           <Avatar name={`${project.user.name} (tú)`} color={project.user.color} image={project.user.image} me />
+        </div>
+        <div style={{ position: 'relative' }}>
+          <button className="btn sm" onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} title="Historial de versiones">
+            <HistoryIcon size={14} /> Historial
+          </button>
+          {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
         </div>
         <div style={{ position: 'relative' }}>
           <button className="btn primary sm" onClick={() => (CLOUD ? setShareOpen((o) => !o) : share())} aria-expanded={shareOpen}>
