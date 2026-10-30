@@ -34,7 +34,7 @@ export function CircuitOverlays({
   const findings = useMemo(
     () =>
       checksActive
-        ? electricalChecks(snapshot, readings, engine.pinCurrents())
+        ? electricalChecks(snapshot, readings, engine.pinCurrents(),engine.pinModes())
         : [],
     [
       snapshot,

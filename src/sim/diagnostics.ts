@@ -82,6 +82,7 @@ export function electricalChecks(
   snapshot: CircuitSnapshot,
   readings: Record<string, number>,
   currents = new Map<string, number>(),
+  modes:Record<string,string>={},
 ): Finding[] {
   const netlist = buildNetlist(snapshot, PARTS),
     members = new Map<number, { part: PartData; pin: string }[]>();
@@ -173,8 +174,7 @@ export function electricalChecks(
   for (const group of members.values()) {
     const outputs = group.filter(
       ({ part, pin }) =>
-        PARTS[part.type]?.logic?.outputs.includes(pin) &&
-        !PARTS[part.type]?.logic?.openDrain,
+        (PARTS[part.type]?.logic?.outputs.includes(pin) && !PARTS[part.type]?.logic?.openDrain) || ['high','low'].includes(modes[pinKey(part.id,pin)]),
     );
     if (outputs.length < 2) continue;
     const sourcing = outputs.find(

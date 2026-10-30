@@ -20,6 +20,12 @@ const snap: CircuitSnapshot = {
   wires: [],
 };
 describe("evidence-based circuit diagnostics", () => {
+  it('checks configured MCU push-pull outputs while excluding input and pull-up pins',()=>{
+    const circuit:CircuitSnapshot={parts:[{id:'mcu',type:'arduino-uno',x:0,y:0,rot:0,props:{}}],wires:[wire('mcu','D2','mcu','D3')]};
+    const currents=new Map([['mcu:D2',-.03],['mcu:D3',.03]]);
+    expect(electricalChecks(circuit,{},currents,{'mcu:D2':'high','mcu:D3':'input'}).some(f=>f.title.includes('contra otra'))).toBe(false);
+    expect(electricalChecks(circuit,{},currents,{'mcu:D2':'high','mcu:D3':'low'}).some(f=>f.title.includes('contra otra'))).toBe(true);
+  });
   it("accepts a focused question and follows an LED through its resistor to the actual gate", () => {
     expect(diagnosticQuery("¿Por qué no enciende LS?")).toBe("ls");
     const circuit: CircuitSnapshot = {

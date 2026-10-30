@@ -50,7 +50,7 @@ export function Diagnostics() {
   const [query, setQuery] = useState("");
   const normalized = diagnosticQuery(query);
   const findings = useMemo(
-    () => electricalChecks(snapshot, engine.readings(), engine.pinCurrents()),
+    () => electricalChecks(snapshot, engine.readings(), engine.pinCurrents(),engine.pinModes()),
     [snapshot, status],
   );
   const candidates = snapshot.parts
