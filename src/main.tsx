@@ -8,6 +8,7 @@ import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { Startup } from './ui/Startup';
 import './styles.css';
+import './workbench.css';
 
 const params = new URLSearchParams(location.search);
 const room = params.get('p');

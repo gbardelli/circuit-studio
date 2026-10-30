@@ -109,6 +109,7 @@ export interface McuSpec {
 
 export interface PartDef {
   type: string;
+  logic?: { inputs:string[]; outputs:string[]; supply:string|null; ground:string; low:number; high:number; fixedThresholds:boolean; minSupply:number; openDrain:boolean };
   mcu?: McuSpec;
   name: string;
   /** Referencia del fabricante (74HC00, NE555…): se muestra en la tarjeta y se busca. */

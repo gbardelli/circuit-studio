@@ -304,6 +304,8 @@ export class Project {
     this.tx(() => this.meta.set('name', name.slice(0, 120)));
   }
 
+  setMeta(key:string,value:unknown) { this.tx(()=>this.meta.set(key,value)); }
+
   addPart(type: string, x: number, y: number, props: Props = {}, rot: Rotation = 0): string {
     const id = crypto.randomUUID();
     this.tx(() => {

@@ -186,6 +186,7 @@ const ClockRender = memo(function ClockRender({ part, visual }: RenderProps) {
 
 export const clockGen: PartDef = {
   type: 'clock',
+  reference: 'GND',
   name: 'Generador de reloj',
   category: 'Entradas',
   description: 'Onda cuadrada de 0 a 5 V a la frecuencia que elijas. Para hacer avanzar contadores, biestables y registros.',

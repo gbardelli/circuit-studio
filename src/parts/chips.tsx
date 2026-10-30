@@ -243,6 +243,8 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
   });
   return {
     type: spec.type,
+    logic: /^(74|cd4)/i.test(spec.type)&&spec.type!=='74hc4066'?{ inputs: pinIds(spec.pins).filter(p=>{const base=p.replace(/\.\d+$/,'');return !spec.outputs.includes(p)&&base!==spec.vcc&&base!==spec.gnd&&base!==spec.rail&&!base.startsWith('NC');}),
+      outputs:spec.outputs, supply:spec.vcc,ground:spec.gnd,low:spec.inputThresholds?.low??1.75,high:spec.inputThresholds?.high??2.75,fixedThresholds:Boolean(spec.inputThresholds),minSupply:spec.minSupply??1.6,openDrain:spec.openDrain??false }:undefined,
     name: spec.name,
     partNumber: spec.part,
     family: spec.family,
@@ -255,8 +257,8 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
     internal: groups.size ? () => [...groups.values()] : undefined,
     ground: [pinIds(spec.pins)[spec.pins.indexOf(spec.gnd)]],
     pinRole: (id) => {
-      const name = id.replace(/.d+$/, '');
-      if (name === spec.vcc) return 'power';
+      const name = id.replace(/\.\d+$/, '');
+      if (name === spec.vcc || name===spec.rail) return 'power';
       if (name === spec.gnd) return 'ground';
       if (name === 'NC') return 'nc';
       return spec.outputs.includes(name) ? 'out' : 'in';

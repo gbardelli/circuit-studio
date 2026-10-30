@@ -53,6 +53,7 @@ function topologyKey(snap: CircuitSnapshot) {
 }
 
 export class SimEngine {
+  onSolve: (() => void) | null = null;
   running = false;
   private snapshot: CircuitSnapshot = { parts: [], wires: [] };
   private topo = '';
@@ -406,6 +407,30 @@ export class SimEngine {
     this.publish(1, converged);
   }
 
+  /** Worker scheduler: keep rendering and pointer input independent of circuit solving. */
+  stepBudget(seconds: number, budgetMs = 7) {
+    const result = this.advance(seconds, budgetMs);
+    this.publish(seconds > 0 ? result.advanced / seconds : 1, result.converged);
+    return result.advanced;
+  }
+
+  readings(includeBreadboards=true) {
+    const values: Record<string, number> = {};
+    const boards=includeBreadboards?new Set<string>():new Set(this.snapshot.parts.filter(p=>PARTS[p.type]?.category==='Protoboards').map(p=>p.id));
+    for (const key of this.netlist?.netOf.keys() ?? []) {
+      const split = key.lastIndexOf(':');
+      if(boards.has(key.slice(0,split)))continue;
+      const voltage = this.voltageAt(key.slice(0, split), key.slice(split + 1));
+      if (voltage !== null) values[key] = voltage;
+    }
+    return values;
+  }
+
+  visualSnapshot() { return Object.fromEntries(this.visuals); }
+  pinModes() {const modes:Record<string,string>={};for(const mcu of this.mcus){const def=PARTS[this.parts.get(mcu.partId)!.type];def.mcu?.pinIds.forEach((pin,index)=>{modes[pinKey(mcu.partId,pin)]=mcu.runner?.pinMode(index)??'input';});}return modes;}
+
+  get time() { return this.simTime; }
+
   private advance(span: number, budgetMs: number) {
     const circuit = this.circuit;
     if (!circuit) return { advanced: 0, converged: true };
@@ -483,6 +508,7 @@ export class SimEngine {
       });
       m.analogNodes.forEach((node, ch) => m.runner!.setAnalog(ch, node < 0 ? 0 : v[node]));
     }
+    this.onSolve?.();
   }
 
   private accumulate(v: Float64Array, dt: number) {

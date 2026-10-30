@@ -21,6 +21,16 @@ The PWM signal stands freely beside the wordmark. A single 440ms connection trac
 
 The first-session introduction lasts 520ms, followed by a 140ms fade. Actual authentication and project loading run concurrently and determine when the loading screen can leave. Input skips the decorative introduction. Returning visitors and reduced-motion users get no decorative delay. The pre-JavaScript document shares the same composition, typography and mark geometry.
 
+## Workbench interaction
+
+The workbench rail groups signal capture, evidence-based diagnosis, physical assembly and component review. A restrained mint trace palette distinguishes live measurements from blue editing selection. Floating readouts show the pinned net; the same physical net remains selected across views. Layout changes retain canvas context, while explicit fit remains available.
+
+Manipulation follows the pointer immediately. Compatible breadboard holes attract leads within a six-screen-pixel capture radius and release beyond eleven pixels; occupied holes are marked and reject placement. Connection confirmation is a short local fade. The browser's reduced-motion preference removes nonessential motion.
+
+The main thread renders the workspace; circuit calculation runs in a module worker. Incremental signal edges avoid copying the entire capture on each frame. Historical inspection visibly distinguishes reconstruction and paused state from live execution. Names of watched signals are local project preferences. Simulation recordings belong to the current session.
+
+On narrow windows, simulation controls move to a second header row and compact panel controls stay beneath the workbench rail. Secondary panels remain scrollable. The optional frame meter reports measured values rather than promising a fixed refresh rate.
+
 ## Hardware materials
 
 Keep all model pin coordinates independent of artwork changes. Use reusable SVG paint servers for solder mask, epoxy, metal, brushed aluminum, plastic and optical glass. Restrict texture to small tiled patterns; avoid per-component turbulence filters and raster dependencies.

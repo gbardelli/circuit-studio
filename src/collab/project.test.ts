@@ -29,6 +29,14 @@ afterEach(() => {
 });
 
 describe('shared project operations', () => {
+  it('merges concurrent component comments and preserves assembly metadata for viewers',async()=>{
+    const a=open(),b=open(),viewer=open('viewer');await Promise.all([synced(a),synced(b),synced(viewer)]);
+    a.setMeta('note:a',{id:'a',part:'u1',text:'Check CLK',author:'A',created:1,resolved:false});
+    b.setMeta('note:b',{id:'b',part:'u1',text:'Check reset',author:'B',created:2,resolved:false});
+    a.setMeta('assembly.done',{'wire-1':'verified-signature'});exchange(a,b);exchange(a,viewer);
+    expect(a.meta.toJSON()).toEqual(b.meta.toJSON());expect(a.meta.has('note:a')).toBe(true);expect(a.meta.has('note:b')).toBe(true);
+    viewer.setMeta('assembly.done',{});expect(viewer.meta.get('assembly.done')).toEqual({'wire-1':'verified-signature'});
+  });
   it('converges after concurrent movement, property edits and schematic connections', async () => {
     const a = open();
     const b = open();

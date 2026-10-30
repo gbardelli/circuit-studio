@@ -23,6 +23,18 @@ export interface LibDrag {
 }
 
 export interface UiState {
+  performanceVisible:boolean;
+  setPerformanceVisible(on:boolean):void;
+  labPanel:'signals'|'diagnostics'|'assembly'|'notes'|null;
+  setLabPanel(panel:UiState['labPanel']):void;
+  commandOpen:boolean;
+  setCommandOpen(open:boolean):void;
+  pinnedSignal:string|null;
+  pinSignal(key:string|null):void;
+  assemblyWire:string|null;
+  setAssemblyWire(id:string|null):void;
+  signalOverlay:boolean;
+  setSignalOverlay(on:boolean):void;
   selection: string[];
   wireSelection: string[];
   placing: string | null;
@@ -66,6 +78,12 @@ function readPanels(): UiState['collapsed'] {
 }
 
 export const useUi = create<UiState>((set) => ({
+  performanceVisible:false,setPerformanceVisible:(performanceVisible)=>set({performanceVisible}),
+  labPanel:null,setLabPanel:(labPanel)=>set(labPanel?{labPanel,codeFor:null,bottomTab:null}:{labPanel}),
+  commandOpen:false,setCommandOpen:(commandOpen)=>set({commandOpen}),
+  pinnedSignal:null,pinSignal:(pinnedSignal)=>set({pinnedSignal}),
+  assemblyWire:null,setAssemblyWire:(assemblyWire)=>set({assemblyWire}),
+  signalOverlay:false,setSignalOverlay:(signalOverlay)=>set({signalOverlay}),
   selection: [],
   wireSelection: [],
   placing: null,
@@ -98,7 +116,7 @@ export const useUi = create<UiState>((set) => ({
   setViewport: (viewport) => set({ viewport }),
   setPlacing: (placing) => set({ placing }),
   setSim: (simRunning) => set({ simRunning }),
-  openCode: (codeFor, tab = 'code') => set({ codeFor, bottomTab: codeFor ? tab : null }),
+  openCode: (codeFor, tab = 'code') => set({ codeFor, bottomTab: codeFor ? tab : null,...(codeFor?{labPanel:null}:{}) }),
   showToast: (text, tone = 'info') => {
     clearTimeout(toastTimer);
     set({ toast: text ? { text, tone } : null });

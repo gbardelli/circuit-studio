@@ -5,7 +5,11 @@ import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type Wire
 import { formatSI } from '../core/units';
 import { PARTS } from '../parts';
 import { SCH_PREFIX } from '../parts/symbols';
-import { useEditor, usePeers, useSnapshot, useVisual } from './context';
+import { useEditor, usePeers, useDisplaySnapshot, useVisual } from './context';
+import { CircuitOverlays } from './CircuitOverlays';
+import { magneticPosition,occupiedHoles } from './magnet';
+import { ProbeReadout } from './ProbeReadout';
+import { FrameMeter } from './FrameMeter';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
 import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
@@ -45,7 +49,7 @@ const MAX_ZOOM = 8;
 
 export function Canvas() {
   const { project, engine } = useEditor();
-  const snapshot = useSnapshot();
+  const snapshot = useDisplaySnapshot();
   const peers = usePeers();
   const viewport = useUi((s) => s.viewport);
   const setViewport = useUi((s) => s.setViewport);
@@ -73,6 +77,15 @@ export function Canvas() {
   const [space, setSpace] = useState(false);
   const lastPresence = useRef(0);
   const fitted = useRef(false);
+  const magnet=useRef<Vec|null>(null);
+  const [connection,setConnection]=useState<{a:Vec;b:Vec}|null>(null);
+  useEffect(()=>{if(!connection)return;const timer=setTimeout(()=>setConnection(null),240);return()=>clearTimeout(timer);},[connection]);
+  useEffect(()=>{
+    const node=svgRef.current;if(!node)return;
+    let previous={w:node.clientWidth,h:node.clientHeight};
+    const observer=new ResizeObserver(()=>{const next={w:node.clientWidth,h:node.clientHeight};if(previous.w&&previous.h){const vp=useUi.getState().viewport;setViewport({...vp,x:vp.x+(next.w-previous.w)/2,y:vp.y+(next.h-previous.h)/2});}previous=next;});
+    observer.observe(node);return()=>observer.disconnect();
+  },[setViewport]);
 
   const view = useUi((s) => s.view);
   const setView = useUi((s) => s.setView);
@@ -290,11 +303,14 @@ export function Canvas() {
 
   // ── Puntero ────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent) => {
+    magnet.current=null;
     if ((e.target as Element).closest('[data-interactive]')) return;
     setMenu(null);
     setPicker(null);
     if (e.button === 2) return;
     const w = toWorldPt(e.clientX, e.clientY);
+    if(e.altKey){const hit=findPin(w,null);const wireId=(e.target as Element).closest('[data-wire]')?.getAttribute('data-wire');const wire=wireId?wiresById.get(wireId):null;const key=hit?pinKey(hit.part,hit.pin):wire?.a.part&&wire.a.pin?pinKey(wire.a.part,wire.a.pin):null;if(key){useUi.getState().pinSignal(key);useUi.getState().setLabPanel('signals');return;}}
+    if(engine.lab.paused && engine.lab.cursor<engine.lab.duration){const id=(e.target as Element).closest('[data-part]')?.getAttribute('data-part');if(id)select([id]);return;}
     svgRef.current!.setPointerCapture(e.pointerId);
 
     if (e.button === 1 || space || tool === 'hand') {
@@ -409,8 +425,8 @@ export function Canvas() {
         setViewport({ ...viewport, x: drag.vx + e.clientX - drag.sx, y: drag.vy + e.clientY - drag.sy });
         break;
       case 'parts': {
-        const dx = snap(w.x - drag.start.x);
-        const dy = snap(w.y - drag.start.y);
+        let dx = snap(w.x - drag.start.x),dy = snap(w.y - drag.start.y);
+        if(!sch&&drag.ids.length===1){const part=partsById.get(drag.ids[0]);if(part){const result=magneticPosition(part,{x:part.x+w.x-drag.start.x,y:part.y+w.y-drag.start.y},scene.parts,z,magnet.current);magnet.current=result.held;dx=result.at.x-part.x;dy=result.at.y-part.y;}}
         if (dx !== drag.dx || dy !== drag.dy) {
           setDrag({ ...drag, dx, dy, moved: true });
           publishPresence({ drag: { ids: drag.ids, dx, dy } });
@@ -461,6 +477,7 @@ export function Canvas() {
     }
     switch (drag.kind) {
       case 'parts':
+        if(!sch&&drag.ids.length===1){const part=partsById.get(drag.ids[0]);if(part&&occupiedHoles(part,{x:part.x+drag.dx,y:part.y+drag.dy},scene.parts).length){publishPresence({drag:null},true);showToast('Ese orificio ya tiene una patilla. Elige otro lugar.');break;}}
         if (drag.moved && (drag.dx || drag.dy)) {
           const moves = drag.ids.flatMap((id) => {
             const p = partsById.get(id);
@@ -563,6 +580,8 @@ export function Canvas() {
     const symbol = sch ? PARTS[SCH_PREFIX + type] : def;
     const shownBounds = symbol.bounds(symbol.defaults);
     const at = { x: snap(w.x - shownBounds.x - shownBounds.w / 2), y: snap(w.y - shownBounds.y - shownBounds.h / 2) };
+    if(!sch){const result=magneticPosition({id:'ghost',type,x:0,y:0,rot:0,props:def.defaults},at,snapshot.parts,z);at.x=result.at.x;at.y=result.at.y;}
+    if(!sch&&occupiedHoles({id:'ghost',type,x:0,y:0,rot:0,props:def.defaults},at,snapshot.parts).length){showToast('Ese orificio ya tiene una patilla. Elige otro lugar.');return;}
     // A schematic placement must not silently insert pins into an existing breadboard.
     const edge = sch ? Math.max(0, ...snapshot.parts.map((p) => { const bounds = partBounds(p); return bounds.x + bounds.w; })) : 0;
     const id = project.addPart(type, sch ? snap(edge + 60 - b.x) : at.x, sch ? snap(-b.y) : at.y);
@@ -576,6 +595,7 @@ export function Canvas() {
     // Los quiebros del esquema no son puntos de la protoboard: el cable del esquema va sin ellos.
     const id = project.addWire(draft.from, { part: pin.part, pin: pin.pin, x: pin.pos.x, y: pin.pos.y }, sch ? [] : draft.points, draft.color, !!sch);
     lastWireColor = draft.color;
+    setConnection({a:{x:draft.from.x,y:draft.from.y},b:pin.pos});
     setDraft(null);
     setPicker(null);
     select([], [id]);
@@ -622,6 +642,7 @@ export function Canvas() {
 
   const onPartInput = useCallback(
     (part: PartData, key: string, value: number | boolean) => {
+      if(engine.lab.paused)return;
       const persistent = PARTS[part.type].fields?.some((f) => f.key === key);
       if (persistent) project.setProp(part.id, key, value);
       else engine.setInput(part.id, key, value);
@@ -662,8 +683,9 @@ export function Canvas() {
   const ghostPart = useMemo<PartData | null>(() => {
     if (!ghostDef || !ghostAt) return null;
     const b = ghostDef.bounds(ghostDef.defaults);
-    return { id: 'ghost', type: ghostDef.type, x: snap(ghostAt.x - b.x - b.w / 2), y: snap(ghostAt.y - b.y - b.h / 2), rot: 0, props: ghostDef.defaults };
-  }, [ghostDef, ghostAt?.x, ghostAt?.y]); // eslint-disable-line react-hooks/exhaustive-deps
+    const p:PartData={ id: 'ghost', type: ghostDef.type, x: snap(ghostAt.x - b.x - b.w / 2), y: snap(ghostAt.y - b.y - b.h / 2), rot: 0, props: ghostDef.defaults };
+    return sch?p:{...p,...magneticPosition(p,{x:p.x,y:p.y},snapshot.parts,z).at};
+  }, [ghostDef, ghostAt?.x, ghostAt?.y,snapshot,z,sch]);
 
   /** Orificios libres (de protoboards y cabezales) por posición, con su clave de pin. */
   const sockets = useMemo(() => {
@@ -713,6 +735,12 @@ export function Canvas() {
       });
     return { marks, strips: strips.slice(0, 600), seated: marks.length > 0 };
   }, [drag, ghostPart, partsById, sockets, netlist, sch]);
+  const blockedHoles=useMemo(()=>{
+    if(sch)return [];
+    if(ghostPart)return occupiedHoles(ghostPart,ghostPart,scene.parts);
+    if(drag?.kind==='parts'&&drag.ids.length===1){const p=partsById.get(drag.ids[0]);if(p)return occupiedHoles(p,{x:p.x+drag.dx,y:p.y+drag.dy},scene.parts);}
+    return [];
+  },[sch,ghostPart,drag,scene.parts,partsById]);
 
   const peerSelections = useMemo(() => {
     const out: { id: string; color: string; name: string; key: string }[] = [];
@@ -792,6 +820,7 @@ export function Canvas() {
         onPointerUp={onPointerUp}
         onPointerLeave={() => {
           setCursor(null);
+          setHoverPin(null);setHoverWire(null);
           setHoverPart(null);
           project.setPresence({ cursor: null });
         }}
@@ -822,6 +851,7 @@ export function Canvas() {
             {insertion.marks.map((m, i) => (
               <circle key={i} cx={m.x} cy={m.y} r={3.4} fill="var(--green)" fillOpacity={0.3} stroke="var(--green)" strokeWidth={1} className="insert-mark" />
             ))}
+            {blockedHoles.map((p,i)=><circle key={`occupied-${i}`} cx={p.x} cy={p.y} r={4.5} fill="#ff453a" fillOpacity={.4} stroke="#ff7d75" strokeWidth={1.1}/>)}
           </g>
 
           {pending.length > 0 && (
@@ -870,6 +900,8 @@ export function Canvas() {
               pointerEvents="none"
             />
           )}
+          <CircuitOverlays snapshot={snapshot} netlist={netlist} schematicPins={sch?.pinPos}/>
+          {connection&&<g className="connection-confirm" pointerEvents="none">{[connection.a,connection.b].map((p,i)=><circle key={i} cx={p.x} cy={p.y} r={5/z} fill="none" stroke="var(--lab-mint)" strokeWidth={1.5/z}/>)}</g>}
           {draft && draftEnd && !sch && (
             <g pointerEvents="none" opacity={0.9}>
               <path d={roundedPath([{ x: draft.from.x, y: draft.from.y }, ...draft.points, hoverPin ? hoverPin.pos : draftEnd])} stroke={draft.color} strokeWidth={2.4} fill="none" strokeLinecap="round" strokeLinejoin="round" />
@@ -962,6 +994,7 @@ export function Canvas() {
           <strong style={{ fontWeight: 500 }}>{hoverPin.label}</strong>
           {hoverPin.desc && <span className="pin-desc">{hoverPin.desc}</span>}
           {hoverVoltage !== null && <span className="mono v">{formatSI(hoverVoltage, 'V')}</span>}
+          <span className="pin-probe">Alt + clic para observar esta señal</span>
         </div>
       )}
 
@@ -1046,6 +1079,8 @@ export function Canvas() {
           <Maximize size={14} />
         </button>
       </div>
+      <ProbeReadout/>
+      <FrameMeter/>
 
       {menu && (
         <div className="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} role="menu">

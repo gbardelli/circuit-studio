@@ -1,12 +1,13 @@
 import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
 import type { Presence, Project } from '../collab/project';
-import type { SimEngine, SimStatus } from '../sim/engine';
+import type { SimStatus } from '../sim/engine';
+import type { SimClient } from '../sim/client';
 import type { Visual } from '../parts/types';
 import type { ProjectDetail } from '../cloud';
 
 export interface EditorCtx {
   project: Project;
-  engine: SimEngine;
+  engine: SimClient;
   /** Datos del proyecto en la nube (rol, miembros, acceso por enlace); null en local. */
   detail?: ProjectDetail | null;
 }
@@ -25,6 +26,11 @@ export function useSnapshot() {
     useCallback((fn) => project.subscribe(fn), [project]),
     () => project.snapshot(),
   );
+}
+
+export function useDisplaySnapshot() {
+  const {project,engine}=useEditor();
+  return useSyncExternalStore(useCallback(fn=>{const a=project.subscribe(fn),b=engine.subscribeStatus(fn);return()=>{a();b();};},[project,engine]),()=>engine.playbackScene??project.snapshot());
 }
 
 let peersCache: { key: string; value: Presence[] } = { key: '', value: [] };
@@ -63,4 +69,9 @@ export function useSimStatus(): SimStatus {
     useCallback((fn) => engine.subscribeStatus(fn), [engine]),
     () => engine.status,
   );
+}
+
+export function useLab() {
+  const {engine}=useEditor();
+  return useSyncExternalStore(useCallback(fn=>engine.subscribeStatus(fn),[engine]),()=>engine.lab);
 }

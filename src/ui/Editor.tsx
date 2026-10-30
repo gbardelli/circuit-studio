@@ -4,7 +4,7 @@ import { Project } from '../collab/project';
 import { PARTS } from '../parts';
 import { schematicPlacement, withFrozenPlacement } from './schematic';
 import { applyTemplate, findTemplate } from '../collab/applyTemplate';
-import { SimEngine } from '../sim/engine';
+import { SimClient } from '../sim/client';
 import { Canvas, isTyping } from './Canvas';
 import { EditorContext, useEditor, useSnapshot, type EditorCtx } from './context';
 import { Inspector } from './Inspector';
@@ -16,6 +16,7 @@ import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
 import { useStartupTask } from './Startup';
 import { useAutoVersions } from './History';
+import { WorkbenchPanel, WorkbenchRail } from './Workbench';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -49,7 +50,7 @@ export function Editor({ room, template }: { room: string; template: string | nu
 
   function open(detail: ProjectDetail | null) {
     const project = new Project(room, detail?.role ?? 'owner');
-    const engine = new SimEngine();
+    const engine = new SimClient(room);
     setCtx({ project, engine, detail });
     let seeded = false;
     const seed = (synced: boolean) => {
@@ -70,10 +71,11 @@ export function Editor({ room, template }: { room: string; template: string | nu
       project.persistence.once('synced', () => seed(true));
     }
     return () => {
-      engine.stop();
+      engine.dispose();
       project.destroy();
       setCtx(null);
       useUi.getState().setSim(false);
+      useUi.getState().pinSignal(null);useUi.getState().setAssemblyWire(null);useUi.getState().setLabPanel(null);useUi.getState().setCommandOpen(false);useUi.getState().select([]);
     };
   }
 
@@ -125,10 +127,11 @@ function EditorShell() {
 
   const shortcuts = useMemo(
     () => (e: KeyboardEvent) => {
-      if (isTyping(e)) return;
       const ui = useUi.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if(mod && key==='k'){e.preventDefault();e.stopPropagation();ui.setCommandOpen(!ui.commandOpen);return;}
+      if (isTyping(e)) return;
       if (mod && (e.key === '[' || e.key === ']')) {
         e.preventDefault();
         ui.togglePanel(e.key === '[' ? 'library' : 'inspector');
@@ -182,8 +185,8 @@ function EditorShell() {
   );
 
   useEffect(() => {
-    window.addEventListener('keydown', shortcuts);
-    return () => window.removeEventListener('keydown', shortcuts);
+    window.addEventListener('keydown', shortcuts,true);
+    return () => window.removeEventListener('keydown', shortcuts,true);
   }, [shortcuts]);
 
   return (
@@ -200,7 +203,9 @@ function EditorShell() {
       <Library />
       <LibDragFloat />
       <main className="workspace">
+        <WorkbenchRail />
         <Canvas />
+        <WorkbenchPanel />
         <Suspense fallback={null}>
           <BottomPanel />
         </Suspense>

@@ -194,11 +194,11 @@ function SyncBadge({ state, synced }: { state: string; synced: boolean }) {
     return (
       <span className="sync connected" title="Sin servidor de colaboración: el circuito se guarda en este navegador.">
         <HardDrive size={13} />
-        <span>Guardado en este equipo</span>
+        <span>Este equipo</span>
       </span>
     );
   }
-  const label = state === 'connected' ? (synced ? 'Guardado' : 'Sincronizando') : state === 'connecting' ? 'Conectando' : 'Sin conexión';
+  const label = state === 'connected' ? (synced ? 'En línea' : 'Sincronizando') : state === 'connecting' ? 'Conectando' : 'Sin conexión';
   return (
     <span className={`sync ${state}`} title={state === 'disconnected' ? 'Los cambios se guardan en este equipo y se enviarán al reconectar.' : label}>
       {state === 'disconnected' ? <WifiOff size={13} /> : <span className="dot" />}
