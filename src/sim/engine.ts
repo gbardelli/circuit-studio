@@ -10,6 +10,8 @@ import { AvrRunner, CLOCK_HZ, type BoardId } from './avr';
 import { I2cBus } from './i2c';
 
 const MAX_SEGMENT = 0.001;
+/** Paso máximo de integración de los condensadores cuando nada más cambia. */
+const CAP_STEP = 0.004;
 const MAX_SOLVES_PER_FRAME = 6000;
 
 interface PartRuntime {
@@ -24,6 +26,8 @@ interface PartRuntime {
 
 interface McuRuntime {
   partId: string;
+  /** Tensión de E/S de la placa: fija los umbrales de entrada. */
+  vio: number;
   runner: AvrRunner | null;
   nodes: number[];
   analogNodes: number[];
@@ -67,6 +71,7 @@ export class SimEngine {
   private raf = 0;
   private last = 0;
   private dirty = true;
+  private sinceSolve = 0;
   private simTime = 0;
   status: SimStatus = { running: false, simTime: 0, speed: 1, converged: true, nodes: 0, message: null };
 
@@ -283,6 +288,7 @@ export class SimEngine {
         const runner = !resetMcu && prev?.runner ? prev.runner : hex ? this.createRunner(p.id, hex, def.mcu.board) : null;
         mcu = {
           partId: p.id,
+          vio: def.mcu.vio ?? 5,
           runner,
           nodes: [],
           analogNodes: [],
@@ -413,11 +419,15 @@ export class SimEngine {
     while (this.simTime < target - 1e-9) {
       this.receiveUart();
       let segEnd = Math.min(target, this.simTime + MAX_SEGMENT);
+      let event = false;
       // Eventos programados por piezas (eco de un HC-SR04…): el segmento termina justo ahí.
       for (const rt of this.parts.values()) {
         const at = rt.sim.nextEvent?.();
         const eventTime = at == null ? null : rt.startedAt + at;
-        if (eventTime != null && eventTime > this.simTime + 1e-12 && eventTime < segEnd) segEnd = eventTime;
+        if (eventTime != null && eventTime > this.simTime + 1e-12 && eventTime <= segEnd) {
+          segEnd = eventTime;
+          event = true;
+        }
       }
       let changed = false;
       for (const m of active) {
@@ -431,10 +441,15 @@ export class SimEngine {
       if (dt > 0) this.accumulate(circuit.v, dt);
       this.simTime = segEnd;
       for (const rt of this.parts.values()) if (rt.sim.changed?.()) changed = true;
-      if ((changed || this.dirty || this.hasCapacitors) && solves < MAX_SOLVES_PER_FRAME) {
-        const r = circuit.solve(this.hasCapacitors ? Math.max(dt, 1e-7) : 0);
+      this.sinceSolve += dt;
+      // Con condensadores se integra en pasos de hasta CAP_STEP; antes si algo cambia o una pieza
+      // pidió mirar (el 555 cerca de su umbral). Euler implícito es estable con pasos largos.
+      const integrate = this.hasCapacitors && (event || this.sinceSolve >= CAP_STEP - 1e-12);
+      if ((changed || this.dirty || integrate) && solves < MAX_SOLVES_PER_FRAME) {
+        const r = circuit.solve(this.hasCapacitors ? Math.max(this.sinceSolve, 1e-7) : 0);
         converged &&= r.converged;
         solves++;
+        this.sinceSolve = 0;
         this.dirty = false;
         this.syncMcuInputs();
       }
@@ -458,7 +473,8 @@ export class SimEngine {
         const mode = m.runner!.pinMode(i);
         if (mode === 'input' || mode === 'pullup') {
           const prev = m.inputs[i] ?? false;
-          const high = prev ? volts > 1.5 : volts > 3.0; // histéresis del disparador Schmitt
+          // Histéresis del disparador Schmitt, proporcional a la tensión de E/S de la placa.
+          const high = prev ? volts > 0.3 * m.vio : volts > 0.6 * m.vio;
           if (high !== prev) {
             m.inputs[i] = high;
             m.runner!.setInput(i, high);

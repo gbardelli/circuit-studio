@@ -25,6 +25,28 @@ export function TopBar() {
   const [, force] = useState(0);
 
   useEffect(() => setName(project.name), [project.name]);
+
+  // Compila en segundo plano en cuanto el código deja de cambiar: al pulsar Simular, el .hex ya
+  // está listo (o en camino) y no se espera al servidor.
+  const boardIds = snapshot.parts.filter((p) => PARTS[p.type].mcu).map((p) => `${p.id}:${p.type}`).join(',');
+  useEffect(() => {
+    if (!boardIds) return;
+    const boards = boardIds.split(',').map((s) => s.split(':') as [string, string]);
+    let timer = 0;
+    const warm = () => {
+      clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        for (const [id, type] of boards) void compileSketch(project.sketch(id).toString(), PARTS[type].mcu!.fqbn);
+      }, 1200);
+    };
+    const texts = boards.map(([id]) => project.sketch(id));
+    texts.forEach((t) => t.observe(warm));
+    warm();
+    return () => {
+      clearTimeout(timer);
+      texts.forEach((t) => t.unobserve(warm));
+    };
+  }, [boardIds, project]);
   useEffect(() => {
     const t = setInterval(() => force((n) => n + 1), 400);
     return () => clearInterval(t);

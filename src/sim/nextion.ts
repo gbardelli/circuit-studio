@@ -122,7 +122,14 @@ export class Nextion {
   private add(op: ScreenOp) {
     if (op.kind === "fill" || (op.kind === "text" && op.opaque))
       this.ops = this.ops.filter((old) => {
-        if (old.kind === "line") return true;
+        // Un relleno opaco tapa también las líneas que caen dentro: en la pantalla real ya no se ven.
+        if (old.kind === "line")
+          return !(
+            Math.min(old.x, old.x2) >= op.x &&
+            Math.min(old.y, old.y2) >= op.y &&
+            Math.max(old.x, old.x2) <= op.x + op.w &&
+            Math.max(old.y, old.y2) <= op.y + op.h
+          );
         return !(
           old.x >= op.x &&
           old.y >= op.y &&

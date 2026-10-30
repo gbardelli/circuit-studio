@@ -18,7 +18,8 @@ function Primitive({ op }: { op: ScreenOp }) {
   if (op.kind === "line")
     return <line x1={op.x} y1={op.y} x2={op.x2} y2={op.y2} stroke={op.color} />;
   if (op.kind !== "text") return null;
-  const size = op.font === 0 ? 16 : 24;
+  // IDs de fuente del proyecto Nextion: 0 = 16 px, 1 = 24 px, 2 = 32 px, 3 = 56 px (cifras grandes).
+  const size = [16, 24, 32, 56][op.font] ?? 24;
   const x = op.x + (op.align === 0 ? 0 : op.align === 1 ? op.w / 2 : op.w);
   const y =
     op.y +

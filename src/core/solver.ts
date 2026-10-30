@@ -295,13 +295,121 @@ export function solveLinear(G: Float64Array, b: Float64Array, n: number): Float6
   return x;
 }
 
+/** Factorización LU con pivoteo parcial, guardada para reutilizarla en los pasos siguientes. */
+interface Lu {
+  G: Float64Array;
+  A: Float64Array;
+  swaps: Int32Array;
+}
+
+function factor(G: Float64Array, n: number): Lu | null {
+  const A = G.slice();
+  const swaps = new Int32Array(n);
+  for (let col = 0; col < n; col++) {
+    let piv = col;
+    let max = Math.abs(A[col * n + col]);
+    for (let r = col + 1; r < n; r++) {
+      const val = Math.abs(A[r * n + col]);
+      if (val > max) {
+        max = val;
+        piv = r;
+      }
+    }
+    if (max < 1e-300) return null;
+    swaps[col] = piv;
+    if (piv !== col) {
+      for (let k = 0; k < n; k++) {
+        const t = A[col * n + k];
+        A[col * n + k] = A[piv * n + k];
+        A[piv * n + k] = t;
+      }
+    }
+    const d = A[col * n + col];
+    for (let r = col + 1; r < n; r++) {
+      const f = A[r * n + col] / d;
+      A[r * n + col] = f;
+      if (f === 0) continue;
+      for (let k = col + 1; k < n; k++) A[r * n + k] -= f * A[col * n + k];
+    }
+  }
+  return { G: G.slice(), A, swaps };
+}
+
+function luSolve(lu: Lu, rhs: Float64Array, n: number): Float64Array {
+  const { A, swaps } = lu;
+  const y = rhs.slice();
+  for (let col = 0; col < n; col++) {
+    const p = swaps[col];
+    if (p !== col) {
+      const t = y[col];
+      y[col] = y[p];
+      y[p] = t;
+    }
+  }
+  for (let r = 1; r < n; r++) {
+    let sum = y[r];
+    for (let k = 0; k < r; k++) sum -= A[r * n + k] * y[k];
+    y[r] = sum;
+  }
+  for (let r = n - 1; r >= 0; r--) {
+    let sum = y[r];
+    for (let k = r + 1; k < n; k++) sum -= A[r * n + k] * y[k];
+    y[r] = sum / A[r * n + r];
+  }
+  return y;
+}
+
 export class Circuit {
   v: Float64Array;
+  /**
+   * Entre un paso y el siguiente la matriz casi nunca cambia (un condensador solo mueve el
+   * lado derecho). Se reutiliza la factorización: igual → resolver directo; parecida →
+   * refinar el residuo con la factorización vieja; distinta → factorizar de nuevo.
+   */
+  private lu: Lu | null = null;
   constructor(readonly nodeCount: number, readonly elements: Element[]) {
     this.v = new Float64Array(nodeCount);
   }
 
+  private linear(G: Float64Array, b: Float64Array): Float64Array | null {
+    const n = this.nodeCount;
+    const lu = this.lu;
+    if (lu) {
+      let same = true;
+      for (let i = 0; i < G.length; i++) {
+        if (G[i] !== lu.G[i]) {
+          same = false;
+          break;
+        }
+      }
+      if (same) return luSolve(lu, b, n);
+      let scale = 0;
+      for (let i = 0; i < n; i++) scale = Math.max(scale, Math.abs(b[i]));
+      const tol = 1e-12 + 1e-10 * scale;
+      const x = luSolve(lu, b, n);
+      const r = new Float64Array(n);
+      for (let pass = 0; pass < 6; pass++) {
+        let worst = 0;
+        for (let i = 0; i < n; i++) {
+          let sum = b[i];
+          for (let k = 0; k < n; k++) sum -= G[i * n + k] * x[k];
+          r[i] = sum;
+          worst = Math.max(worst, Math.abs(sum));
+        }
+        if (!Number.isFinite(worst)) break;
+        if (worst <= tol) return x;
+        const dx = luSolve(lu, r, n);
+        for (let i = 0; i < n; i++) x[i] += dx[i];
+      }
+    }
+    const fresh = factor(G, n);
+    if (!fresh) return null;
+    this.lu = fresh;
+    return luSolve(fresh, b, n);
+  }
+
   reset() {
+    this.lu = null;
     this.v.fill(0);
     for (const e of this.elements) e.reset?.();
   }
@@ -316,7 +424,7 @@ export class Circuit {
       const s = new Stamper(n, v, dt);
       for (let i = 0; i < n; i++) s.G[i * n + i] += GMIN;
       for (const e of this.elements) e.stamp(s);
-      const x = solveLinear(s.G, s.b, n);
+      const x = this.linear(s.G, s.b);
       if (!x) return { v, converged: false, iterations: it };
       let done = true;
       for (let i = 0; i < n; i++) {

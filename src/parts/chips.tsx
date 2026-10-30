@@ -987,6 +987,11 @@ const ne555Def: PartDef = (() => {
       let t = 0;
       let dirty = false;
       let powered = false;
+      // Próxima comprobación de los comparadores. Lejos del umbral se estima con la pendiente
+      // del condensador cuándo llegará; cerca, cada 20 µs. Así un astable lento no obliga a
+      // resolver todo el circuito 50 000 veces por segundo.
+      let wait = 2e-5;
+      let lastSense: number | null = null;
       const elements: Element[] = [
         new Resistor(vcc, ctrl, () => 5000),
         new Resistor(ctrl, low, () => 5000),
@@ -1006,7 +1011,7 @@ const ne555Def: PartDef = (() => {
           dirty = false;
           return d;
         },
-        nextEvent: () => (powered ? t + 2e-5 : null),
+        nextEvent: () => (powered ? t + wait : null),
         tracker: {
           sample(v: Float64Array, dt: number) {
             t += dt;
@@ -1027,7 +1032,20 @@ const ne555Def: PartDef = (() => {
             if (next !== q) {
               q = next;
               dirty = true;
+              lastSense = null;
+              wait = 2e-5;
+              return;
             }
+            // Con la salida alta el condensador sube hacia el umbral alto (THR); con la salida
+            // baja descarga hacia el umbral bajo (TRIG).
+            const sense = q ? at(v, ctx.net('THR')) : at(v, ctx.net('TRIG'));
+            const goal = q ? at(v, ctrl) : at(v, low);
+            const slope = lastSense === null || dt <= 0 ? 0 : (sense - lastSense) / dt;
+            lastSense = sense;
+            const eta = slope !== 0 && Math.sign(goal - sense) === Math.sign(slope) ? (goal - sense) / slope : Infinity;
+            // La carga y la descarga son exponenciales: frenan al acercarse, así que la
+            // extrapolación lineal siempre llega antes que el cruce real. Se puede usar entera.
+            wait = Math.min(4e-3, Math.max(2e-5, eta * 0.95));
           },
           read: () => ({ on: q }),
         },

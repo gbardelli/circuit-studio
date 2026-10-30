@@ -172,6 +172,30 @@ export class AvrRunner {
     this.uartPins = board === BOARDS.mega ? [[0,1],[19,18],[17,16],[15,14]] : [[0,1]];
     this.uarts = configs.map((config, port) => {
       const uart = new AVRUSART(this.cpu, config, CLOCK_HZ);
+      // avr8js borra RXC y UDRE al escribir UCSRA, pero en el chip son de solo lectura.
+      // · RXC: la rutina de envío de Arduino escribe UCSRA en cada byte; si en ese momento había
+      //   un byte recibido sin leer, se perdía su interrupción. Con la pantalla dibujando, se
+      //   perdían bytes de los toques y, desalineados los paquetes, el táctil dejaba de responder.
+      // · UDRE: un segundo Serial.begin() (para cambiar de velocidad) dejaba la UART muda.
+      const flags = uart as unknown as Record<'RXC' | 'UDRE', Parameters<CPU['setInterruptFlag']>[0]>;
+      const writeUcsra = this.cpu.writeHooks[config.UCSRA];
+      this.cpu.writeHooks[config.UCSRA] = (value, old, addr, mask) => {
+        const before = this.cpu.data[config.UCSRA];
+        const handled = writeUcsra(value, old, addr, mask);
+        if (before & 0x80) this.cpu.setInterruptFlag(flags.RXC);
+        if (before & 0x20) this.cpu.setInterruptFlag(flags.UDRE);
+        return handled;
+      };
+      // Y al escribir UCSRB con la recepción activa cancela la interrupción del byte recibido.
+      // Arduino escribe UCSRB al encolar cada envío: dibujar en la pantalla mientras llegaba
+      // un toque perdía bytes. En el chip, UCSRB no toca RXC.
+      const writeUcsrb = this.cpu.writeHooks[config.UCSRB];
+      this.cpu.writeHooks[config.UCSRB] = (value, old, addr, mask) => {
+        const pending = this.cpu.data[config.UCSRA] & 0x80;
+        const handled = writeUcsrb(value, old, addr, mask);
+        if (pending && value & 0x10) this.cpu.setInterruptFlag(flags.RXC);
+        return handled;
+      };
       this.rxQueues[port] = [];
       const pump = () => {
         const queue = this.rxQueues[port];

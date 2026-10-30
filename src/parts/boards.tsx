@@ -128,7 +128,7 @@ const MEGA_COMM: [string, number, string][] = [
 const MEGA_ANALOG_HI: [string, number, string][] = range(8, (i) => `A${i + 8}`).map((id, i) => [id, 260 + i * 10, id]);
 const MEGA_BOTTOM: [string, number, string][] = [...BOTTOM_HEADER.filter(([id]) => !/^A[45]$/.test(id)), ['A4', 210, 'A4'], ['A5', 220, 'A5'], ['A6', 230, 'A6'], ['A7', 240, 'A7'], ...MEGA_ANALOG_HI];
 // Cabezal doble del lateral: pares en x = 370, impares en x = 380; 5 V arriba y GND abajo.
-const MEGA_SIDE: PinDef[] = [
+export const MEGA_SIDE: PinDef[] = [
   { id: '5V.2', x: 370, y: 10, kind: 'socket', label: '5V' },
   { id: '5V.3', x: 380, y: 10, kind: 'socket', label: '5V' },
   ...range(16, (r) => String(r)).flatMap((_, r) => [
@@ -138,7 +138,7 @@ const MEGA_SIDE: PinDef[] = [
   { id: 'GND.4', x: 370, y: 190, kind: 'socket', label: 'GND' },
   { id: 'GND.5', x: 380, y: 190, kind: 'socket', label: 'GND' },
 ];
-const MEGA_PINS: PinDef[] = [
+export const MEGA_PINS: PinDef[] = [
   ...[...TOP_HEADER, ...MEGA_COMM].map(([id, x, label]) => ({ id, x, y: HEADER_Y.top, kind: 'socket' as const, label })),
   ...MEGA_BOTTOM.map(([id, x, label]) => ({ id, x, y: HEADER_Y.bottom, kind: 'socket' as const, label })),
   ...MEGA_SIDE,

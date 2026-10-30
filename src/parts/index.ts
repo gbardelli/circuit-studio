@@ -2,6 +2,7 @@ import type { Category, PartDef } from './types';
 import { SCH_PREFIX, schematicDef } from './symbols';
 import { arduinoUno } from './arduino';
 import { arduinoMega, arduinoNano } from './boards';
+import { arduinoGiga } from './giga';
 import { breadboardFull, breadboardHalf, breadboardMini } from './breadboard';
 import { capacitor, ldr, potentiometer, resistor } from './basic';
 import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
@@ -17,6 +18,7 @@ export const PART_LIST: PartDef[] = [
   arduinoUno,
   arduinoNano,
   arduinoMega,
+  arduinoGiga,
   breadboardHalf,
   breadboardFull,
   breadboardMini,

@@ -74,17 +74,17 @@ const PINS: PinDef[] = [
 
 /** Driver de un pin del ATmega328P según DDR/PORT. Resistencias aproximadas del datasheet. */
 export class McuPin implements Element {
-  constructor(private node: number, private index: number, private mcu: McuBridge) {}
+  constructor(private node: number, private index: number, private mcu: McuBridge, private vio = 5) {}
   stamp(s: Stamper) {
     const mode = this.mcu.running ? this.mcu.pinMode(this.index) : 'input';
     if (mode === 'high') {
       s.conductance(this.node, -1, 1 / 25);
-      s.rhs(this.node, 5 / 25);
+      s.rhs(this.node, this.vio / 25);
     } else if (mode === 'low') {
       s.conductance(this.node, -1, 1 / 25);
     } else if (mode === 'pullup') {
       s.conductance(this.node, -1, 1 / 35_000);
-      s.rhs(this.node, 5 / 35_000);
+      s.rhs(this.node, this.vio / 35_000);
     } else {
       s.conductance(this.node, -1, 1e-9);
     }
@@ -246,9 +246,9 @@ export function mcuSim(ctx: SimContext, spec: McuSpec, gndPin = 'GND.1'): PartSi
   const elements: Element[] = [new VSource(ctx.net('5V'), gnd, () => 5, () => 0.05), new VSource(ctx.net('3V3'), gnd, () => 3.3, () => 0.2)];
   const mcuNodes = spec.pinIds.map((id) => ctx.net(id));
   const analogNodes = spec.analogIds.map((id) => ctx.net(id));
-  if (ctx.mcu) mcuNodes.forEach((node, i) => elements.push(new McuPin(node, i, ctx.mcu!)));
+  if (ctx.mcu) mcuNodes.forEach((node, i) => elements.push(new McuPin(node, i, ctx.mcu!, spec.vio)));
   const d13 = mcuNodes[13];
-  return { elements, mcuNodes, analogNodes, probe: (v) => ({ l: (d13 < 0 ? 0 : v[d13]) > 2.5 ? 1 : 0 }) };
+  return { elements, mcuNodes, analogNodes, probe: (v) => ({ l: (d13 < 0 ? 0 : v[d13]) > (spec.vio ?? 5) / 2 ? 1 : 0 }) };
 }
 
 export const arduinoUno: PartDef = {

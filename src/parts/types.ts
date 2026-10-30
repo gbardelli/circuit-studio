@@ -103,6 +103,8 @@ export interface McuSpec {
   pinIds: string[];
   /** Canal analógico (A0, A1…) → id del pin. */
   analogIds: string[];
+  /** Tensión de E/S de los pines (5 V por defecto; 3,3 V en el GIGA). */
+  vio?: number;
 }
 
 export interface PartDef {

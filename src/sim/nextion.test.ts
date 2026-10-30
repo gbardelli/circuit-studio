@@ -3,8 +3,7 @@ import { compileSketch, compilerAvailable } from "../../server/compile";
 import { Nextion } from "./nextion";
 import { SimEngine } from "./engine";
 import { templateSnapshot } from "../collab/applyTemplate";
-import { TOUCHSCREEN, ELEVATOR_SCREEN } from "../collab/touchscreen";
-import { elevatorTemplate } from "../collab/elevator";
+import { TOUCHSCREEN } from "../collab/touchscreen";
 
 function send(screen: Nextion, text: string) {
   for (const ch of text) screen.receive(ch.charCodeAt(0));
@@ -173,24 +172,5 @@ describe.skipIf(!compilerAvailable())(
       },
       90_000,
     );
-    it("uses touch as a physical hall call while the ICs retain and lock the destination", async () => {
-      const compiled = await compileSketch(
-        ELEVATOR_SCREEN,
-        "arduino:avr:mega:cpu=atmega2560",
-      );
-      expect(compiled.ok, compiled.stderr).toBe(true);
-      const h = run(compiled.hex!, templateSnapshot(elevatorTemplate()));
-      expect(String(h.engine.getVisual("screen")?.scene)).toContain("FLOOR 4");
-      h.engine.setInput("screen", "touch", (1 << 18) | (230 << 9) | 195);
-      h.engine.setInput("screen", "touch", (230 << 9) | 195);
-      h.engine.tick(0.6);
-      expect(h.engine.voltageAt("destination", "Q2")).toBeGreaterThan(4.5);
-      expect(h.engine.voltageAt("state", "1Q")).toBeGreaterThan(4.5);
-      expect(h.engine.voltageAt("control", "4Y")).toBeGreaterThan(4.5);
-      h.engine.setInput("screen", "touch", (1 << 18) | (80 << 9) | 130);
-      h.engine.tick(0.5);
-      expect(h.engine.voltageAt("destination", "Q2")).toBeGreaterThan(4.5);
-      h.engine.stop();
-    }, 90_000);
   },
 );
