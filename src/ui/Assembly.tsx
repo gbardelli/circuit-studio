@@ -7,6 +7,7 @@ import { csvCell, download, materials } from './lab-utils';
 import { AssemblySteps } from './AssemblySteps';
 import { assemblyEndLabel, buildAssemblyPlan, orientationText } from './assembly-plan';
 import { CircuitPreview } from './Preview';
+import { WorkbenchToolbar } from './WorkbenchToolbar';
 const escape = (s: unknown) =>
   String(s).replace(
     /[&<>"']/g,
@@ -68,7 +69,7 @@ export function Assembly() {
   };
   return (
     <div className="assembly-panel">
-      <div className="assembly-toolbar">
+      <WorkbenchToolbar><div className="assembly-toolbar">
         {tab!=='steps'&&<HintButton className="btn ghost sm" onClick={()=>setTab('steps')}><ArrowLeft size={13}/>Guía de montaje</HintButton>}
         {tab==='steps'?<HintButton className="btn ghost sm" onClick={()=>setTab('materials')}>Materiales<span className="assembly-material-count">{rows.length}</span></HintButton>:<strong>{tab==='materials'?'Materiales':'Comparar foto'}</strong>}
         <span className="grow"/>
@@ -78,7 +79,7 @@ export function Assembly() {
           <div className="ui-menu-separator"/>
           <button onClick={()=>{useUi.getState().setAssemblyCursor(null);setTab('steps');setMenuOpen(false);}}><ArrowLeft size={14}/>Volver al inicio de la guía</button>
         </PopoverPanel>
-      </div>
+      </div></WorkbenchToolbar>
       {tab==='steps'&&<AssemblySteps/>}
       {tab === "materials" && (
         <div className="materials-list">

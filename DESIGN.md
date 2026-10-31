@@ -71,3 +71,11 @@ inside their focus boundary. Menu keyboard events never edit the circuit.
 Popover transitions use opacity and a small origin-aware transform, with faster
 exit and immediate keyboard interaction. Direct resizing has no animated delay.
 Reduced-motion and increased-contrast preferences have explicit overrides.
+
+Assembly actions share the workbench heading through `WorkbenchToolbar`, keeping
+the stateful assembly body mounted when its toolbar is placed in the heading.
+Narrow windows wrap those actions into a second row. Neutral raised buttons use a
+short vertical gradient, a brighter top edge and a short contact shadow. Sharing
+uses this secondary treatment so the current assembly confirmation keeps priority.
+Read assembly metadata at 11 px and cable endpoint names at 13 px; retain the
+complete instruction at the normal 280 px panel height.

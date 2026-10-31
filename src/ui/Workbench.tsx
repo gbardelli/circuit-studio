@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from 'react';
 import { AssemblyStage } from './AssemblyStage';
+import { WorkbenchToolbarTarget } from './WorkbenchToolbar';
 import { useUi } from "./store";
 import { useSimStatus } from "./context";
 import { Signals } from "./Signals";
@@ -75,6 +76,7 @@ export function clampPanelHeight(height:number,available:number) {
 export function WorkbenchPanel() {
   const panel=useUi(s=>s.labPanel),set=useUi(s=>s.setLabPanel),full=useUi(s=>s.labFullscreen),setFull=useUi(s=>s.setLabFullscreen),sizes=useUi(s=>s.labSizes),setSize=useUi(s=>s.setLabSize),assemblyTab=useUi(s=>s.assemblyTab);
   const node=useRef<HTMLElement>(null),expand=useRef<HTMLButtonElement>(null);
+  const [toolbarHost,setToolbarHost]=useState<HTMLDivElement|null>(null);
   const [available,setAvailable]=useState(typeof window==='undefined'?700:window.innerHeight-100),[dragHeight,setDragHeight]=useState<number|null>(null);
   const resize=useRef<{y:number;height:number;last:number;available:number}|null>(null);
   const height=clampPanelHeight(dragHeight??(panel?sizes[panel]:280),available);
@@ -112,15 +114,15 @@ export function WorkbenchPanel() {
       onPointerMove={e=>{const r=resize.current;if(!r)return;r.last=clampPanelHeight(r.height+r.y-e.clientY,r.available);setDragHeight(r.last);}}
       onPointerUp={e=>{if(!resize.current)return;setSize(panel,resize.current.last);resize.current=null;setDragHeight(null);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
       onPointerCancel={()=>{resize.current=null;setDragHeight(null);}}><span/></div>}
-    <div className="workbench-heading">
+    <WorkbenchToolbarTarget.Provider value={toolbarHost}><div className="workbench-heading">
       {full?<div className="workbench-full-tabs" role="toolbar" aria-label="Secciones del laboratorio">{TABS.map(t=><HintButton key={t.id} aria-pressed={panel===t.id} onClick={()=>set(t.id)}><t.icon size={14}/>{t.name}</HintButton>)}</div>:<><span className="signal-dot"/><strong>{TABS.find(t=>t.id===panel)?.name}</strong></>}
-      <span className="grow"/>
+      <div className="workbench-header-tools" ref={setToolbarHost}/>
       <HintButton ref={expand} className="icon-btn" onClick={()=>setFull(!full)} aria-label={full?'Volver al tamaño anterior':'Ampliar laboratorio a pantalla completa'} title={full?'Volver al tamaño anterior · Esc':'Pantalla completa'}>{full?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</HintButton>
       <HintButton className="icon-btn" onClick={()=>set(null)} aria-label="Cerrar laboratorio" title="Cerrar laboratorio"><X size={15}/></HintButton>
     </div>
     <OverlayScope.Provider value={node}><div className={`workbench-body ${assemblyFull?'assembly-full-layout':''}`}>
       <div className="workbench-preview-slot" hidden={!assemblyFull}>{assemblyFull&&<AssemblyStage/>}</div>
       {panel==='signals'?<Signals key="signals"/>:panel==='diagnostics'?<Diagnostics key="diagnostics"/>:panel==='assembly'?<Assembly key="assembly"/>:<Notes key="notes"/>}
-    </div></OverlayScope.Provider>
+    </div></OverlayScope.Provider></WorkbenchToolbarTarget.Provider>
   </section>}</>;
 }

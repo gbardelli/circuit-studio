@@ -135,7 +135,7 @@ export function TopBar() {
             <Code2 size={14} /> Código
           </HintButton>
         )}
-        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guest ? 'Inicia sesión para simular' : undefined}>
+        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guiding ? 'Cierra la guía de montaje para simular' : guest ? 'Inicia sesión para simular' : undefined}>
           {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
         </HintButton>
