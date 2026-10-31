@@ -38,7 +38,7 @@ export function AssemblySteps() {
       </PopoverPanel>
     </div>
     {cursor===null ? <div className="assembly-welcome">
-      <div><span className="assembly-section-label">Guía de montaje</span><h2>Construye desde cero.</h2><p>{plan.parts} piezas y {plan.wires} cables, uno a uno. En cada paso verás qué colocar, dónde va y cómo orientarlo.</p><small>{project.readOnly?'Puedes recorrer la guía sin modificar el proyecto.':'Confirma cada paso después de realizarlo en tu montaje físico.'}</small></div>
+      <div><h2>Montaje paso a paso</h2><p>{plan.parts} piezas y {plan.wires} cables, uno a uno. En cada paso verás qué colocar, dónde va y cómo orientarlo.</p><small>{project.readOnly?'Puedes recorrer la guía sin modificar el proyecto.':'Confirma cada paso después de realizarlo en tu montaje físico.'}</small></div>
       <div className="assembly-welcome-actions"><HintButton className="btn primary" onClick={()=>navigate(completed>0&&firstPending>=0?firstPending:0)}>{completed>0&&firstPending>=0?'Continuar montaje':'Empezar montaje'}<ArrowRight size={15}/></HintButton>{completed>0&&<HintButton className="btn ghost" onClick={()=>navigate(0)}>Ver desde el principio</HintButton>}</div>
     </div> : !step ? <div className="assembly-welcome">
       <div><CheckCheck size={25}/><h2>{progress===1&&!project.readOnly?'Montaje completado.':'Llegaste al final de la guía.'}</h2><p>{completed} de {plan.steps.length} pasos {project.readOnly?'vistos':'confirmados'}. Puedes revisar cualquier pieza o volver al circuito.</p></div>

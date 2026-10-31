@@ -13,7 +13,6 @@ import { useEffect, useRef, useState } from 'react';
 import { AssemblyStage } from './AssemblyStage';
 import { WorkbenchToolbarTarget } from './WorkbenchToolbar';
 import { useUi } from "./store";
-import { useSimStatus } from "./context";
 import { Signals } from "./Signals";
 import { Diagnostics } from "./Diagnostics";
 import { Assembly } from "./Assembly";
@@ -27,17 +26,9 @@ const TABS = [
 ] as const;
 export function WorkbenchRail() {
   const panel = useUi((s) => s.labPanel),
-    set = useUi((s) => s.setLabPanel),
-    status = useSimStatus();
+    set = useUi((s) => s.setLabPanel);
   return (
     <div className="workbench-rail">
-      <div className="workbench-label">
-        <span className={`workbench-led ${status.running ? "live" : ""}`} />
-        <strong>Workbench</strong>
-        <span>
-          {status.running ? "Simulación activa" : "Diseña · conecta · verifica"}
-        </span>
-      </div>
       <div
         className="workbench-tools"
         role="toolbar"
@@ -52,7 +43,7 @@ export function WorkbenchRail() {
             aria-pressed={panel === t.id}
             onClick={() => set(panel === t.id ? null : t.id)}
           >
-            <t.icon size={14} />
+            <t.icon size={18} />
             <span>{t.name}</span>
           </HintButton>
         ))}
@@ -61,7 +52,7 @@ export function WorkbenchRail() {
           onClick={() => useUi.getState().setCommandOpen(true)}
           aria-label="Abrir comandos"
         >
-          <Command size={14} />
+          <Command size={18} />
           <kbd> K</kbd>
         </HintButton>
       </div>
@@ -116,7 +107,7 @@ export function WorkbenchPanel() {
       onPointerUp={e=>{if(!resize.current)return;setSize(panel,resize.current.last);resize.current=null;setDragHeight(null);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
       onPointerCancel={()=>{resize.current=null;setDragHeight(null);}}><span/></div>}
     <WorkbenchToolbarTarget.Provider value={toolbarHost}><div className="workbench-heading">
-      {full?<div className="workbench-full-tabs" role="toolbar" aria-label="Secciones del laboratorio">{TABS.map(t=><HintButton key={t.id} aria-pressed={panel===t.id} onClick={()=>set(t.id)}><t.icon size={14}/>{t.name}</HintButton>)}</div>:<><span className="signal-dot"/><strong>{TABS.find(t=>t.id===panel)?.name}</strong></>}
+      {full?<div className="workbench-full-tabs" role="toolbar" aria-label="Secciones del laboratorio">{TABS.map(t=><HintButton key={t.id} aria-pressed={panel===t.id} onClick={()=>set(t.id)}><t.icon size={18}/>{t.name}</HintButton>)}</div>:<><span className="signal-dot"/><strong>{TABS.find(t=>t.id===panel)?.name}</strong></>}
       <div className="workbench-header-tools" ref={setToolbarHost}/>
       <HintButton ref={expand} className="icon-btn" onClick={()=>setFull(!full)} aria-label={full?'Volver al tamaño anterior':'Ampliar laboratorio a pantalla completa'} title={full?'Volver al tamaño anterior · Esc':'Pantalla completa'}>{full?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</HintButton>
       <HintButton className="icon-btn" onClick={()=>set(null)} aria-label="Cerrar laboratorio" title="Cerrar laboratorio"><X size={15}/></HintButton>

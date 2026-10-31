@@ -268,3 +268,27 @@
   .assembly-step-completion>.btn { flex: 1; min-width: 0; }
   .assembly-view-switcher>button { font-size: 13px; padding: 0 10px; }
 }
+
+/* Laboratory navigation stays readable at every window width. */
+.workbench-rail { height: auto; min-height: 56px; padding: 7px 12px; }
+.workbench-tools { width: 100%; min-width: 0; flex-wrap: wrap; justify-content: flex-start; gap: 5px; }
+.workbench-tools>button { height: 40px; min-height: 40px; padding: 0 14px; gap: 9px; font-size: 16px; font-weight: 500; color: #bfc7d3; white-space: nowrap; }
+.workbench-tools .command-trigger { margin-left: auto; padding-left: 14px; }
+.workbench-tools kbd { font-size: 14px; color: #bfc7d3; }
+.workbench-full-tabs>button { min-height: 40px; padding: 8px 13px; gap: 9px; font-size: 16px; font-weight: 500; }
+.workbench-flexible.is-fullscreen .workbench-heading { height: auto; min-height: 56px; }
+.workbench-heading>strong { font-size: 16px; }
+@media(max-width:700px) {
+  .workbench-rail { padding: 7px 8px; }
+  .workbench-tools { gap: 4px; }
+  .workbench-tools>button { padding: 0 10px; font-size: 16px; }
+}
+@media(max-width:1000px) {
+  .workbench-flexible.is-fullscreen .workbench-heading { flex-wrap: wrap; padding-top: 6px; padding-bottom: 6px; }
+  .workbench-flexible.is-fullscreen .workbench-header-tools { order: 3; flex-basis: 100%; margin-left: 0; }
+  .workbench-flexible.is-fullscreen .workbench-heading>.icon-btn:first-of-type { margin-left: auto; }
+}
+.assembly-welcome h2 { font-size: 24px; line-height: 1.25; }
+.assembly-welcome p { font-size: 16px; }
+.assembly-welcome small { font-size: 14px; line-height: 1.5; }
+.assembly-welcome-actions>.btn { min-height: 40px; font-size: 15px; }
