@@ -9,7 +9,7 @@
   --ui-ease: cubic-bezier(.23,1,.32,1);
 }
 .ui-tooltip-positioner { z-index: 120; pointer-events: none; }
-.ui-tooltip-positioner .ui-tooltip { pointer-events: auto; }
+.ui-tooltip-positioner .ui-tooltip { pointer-events: none; }
 .ui-tooltip {
   display: flex; align-items: center; gap: 14px; max-width: min(330px,calc(100vw - 24px));
   padding: 7px 10px; border-radius: 7px; color: #f1f2f4;
@@ -143,6 +143,7 @@
   .workbench-tools>button:not(.active):hover,.workbench-full-tabs>button:not([aria-pressed=true]):hover { background: #ffffff08; color: #e8ecf2; }
 }
 .workbench-panel .btn:active:not(:disabled),.topbar .btn:active:not(:disabled) { transform: scale(.98); }
+.workbench-panel .btn:focus-visible:active:not(:disabled),.topbar .btn:focus-visible:active:not(:disabled) { transform: none; }
 @media(max-width:760px) {
   .workbench-rail { padding: 0 8px; }
   .workbench-tools { gap: 2px; }
