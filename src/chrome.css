@@ -270,18 +270,19 @@
 }
 
 /* Laboratory navigation stays readable at every window width. */
-.workbench-rail { height: auto; min-height: 56px; padding: 7px 12px; }
+.workbench-rail { height: auto; min-height: 48px; padding: 6px 12px; }
 .workbench-tools { width: 100%; min-width: 0; flex-wrap: wrap; justify-content: flex-start; gap: 5px; }
-.workbench-tools>button { height: 40px; min-height: 40px; padding: 0 14px; gap: 9px; font-size: 16px; font-weight: 500; color: #bfc7d3; white-space: nowrap; }
+.workbench-tools>button { height: 34px; min-height: 34px; padding: 0 12px; gap: 8px; font-size: 14px; font-weight: 500; color: #bfc7d3; white-space: nowrap; }
 .workbench-tools .command-trigger { margin-left: auto; padding-left: 14px; }
 .workbench-tools kbd { font-size: 14px; color: #bfc7d3; }
-.workbench-full-tabs>button { min-height: 40px; padding: 8px 13px; gap: 9px; font-size: 16px; font-weight: 500; }
-.workbench-flexible.is-fullscreen .workbench-heading { height: auto; min-height: 56px; }
-.workbench-heading>strong { font-size: 16px; }
+.workbench-full-tabs>button { min-height: 34px; padding: 7px 11px; gap: 8px; font-size: 14px; font-weight: 500; }
+.workbench-tools>button>svg,.workbench-full-tabs>button>svg { width: 16px; height: 16px; }
+.workbench-flexible.is-fullscreen .workbench-heading { height: auto; min-height: 48px; }
+.workbench-heading>strong { font-size: 14px; }
 @media(max-width:700px) {
-  .workbench-rail { padding: 7px 8px; }
+  .workbench-rail { padding: 6px 8px; }
   .workbench-tools { gap: 4px; }
-  .workbench-tools>button { padding: 0 10px; font-size: 16px; }
+  .workbench-tools>button { padding: 0 10px; font-size: 14px; }
 }
 @media(max-width:1000px) {
   .workbench-flexible.is-fullscreen .workbench-heading { flex-wrap: wrap; padding-top: 6px; padding-bottom: 6px; }
