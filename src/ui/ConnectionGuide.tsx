@@ -1,4 +1,5 @@
 import { X } from 'lucide-react';
+import { useLayoutEffect, useRef } from 'react';
 import { pinKey, type Netlist } from '../core/netlist';
 import type { CircuitSnapshot, WireData, WireEnd, Vec } from '../core/types';
 import { PARTS } from '../parts';
@@ -42,6 +43,14 @@ export function wireCrossings(snapshot: CircuitSnapshot): Map<string, (Vec & { v
 
 export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot: CircuitSnapshot; netlist: Netlist; wire?: WireData; onClear: () => void }) {
   const { project } = useEditor();
+  const guide=useRef<HTMLElement>(null);
+  useLayoutEffect(()=>{
+    const node=guide.current,canvas=node?.closest<HTMLElement>('.canvas-wrap');if(!node||!canvas)return;
+    let previous=0;
+    const measure=()=>{const height=Math.ceil(node.getBoundingClientRect().height);if(height>0&&height!==previous){previous=height;canvas.style.setProperty('--connection-guide-height',`${height}px`);}};
+    const observer=new ResizeObserver(measure);observer.observe(node);measure();
+    return()=>{observer.disconnect();canvas.style.removeProperty('--connection-guide-height');};
+  },[]);
   const rawLegend = project.meta.get('wiring.legend');
   const configuredLegend = (Array.isArray(rawLegend) ? rawLegend : []).filter((entry): entry is { color: string; colors?: string[]; label: string } => entry && typeof entry.color === 'string' && /^#[a-f\d]{6}$/i.test(entry.color) && typeof entry.label === 'string').slice(0, 12);
   const usedColors=new Set(snapshot.wires.map(w=>w.color));
@@ -69,7 +78,7 @@ export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot
     }
   }
   const count = wire ? snapshot.wires.filter(w=>wireNet(w,netlist)===net).length : 0;
-  return <aside className={`connection-guide ${wire ? 'is-focused' : ''} ${legend.length ? 'has-legend' : ''}`} aria-label="Guía de conexiones" aria-live="polite">
+  return <aside ref={guide} className={`connection-guide ${wire ? 'is-focused' : ''} ${legend.length ? 'has-legend' : ''}`} aria-label="Guía de conexiones" aria-live="polite">
     {wire ? <>
       <div className="connection-heading"><span className="connection-swatch" style={{background:wire.color}}/><strong>{name}</strong><span>{count} {count===1?'cable':'cables'} en esta red</span><button className="icon-btn" aria-label="Dejar de seguir la conexión" onClick={onClear}><X size={13}/></button></div>
       <div className="connection-ends"><span>{endpoint(wire.a)}</span><span aria-hidden="true">→</span><span>{endpoint(wire.b)}</span></div>

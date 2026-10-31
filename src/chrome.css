@@ -431,9 +431,9 @@
   .connection-guide { height: 84px; }
 }
 .connection-guide.has-legend { pointer-events: auto; }
-.canvas-wrap.with-connections { padding-bottom: 92px; }
-.connection-guide { height: 92px; }
-.with-connections .zoom-float { bottom: 104px; }
+.canvas-wrap.with-connections { padding-bottom: var(--connection-guide-height,72px); }
+.connection-guide { height: auto; min-height: 64px; max-height: 144px; }
+.with-connections .zoom-float { bottom: calc(var(--connection-guide-height,72px) + 12px); }
 .signals-panel .lab-empty { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: start; gap: 8px 22px; min-height: 0; padding: 18px 22px; }
 .signals-panel .lab-empty>strong { grid-column: 1; grid-row: 1; font-size: 20px; }
 .signals-panel .lab-empty>p { grid-column: 1; grid-row: 2; margin: 0; max-width: 52ch; }
