@@ -91,7 +91,7 @@ export class Project {
   private scheduled = false;
 
   constructor(readonly room: string, readonly role: Role = 'owner') {
-    this.user = localUser();
+    this.user = role === 'viewer' && !sessionUser() ? { id: crypto.randomUUID(), name: 'Visitante', color: '#858c98' } : localUser();
     this.readOnly = role === 'viewer';
     this.persistence = new IndexeddbPersistence(`circuit-studio:${room}`, this.doc);
     const url = collabUrl();

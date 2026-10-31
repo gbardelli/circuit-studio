@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { ClerkProvider, SignIn, useAuth, useUser } from '@clerk/react';
 import { CLERK_KEY, setSession } from '../cloud';
 import { TEMPLATES } from '../collab/templates';
@@ -33,11 +33,21 @@ const appearance = {
 } as never;
 
 export function CloudShell({ children }: { children: ReactNode }) {
+  const params = new URLSearchParams(location.search);
+  // A presentation link is always anonymous, even in a browser with an existing session.
+  // It loads without Clerk and cannot inherit the owner's editing credentials.
+  if (/^[A-Za-z0-9_-]{1,64}$/.test(params.get('p') ?? '') && params.has('view') && !params.has('signin')) return <PublicSession>{children}</PublicSession>;
   return (
     <ClerkProvider publishableKey={CLERK_KEY!} appearance={appearance} afterSignOutUrl="/">
       <SessionGate>{children}</SessionGate>
     </ClerkProvider>
   );
+}
+
+function PublicSession({ children }: { children: ReactNode }) {
+  useStartupTask('session', false);
+  useLayoutEffect(() => setSession(async () => null, null), []);
+  return <>{children}</>;
 }
 
 function SessionGate({ children }: { children: ReactNode }) {

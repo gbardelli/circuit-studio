@@ -9,7 +9,8 @@ export async function GET(req: Request) {
   const id = idOf(req);
   if (!user) {
     if (!(await publicViewRole(id))) return json({ error: 'Este enlace no es público. Inicia sesión o pide acceso.' }, 403);
-    const [project] = await sql`SELECT id, name, link_access, updated_at FROM projects WHERE id = ${id}`;
+    const [project] = await sql`SELECT id, name, link_access, updated_at FROM projects WHERE id = ${id} AND link_access = 'view'`;
+    if (!project) return json({ error: 'Este enlace ya no es público.' }, 403);
     return json({ ...project, owner_id: '', role: 'viewer', guest: true, members: [] });
   }
   const role = await roleFor(id, user);

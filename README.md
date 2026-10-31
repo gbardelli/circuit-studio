@@ -28,6 +28,16 @@ El esquema permite conectar pines y simular el circuito directamente. Las conexi
 del esquema aparecen discontinuas en la protoboard hasta que se cablean físicamente.
 Ambas vistas comparten la topología y conservan posiciones independientes.
 
+«Ordenar conexiones» acerca las protoboards de una misma columna, mueve sus piezas
+insertadas y repara los recorridos diagonales. La operación se puede deshacer y se
+rechaza si cambia una conexión eléctrica. Al señalar un cable se destaca su red
+completa y se identifican sus extremos; los cruces llevan puentes visuales.
+
+En Compartir, «Copiar enlace de visualización» activa el acceso público de solo
+lectura y copia un enlace `?p=…&view=1`. Se abre sin cuenta y sin cargar Clerk.
+La edición, el historial y la compilación requieren una sesión. Los enlaces
+restringidos y los de edición no permiten acceso anónimo.
+
 Las decisiones visuales y referencias están en `DESIGN.md`.
 
 ## Producción
