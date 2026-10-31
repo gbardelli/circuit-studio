@@ -1,3 +1,4 @@
+import { HintButton, OverlayScope } from './Overlays';
 import {
   Activity,
   Maximize2,
@@ -42,25 +43,26 @@ export function WorkbenchRail() {
         aria-label="Herramientas de laboratorio"
       >
         {TABS.map((t) => (
-          <button
+          <HintButton
             key={t.id}
             data-lab-panel={t.id}
+            hint={t.id==='signals'?'Observar señales y recorrer el tiempo':t.id==='assembly'?'Construir el circuito paso a paso':t.id==='diagnostics'?'Revisar conexiones y niveles eléctricos':'Revisiones ancladas al circuito'}
             className={panel === t.id ? "active" : ""}
             aria-pressed={panel === t.id}
             onClick={() => set(panel === t.id ? null : t.id)}
           >
             <t.icon size={14} />
             <span>{t.name}</span>
-          </button>
+          </HintButton>
         ))}
-        <button
+        <HintButton
           className="command-trigger"
           onClick={() => useUi.getState().setCommandOpen(true)}
           aria-label="Abrir comandos"
         >
           <Command size={14} />
           <kbd> K</kbd>
-        </button>
+        </HintButton>
       </div>
     </div>
   );
@@ -89,6 +91,7 @@ export function WorkbenchPanel() {
     const previous=background.map(el=>({el,inert:el.inert}));previous.forEach(({el})=>{el.inert=true;});
     const key=(e:KeyboardEvent)=>{
       if(useUi.getState().commandOpen)return;
+      if(root.querySelector('[data-menu-popup]')||(e.key==='Escape'&&document.querySelector('.ui-tooltip[data-open]')))return;
       if(e.key==='Escape'){e.preventDefault();e.stopPropagation();setFull(false);requestAnimationFrame(()=>expand.current?.focus());}
       if(e.key==='Tab'){
         const focusable=Array.from(root.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled),summary,[tabindex="0"]')).filter(el=>el.getClientRects().length>0&&!el.closest('[hidden]'));
@@ -110,14 +113,14 @@ export function WorkbenchPanel() {
       onPointerUp={e=>{if(!resize.current)return;setSize(panel,resize.current.last);resize.current=null;setDragHeight(null);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
       onPointerCancel={()=>{resize.current=null;setDragHeight(null);}}><span/></div>}
     <div className="workbench-heading">
-      {full?<div className="workbench-full-tabs" role="toolbar" aria-label="Secciones del laboratorio">{TABS.map(t=><button key={t.id} aria-pressed={panel===t.id} onClick={()=>set(t.id)}><t.icon size={14}/>{t.name}</button>)}</div>:<><span className="signal-dot"/><strong>{TABS.find(t=>t.id===panel)?.name}</strong></>}
+      {full?<div className="workbench-full-tabs" role="toolbar" aria-label="Secciones del laboratorio">{TABS.map(t=><HintButton key={t.id} aria-pressed={panel===t.id} onClick={()=>set(t.id)}><t.icon size={14}/>{t.name}</HintButton>)}</div>:<><span className="signal-dot"/><strong>{TABS.find(t=>t.id===panel)?.name}</strong></>}
       <span className="grow"/>
-      <button ref={expand} className="icon-btn" onClick={()=>setFull(!full)} aria-label={full?'Volver al tamaño anterior':'Ampliar laboratorio a pantalla completa'} title={full?'Volver al tamaño anterior · Esc':'Pantalla completa'}>{full?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</button>
-      <button className="icon-btn" onClick={()=>set(null)} aria-label="Cerrar laboratorio" title="Cerrar laboratorio"><X size={15}/></button>
+      <HintButton ref={expand} className="icon-btn" onClick={()=>setFull(!full)} aria-label={full?'Volver al tamaño anterior':'Ampliar laboratorio a pantalla completa'} title={full?'Volver al tamaño anterior · Esc':'Pantalla completa'}>{full?<Minimize2 size={15}/>:<Maximize2 size={15}/>}</HintButton>
+      <HintButton className="icon-btn" onClick={()=>set(null)} aria-label="Cerrar laboratorio" title="Cerrar laboratorio"><X size={15}/></HintButton>
     </div>
-    <div className={`workbench-body ${assemblyFull?'assembly-full-layout':''}`}>
+    <OverlayScope.Provider value={node}><div className={`workbench-body ${assemblyFull?'assembly-full-layout':''}`}>
       <div className="workbench-preview-slot" hidden={!assemblyFull}>{assemblyFull&&<AssemblyStage/>}</div>
       {panel==='signals'?<Signals key="signals"/>:panel==='diagnostics'?<Diagnostics key="diagnostics"/>:panel==='assembly'?<Assembly key="assembly"/>:<Notes key="notes"/>}
-    </div>
+    </div></OverlayScope.Provider>
   </section>}</>;
 }

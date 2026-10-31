@@ -53,3 +53,21 @@ These references inform original vector artwork. They are not a claim of dimensi
 Large physical circuits use two columns of named stages, with 220 world units between columns and 200 between board rows. The router reserves stage captions, component bodies and parallel tracks. Power, ground, cabin requests, external calls, destination, current floor, control, clock, reset, countdown, segments and UART each have a distinct family. Related bits use different tones, and one electrical net retains one color across stages. The legend sits in a reserved canvas rail.
 
 Physical remounts must preserve the complete partition of device pins into electrical nets. Display cases share a baseline and leave visible space between them. Fitting the whole circuit is an overview; tracing a named net and zooming into a stage remain available.
+
+## Menus and workbench chrome
+
+Keep application chrome independent of circuit artwork and canvas theme tokens.
+`chrome.css` defines the raised neutral surfaces, subtle vertical gradients, layered
+shadows and readable secondary text for navigation, workbench panels and popups.
+The active tool gets a tangible raised surface; inactive navigation stays quieter.
+
+Use `HintButton` for concise control descriptions and a separate shortcut key.
+Tooltips share a 420 ms initial hover delay and open immediately when moving among
+nearby controls. Keyboard focus shows the description without animated motion.
+Use `PopoverPanel` for anchored interactive content. Base UI handles collision
+positioning, dismissal and focus return. Portals inside full-screen panels stay
+inside their focus boundary. Menu keyboard events never edit the circuit.
+
+Popover transitions use opacity and a small origin-aware transform, with faster
+exit and immediate keyboard interaction. Direct resizing has no animated delay.
+Reduced-motion and increased-contrast preferences have explicit overrides.

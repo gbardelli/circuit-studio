@@ -1,3 +1,4 @@
+import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useRef, useState } from 'react';
 import { UserButton } from '@clerk/react';
 import { CLOUD, api, type LinkAccess } from '../cloud';
@@ -120,24 +121,24 @@ export function TopBar() {
         />
         <SyncBadge state={project.connection} synced={project.synced} />
         <span className="tb-divider" />
-        <button className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
+        <HintButton className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
           <Undo2 size={16} />
-        </button>
-        <button className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
+        </HintButton>
+        <HintButton className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
           <Redo2 size={16} />
-        </button>
+        </HintButton>
       </div>
 
       <div className="sim-controls">
         {board && (
-          <button className={`btn ghost sm ${codeOpen ? 'is-on' : ''}`} onClick={() => openCode(codeOpen ? null : board.id, 'code')} aria-pressed={codeOpen} title="Código del Arduino">
+          <HintButton className={`btn ghost sm ${codeOpen ? 'is-on' : ''}`} onClick={() => openCode(codeOpen ? null : board.id, 'code')} aria-pressed={codeOpen} title="Código del Arduino">
             <Code2 size={14} /> Código
-          </button>
+          </HintButton>
         )}
-        <button className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guest ? 'Inicia sesión para simular' : undefined}>
+        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guest ? 'Inicia sesión para simular' : undefined}>
           {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
-        </button>
+        </HintButton>
         {simRunning && (
           <span className="sim-readout">
             <span className="mono">{t.toFixed(t < 10 ? 2 : 1)} s</span>
@@ -159,18 +160,10 @@ export function TopBar() {
           ))}
           <Avatar name={`${project.user.name} (tú)`} color={project.user.color} image={project.user.image} me />
         </div>
-        <div style={{ position: 'relative' }}>
-          <button className="btn sm" disabled={guest} onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} title="Historial de versiones">
-            <HistoryIcon size={14} /> Historial
-          </button>
-          {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
-        </div>
-        <div style={{ position: 'relative' }}>
-          <button className="btn primary sm" onClick={() => (CLOUD && !guest ? setShareOpen((o) => !o) : share())} aria-expanded={shareOpen}>
-            <Link2 size={14} /> Compartir
-          </button>
-          {shareOpen && <SharePopover onClose={() => setShareOpen(false)} />}
-        </div>
+        <PopoverPanel label="Historial de versiones" className="ui-history" open={historyOpen} onOpenChange={value=>{setHistoryOpen(value);if(value)setShareOpen(false);}} trigger={<HintButton className="btn sm" disabled={guest} title={guest?'Inicia sesión para consultar versiones':'Historial de versiones'}><HistoryIcon size={14}/>Historial</HintButton>}>
+          <HistoryPanel/>
+        </PopoverPanel>
+        {CLOUD&&!guest ? <PopoverPanel label="Compartir circuito" className="ui-sharing" open={shareOpen} onOpenChange={value=>{setShareOpen(value);if(value)setHistoryOpen(false);}} trigger={<button className="btn primary sm"><Link2 size={14}/>Compartir</button>}><SharePopover/></PopoverPanel> : <HintButton className="btn primary sm" onClick={()=>void share()}><Link2 size={14}/>Compartir</HintButton>}
         {CLOUD && (guest ? <a className="btn sm" href={`?p=${project.room}&signin=1`}>Iniciar sesión</a> : <UserButton />)}
       </div>
     </header>
@@ -185,9 +178,9 @@ function PanelToggle({ panel }: { panel: 'library' | 'inspector' }) {
   const Icon = left ? (closed ? PanelLeftOpen : PanelLeftClose) : closed ? PanelRightOpen : PanelRightClose;
   const what = left ? 'componentes' : 'propiedades';
   return (
-    <button className="icon-btn panel-toggle" onClick={() => toggle(panel)} aria-pressed={!closed} aria-label={`${closed ? 'Mostrar' : 'Ocultar'} el panel de ${what}`} title={`${closed ? 'Mostrar' : 'Ocultar'} ${what} · Ctrl+${left ? '[' : ']'}`}>
+    <HintButton className="icon-btn panel-toggle" onClick={() => toggle(panel)} aria-pressed={!closed} aria-label={`${closed ? 'Mostrar' : 'Ocultar'} el panel de ${what}`} title={`${closed ? 'Mostrar' : 'Ocultar'} ${what} · Ctrl+${left ? '[' : ']'}`}>
       <Icon size={16} />
-    </button>
+    </HintButton>
   );
 }
 
@@ -229,14 +222,6 @@ export function StatusBar() {
   const simRunning = useUi((s) => s.simRunning);
   const { project } = useEditor();
   const [keys, setKeys] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!keys) return;
-    const close = (e: PointerEvent) => !ref.current?.contains(e.target as Node) && setKeys(false);
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [keys]);
 
   return (
     <footer className="statusbar">
@@ -255,20 +240,9 @@ export function StatusBar() {
         </span>
       )}
       <span className="grow" />
-      <div ref={ref} style={{ position: 'relative' }}>
-        <button className="btn ghost sm" onClick={() => setKeys((k) => !k)} aria-expanded={keys}>
-          <Keyboard size={13} /> Atajos
-        </button>
-        {keys && (
-          <div className="popover" role="dialog" aria-label="Atajos de teclado">
-            <div className="shortcuts">
-              {SHORTCUTS.map(([label, combo]) => (
-                <FragmentRow key={label} label={label} combo={combo} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      <PopoverPanel label="Atajos de teclado" className="ui-shortcuts" side="top" open={keys} onOpenChange={setKeys} trigger={<button className="btn ghost sm"><Keyboard size={13}/>Atajos</button>}>
+        <div className="shortcuts">{SHORTCUTS.map(([label,combo])=><FragmentRow key={label} label={label} combo={combo}/>)}</div>
+      </PopoverPanel>
     </footer>
   );
 }
@@ -300,7 +274,7 @@ const ACCESS: { value: LinkAccess; label: string; hint: string }[] = [
   { value: 'none', label: 'Restringido', hint: 'Solo quienes ya son miembros.' },
 ];
 
-function SharePopover({ onClose }: { onClose: () => void }) {
+function SharePopover() {
   const { project, detail } = useEditor();
   const [access, setAccess] = useState<LinkAccess>(detail?.link_access ?? 'edit');
   const [copied, setCopied] = useState(false);
@@ -308,12 +282,6 @@ function SharePopover({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const owner = detail?.role === 'owner';
-
-  useEffect(() => {
-    const close = (e: PointerEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
-    window.addEventListener('pointerdown', close);
-    return () => window.removeEventListener('pointerdown', close);
-  }, [onClose]);
 
   const change = async (value: LinkAccess) => {
     setBusy(true); setError(null);
@@ -339,7 +307,7 @@ function SharePopover({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div ref={ref} className="share-pop" role="dialog" aria-label="Compartir circuito">
+    <div ref={ref} className="share-pop">
       <div className="share-head">
         <strong>Compartir</strong>
         <span className="faint">{detail?.members.length ?? 1} miembros</span>
@@ -354,9 +322,9 @@ function SharePopover({ onClose }: { onClose: () => void }) {
       {owner && (
         <div className="segmented" role="group" aria-label="Acceso con el enlace">
           {ACCESS.map((a) => (
-            <button key={a.value} aria-pressed={access === a.value} disabled={busy} onClick={() => void change(a.value)}>
+            <HintButton key={a.value} aria-pressed={access === a.value} disabled={busy} onClick={() => void change(a.value)}>
               {a.label}
-            </button>
+            </HintButton>
           ))}
         </div>
       )}
@@ -370,14 +338,14 @@ function SharePopover({ onClose }: { onClose: () => void }) {
           </li>
         ))}
       </ul>
-      <button
+      <HintButton
         className="btn accent"
         style={{ width: '100%' }}
         disabled={busy}
         onClick={() => void copyView()}
       >
         {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : busy ? 'Preparando enlace…' : 'Copiar enlace de visualización'}
-      </button>
+      </HintButton>
     </div>
   );
 }

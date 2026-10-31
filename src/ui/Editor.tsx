@@ -1,3 +1,4 @@
+import { HintProvider } from './Overlays';
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Info, Component, SlidersHorizontal, X } from 'lucide-react';
 import { Project } from '../collab/project';
@@ -141,7 +142,7 @@ export function EditorShell() {
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if(mod && key==='k'){e.preventDefault();e.stopPropagation();ui.setCommandOpen(!ui.commandOpen);return;}
-      if (isTyping(e) || (e.target as Element)?.closest?.('.workbench-panel')) return;
+      if (isTyping(e) || (e.target as Element)?.closest?.('.workbench-panel,[data-menu-popup]')) return;
       if(ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps')) return;
       if (mod && (e.key === '[' || e.key === ']')) {
         e.preventDefault();
@@ -201,7 +202,7 @@ export function EditorShell() {
   }, [shortcuts]);
 
   return (
-    <div className="app" data-panel={compactPanel ?? ''} data-lib={guiding || project.readOnly || collapsed.library ? 'closed' : 'open'} data-insp={guiding || collapsed.inspector ? 'closed' : 'open'}>
+    <HintProvider><div className="app" data-panel={compactPanel ?? ''} data-lib={guiding || project.readOnly || collapsed.library ? 'closed' : 'open'} data-insp={guiding || collapsed.inspector ? 'closed' : 'open'}>
       <TopBar />
       <div className="compact-panels float" style={guiding?{display:'none'}:undefined} role="toolbar" aria-label="Paneles">
         <button className={`icon-btn ${compactPanel === 'library' ? 'on' : ''}`} aria-label="Componentes" aria-pressed={compactPanel === 'library'} title="Componentes" onClick={() => setCompactPanel(compactPanel === 'library' ? null : 'library')}>
@@ -230,6 +231,6 @@ export function EditorShell() {
           {toast.text}
         </div>
       )}
-    </div>
+    </div></HintProvider>
   );
 }

@@ -1,3 +1,4 @@
+import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useMemo, useState } from "react";
 import {
   Download,
@@ -111,7 +112,7 @@ export function Signals() {
   return (
     <div className="signals-panel">
       <div className="lab-controls">
-        <button
+        <HintButton
           className="btn sm transport-control"
           disabled={!engine.running || lab.seeking}
           onClick={() => engine.pause(!lab.paused)}
@@ -122,23 +123,23 @@ export function Signals() {
             : lab.paused
               ? "Reanudar desde aquí"
               : "Pausar"}
-        </button>
-        <button
+        </HintButton>
+        <HintButton
           className="icon-btn"
           aria-label="Flanco anterior"
           disabled={!engine.running || !edges.length}
           onClick={() => seekEdge(-1)}
         >
           <SkipBack size={14} />
-        </button>
-        <button
+        </HintButton>
+        <HintButton
           className="icon-btn"
           aria-label="Flanco siguiente"
           disabled={!engine.running || !edges.length}
           onClick={() => seekEdge(1)}
         >
           <SkipForward size={14} />
-        </button>
+        </HintButton>
         <span className="lab-time">
           {lab.cursor.toFixed(4)} s <span>/ {lab.duration.toFixed(2)} s</span>
         </span>
@@ -152,42 +153,34 @@ export function Signals() {
           </span>
         ) : null}
         <span className="grow" />
-        <button
+        <HintButton
           className="icon-btn"
           aria-label="Ampliar tiempo"
           onClick={() => setSpan((s) => Math.max(0.001, s / 2))}
         >
           <ZoomIn size={14} />
-        </button>
-        <button
+        </HintButton>
+        <HintButton
           className="icon-btn"
           aria-label="Reducir tiempo"
           onClick={() => setSpan((s) => Math.min(600, s * 2))}
         >
           <ZoomOut size={14} />
-        </button>
-        <button
+        </HintButton>
+        <HintButton
           className={`btn ghost sm ${offset === null ? "is-on" : ""}`}
           onClick={() => setOffset(null)}
         >
           Seguir
-        </button>
-        <button
+        </HintButton>
+        <HintButton
           className="btn ghost sm"
           disabled={!lab.probes.length}
           onClick={() => download("circuit-studio.vcd", vcd(lab))}
         >
           <Download size={13} /> VCD
-        </button>
-        <button
-          className="btn sm"
-          aria-expanded={adding}
-          onClick={() => setAdding(!adding)}
-        >
-          <Plus size={13} /> Señal
-        </button>
-      </div>
-      {adding && (
+        </HintButton>
+        <PopoverPanel label="Añadir señal" className="ui-signal-picker" open={adding} onOpenChange={setAdding} trigger={<button className="btn sm"><Plus size={13}/>Señal</button>}>
         <div className="signal-picker">
           <input
             autoFocus
@@ -197,6 +190,7 @@ export function Signals() {
             onChange={(e) => setSearch(e.target.value)}
           />
           <div>
+            {!options.some(o=>o.name.toLowerCase().includes(search.toLowerCase())&&!lab.probes.some(p=>p.key===o.key))&&<p className="ui-signal-empty">No hay señales disponibles para esta búsqueda.</p>}
             {options
               .filter(
                 (o) =>
@@ -205,7 +199,7 @@ export function Signals() {
               )
               .slice(0, 30)
               .map((o) => (
-                <button
+                <HintButton
                   key={o.key}
                   onClick={() => {
                     add(o.key, o.name);
@@ -215,11 +209,12 @@ export function Signals() {
                 >
                   {o.name}
                   <Plus size={12} />
-                </button>
+                </HintButton>
               ))}
           </div>
         </div>
-      )}
+        </PopoverPanel>
+      </div>
       <div className="wave-scroll">
         <div className="wave-ruler">
           <span>
@@ -240,11 +235,11 @@ export function Signals() {
               Añade una señal o fija una red desde el lienzo. Selecciona un
               flanco para inspeccionar el circuito en ese instante.
             </p>
-            <button className="btn sm" onClick={() => setAdding(true)}>
+            <HintButton className="btn sm" onClick={() => setAdding(true)}>
               <Plus size={14} /> Añadir primera señal
-            </button>
+            </HintButton>
             {suggested.length > 0 && (
-              <button
+              <HintButton
                 className="btn ghost sm"
                 onClick={() =>
                   engine.watch(
@@ -257,7 +252,7 @@ export function Signals() {
                 }
               >
                 Usar salidas del montaje
-              </button>
+              </HintButton>
             )}
           </div>
         ) : (
@@ -285,7 +280,7 @@ export function Signals() {
                     )
                   }
                 />
-                <button
+                <HintButton
                   className="icon-btn"
                   aria-label={`Quitar ${probe.name}`}
                   onClick={() =>
@@ -293,7 +288,7 @@ export function Signals() {
                   }
                 >
                   <X size={11} />
-                </button>
+                </HintButton>
               </div>
               <svg
                 viewBox="0 0 800 32"

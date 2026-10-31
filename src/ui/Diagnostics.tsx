@@ -1,3 +1,4 @@
+import { HintButton } from './Overlays';
 import { useMemo, useState } from "react";
 import {
   Check,
@@ -21,13 +22,13 @@ function EvidenceNode({ node }: { node: Evidence }) {
   const pin = useUi((s) => s.pinSignal);
   return (
     <li>
-      <button onClick={() => pin(node.key)}>
+      <HintButton onClick={() => pin(node.key)}>
         <span>{node.label}</span>
         <strong className={node.state === "HIGH" ? "state-high" : ""}>
           {node.voltage === null ? "—" : `${node.voltage.toFixed(2)} V`}{" "}
           <small>{node.state}</small>
         </strong>
-      </button>
+      </HintButton>
       <p>{node.explanation}</p>
       {node.children.length > 0 && (
         <ul>
@@ -110,7 +111,7 @@ export function Diagnostics() {
           </div>
         ) : (
           findings.map((f) => (
-            <button
+            <HintButton
               className={`finding ${f.severity}`}
               key={f.id}
               onClick={() => {
@@ -124,7 +125,7 @@ export function Diagnostics() {
                 <small>{f.detail}</small>
               </span>
               <Crosshair size={13} />
-            </button>
+            </HintButton>
           ))
         )}
       </section>
@@ -144,7 +145,7 @@ export function Diagnostics() {
           {query && (
             <div className="diagnostic-results">
               {candidates.slice(0, 12).map((c) => (
-                <button
+                <HintButton
                   key={c.key}
                   onClick={() => {
                     pinSignal(c.key);
@@ -153,7 +154,7 @@ export function Diagnostics() {
                 >
                   {c.label}
                   <ChevronRight size={13} />
-                </button>
+                </HintButton>
               ))}
             </div>
           )}

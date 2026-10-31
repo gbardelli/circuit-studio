@@ -48,7 +48,7 @@ export function useAutoVersions(project: Project, snapshot: CircuitSnapshot) {
   }, [project]);
 }
 
-export function HistoryPanel({ onClose }: { onClose: () => void }) {
+export function HistoryPanel() {
   const { project } = useEditor();
   const showToast = useUi((s) => s.showToast);
   const ref = useRef<HTMLDivElement>(null);
@@ -73,17 +73,6 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
     void refresh();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [project.room]);
-
-  useEffect(() => {
-    const close = (e: PointerEvent) => !ref.current?.parentElement?.contains(e.target as Node) && onClose();
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', esc);
-    return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', esc);
-    };
-  }, [onClose]);
 
   const select = (v: VersionInfo) => {
     setConfirming(false);
@@ -129,7 +118,7 @@ export function HistoryPanel({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div ref={ref} className="history-pop" role="dialog" aria-label="Historial de versiones">
+    <div ref={ref} className="history-pop">
       <div className="history-head">
         <div>
           <strong>Historial</strong>

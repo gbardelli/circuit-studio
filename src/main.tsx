@@ -9,6 +9,7 @@ import { Home } from './ui/Home';
 import { Startup } from './ui/Startup';
 import './styles.css';
 import './workbench.css';
+import './chrome.css';
 
 const params = new URLSearchParams(location.search);
 const room = params.get('p');

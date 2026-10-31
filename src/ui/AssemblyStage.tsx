@@ -1,3 +1,4 @@
+import { HintButton } from './Overlays';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Hand, Maximize, Minus, Plus } from 'lucide-react';
 import type { PartData, Vec } from '../core/types';
@@ -68,10 +69,10 @@ export function AssemblyStage() {
     {cursor!==null&&<div className="assembly-stage-caption"><span>{ghost?'Por colocar':activeWire?'Cable actual':'Vista de conjunto'}</span><strong>{ghost?String(ghost.props.label||PARTS[ghost.type].name):activeWire?'Conecta los extremos resaltados':'Todas las piezas y conexiones'}</strong></div>}
     {cursor!==null&&<div className="assembly-stage-tools" role="toolbar" aria-label="Vista del montaje">
       <Hand size={14}/><span className="assembly-pan-hint">Arrastra para mover</span><span className="sep"/>
-      <button className="icon-btn" aria-label="Alejar montaje" onClick={()=>zoomAt(1/1.25,{x:size.w/2,y:size.h/2})}><Minus size={14}/></button>
+      <HintButton className="icon-btn" aria-label="Alejar montaje" onClick={()=>zoomAt(1/1.25,{x:size.w/2,y:size.h/2})}><Minus size={14}/></HintButton>
       <span className="assembly-zoom">{Math.round(z*100)}%</span>
-      <button className="icon-btn" aria-label="Acercar montaje" onClick={()=>zoomAt(1.25,{x:size.w/2,y:size.h/2})}><Plus size={14}/></button>
-      <button className="icon-btn" aria-label="Enfocar paso actual" title="Enfocar paso actual" onClick={fit}><Maximize size={14}/></button>
+      <HintButton className="icon-btn" aria-label="Acercar montaje" onClick={()=>zoomAt(1.25,{x:size.w/2,y:size.h/2})}><Plus size={14}/></HintButton>
+      <HintButton className="icon-btn" aria-label="Enfocar paso actual" title="Enfocar paso actual" onClick={fit}><Maximize size={14}/></HintButton>
     </div>}
   </div>;
 }

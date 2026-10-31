@@ -1,0 +1,165 @@
+/* Application chrome only. Circuit artwork, canvas themes and wire colors stay independent. */
+:root {
+  --ui-surface: #141619;
+  --ui-elevated: #202226;
+  --ui-label: #b7bcc5;
+  --ui-muted: #979faa;
+  --ui-edge: #ffffff0f;
+  --ui-shadow: 0 0 0 1px #090a0bc9, 0 0 0 1px #ffffff0b inset, 0 1px 0 #ffffff0b inset, 0 4px 8px -4px #0009, 0 16px 40px -12px #000b;
+  --ui-ease: cubic-bezier(.23,1,.32,1);
+}
+.ui-tooltip-positioner { z-index: 120; pointer-events: none; }
+.ui-tooltip-positioner .ui-tooltip { pointer-events: auto; }
+.ui-tooltip {
+  display: flex; align-items: center; gap: 14px; max-width: min(330px,calc(100vw - 24px));
+  padding: 7px 10px; border-radius: 7px; color: #f1f2f4;
+  background: linear-gradient(#292c31,#24262b); box-shadow: var(--ui-shadow);
+  font: 450 11px/1.45 var(--font); letter-spacing: 0;
+  transform-origin: var(--transform-origin);
+  transition: opacity 125ms var(--ui-ease), transform 125ms var(--ui-ease);
+}
+.ui-tooltip kbd { flex-shrink: 0; height: 17px; padding: 0 4px; color: #c5cad2; background: #ffffff08; box-shadow: 0 0 0 1px #ffffff0d; font-size: 10px; }
+.ui-tooltip[data-starting-style],.ui-tooltip[data-ending-style] { opacity: 0; transform: scale(.97); }
+.ui-tooltip[data-instant] { transition-duration: 0ms; }
+.ui-popover-positioner { z-index: 110; }
+.ui-popover {
+  max-width: calc(100vw - 24px); max-height: var(--available-height); overflow: auto;
+  border-radius: 10px; background: linear-gradient(175deg,#232529,#1b1d21 65%); color: #eef0f3;
+  box-shadow: var(--ui-shadow); outline: none; transform-origin: var(--transform-origin);
+  transition: opacity 150ms var(--ui-ease), transform 150ms var(--ui-ease);
+}
+.ui-popover[data-starting-style],.ui-popover[data-ending-style] { opacity: 0; transform: translateY(-3px) scale(.98); }
+.ui-popover[data-side=top][data-starting-style],.ui-popover[data-side=top][data-ending-style] { transform: translateY(3px) scale(.98); }
+.ui-popover[data-keyboard] { transition-duration: 0ms; }
+.ui-popover[data-ending-style]:not([data-keyboard]) { transition-duration: 100ms; }
+.ui-popover button { -webkit-tap-highlight-color: transparent; }
+.ui-popover :is(button,input,select):focus-visible { outline: 2px solid #8eb8e9; outline-offset: -2px; }
+.ui-menu-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 13px 14px 11px; border-bottom: 1px solid var(--ui-edge); font-size: 12px; font-weight: 550; }
+.ui-menu-heading>span { font-weight: 400; font-size: 11px; color: var(--ui-muted); }
+.ui-action-menu { width: 248px; padding: 5px; }
+.ui-action-menu>button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 34px; padding: 8px 9px; border: 0; border-radius: 5px; background: transparent; text-align: left; color: #d4d8de; font-size: 12px; }
+.ui-action-menu>button svg { color: #a1a8b4; flex-shrink: 0; }
+.ui-menu-separator { height: 1px; margin: 4px 6px; background: var(--ui-edge); }
+.ui-step-index { width: 390px; overflow: hidden; }
+.ui-step-list { max-height: min(440px,calc(var(--available-height) - 48px)); overflow: auto; overscroll-behavior: contain; padding: 4px 5px 7px; }
+.ui-step-list>div>strong { display: block; padding: 13px 9px 6px; font-size: 10px; font-weight: 550; color: var(--ui-muted); }
+.ui-step-list button { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 32px; padding: 7px 9px; border: 0; border-radius: 5px; background: transparent; color: #d0d5dd; text-align: left; font-size: 11px; }
+.ui-step-list button>span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ui-step-list button>svg { flex-shrink: 0; color: #8ed4b1; }
+.ui-step-list button.current { background: #ffffff0c; color: #fff; }
+.assembly-index-trigger { margin-left: auto; border: 0; background: transparent; border-radius: 4px; color: #b9c0cb; padding: 4px 6px; font-size: 11px; }
+.ui-signal-picker { width: 340px; padding: 6px; }
+.ui-signal-picker .signal-picker { position: static; width: auto; margin: 0; padding: 0; box-shadow: none; border: 0; background: none; animation: none; }
+.ui-signal-picker .signal-picker input { width: 100%; border: 0; border-bottom: 1px solid var(--ui-edge); border-radius: 0; padding: 10px 9px 12px; background: transparent; box-shadow: none; outline-offset: -2px; }
+.ui-signal-picker .signal-picker>div { max-height: min(310px,calc(var(--available-height) - 65px)); overscroll-behavior: contain; padding: 5px 0 0; }
+.ui-signal-picker .signal-picker button { padding: 8px 9px; border-radius: 5px; color: #d1d6df; }
+.ui-signal-picker .signal-picker button>svg { color: var(--ui-muted); flex-shrink: 0; }
+.ui-signal-empty { padding: 18px 10px; font-size: 12px; color: #b7bec9; }
+.ui-sharing { width: 350px; }
+.ui-history { width: 400px; }
+.ui-popover .share-pop,.ui-popover .history-pop,.ui-popover .popover { position: static; width: 100%; max-width: none; max-height: none; margin: 0; border-radius: 0; background: transparent; backdrop-filter: none; box-shadow: none; animation: none; }
+.ui-popover .share-pop { padding: 16px; gap: 15px; }
+.ui-popover .share-head strong { font-size: 14px; font-weight: 550; }
+.ui-popover .share-access { align-items: start; }
+.ui-popover .share-access .faint { line-height: 1.55; color: #a7afbb; }
+.ui-popover .history-list { max-height: min(420px,calc(var(--available-height) - 100px)); }
+.ui-popover .history-head { padding: 14px; }
+.ui-popover .shortcuts { padding: 3px; gap: 12px 24px; color: #c9cfd8; }
+.ui-shortcuts { width: 320px; padding: 13px; }
+.topbar { background: linear-gradient(180deg,#111214 0%,#0e0f11 100%); border-bottom-color: #ffffff09; }
+.topbar .tb-divider { background: #ffffff0b; }
+.topbar .project-name { font-weight: 550; max-width: min(27vw,360px); text-overflow: ellipsis; }
+.topbar .btn:not(.primary):not(.ghost) { background: linear-gradient(#25272b,#1d1f23); box-shadow: 0 0 0 1px #ffffff0a inset,0 1px 2px #0004; }
+.topbar .btn.primary { background: linear-gradient(#f5f6f7,#dedfe2); color: #202226; box-shadow: 0 1px 0 #fff8 inset,0 1px 3px #0005; }
+.topbar .avatars { margin-right: 5px; }
+.workbench-rail { height: 44px; min-height: 44px; background: linear-gradient(180deg,#141619,#121416); border-bottom-color: #ffffff08; }
+.workbench-label strong { font-size: 11px; font-weight: 550; color: #cbd0d8; letter-spacing: -.01em; }
+.workbench-label>span:last-child { color: #969da8; font-size: 10px; }
+.workbench-tools { gap: 4px; }
+.workbench-tools>button { min-height: 29px; padding: 0 10px; color: #a5acb7; border-radius: 6px; }
+.workbench-tools>button.active { color: #f4f5f7; background: linear-gradient(#2a2d32,#23262a); box-shadow: 0 0 0 1px #ffffff08 inset,0 1px 0 #ffffff08 inset,0 1px 3px #0004; }
+.workbench-flexible { background: #141619; border-top-color: transparent; box-shadow: 0 -1px 0 #ffffff0d,0 -8px 24px -12px #000c; }
+.workbench-flexible .workbench-heading { height: 39px; min-height: 39px; padding: 0 14px; background: linear-gradient(#1c1e22,#181a1d); border-bottom: 1px solid #ffffff07; }
+.workbench-heading>strong { font-size: 12px; font-weight: 550; letter-spacing: -.012em; }
+.workbench-heading .signal-dot { width: 5px; height: 5px; opacity: .8; }
+.workbench-heading>.icon-btn { width: 28px; height: 28px; color: #aab1bc; }
+.workbench-resizer>span { width: 32px; height: 2px; background: #838b9760; }
+.workbench-full-tabs { gap: 5px; }
+.workbench-full-tabs>button { padding: 7px 10px; border-radius: 6px; color: #a9b0bc; }
+.workbench-full-tabs>button[aria-pressed=true] { background: linear-gradient(#2c2f34,#24272c); box-shadow: 0 0 0 1px #ffffff08 inset,0 1px 0 #ffffff08 inset; color: #f2f4f7; }
+.workbench-panel :is(.assembly-toolbar,.lab-controls) { min-height: 40px; background: #17191c; border-bottom-color: #ffffff07; padding-left: 14px; padding-right: 14px; gap: 7px; }
+.workbench-panel .btn { border-radius: 6px; font-weight: 450; }
+.workbench-panel .btn:not(.ghost):not(.primary):not(.danger) { background: linear-gradient(#2c2f34,#25282d); box-shadow: 0 0 0 1px #ffffff0a inset,0 1px 0 #ffffff08 inset,0 1px 2px #0003; }
+.workbench-panel .btn.ghost { color: #b5bdc9; }
+.workbench-panel .btn.primary { background: linear-gradient(#f3f4f6,#dedfe3); color: #202226; box-shadow: 0 1px 0 #fff9 inset,0 1px 3px #0005; font-weight: 550; }
+.workbench-panel .btn:disabled,.workbench-panel .icon-btn:disabled { opacity: .4; }
+.workbench-panel :is(button,input,select):focus-visible { outline-color: #8eb8e9; }
+.workbench-panel :is(.lab-caption,.assembly-manual-note) { color: #a1a9b5; }
+.workbench-panel .lab-caption { font-size: 11px; }
+.workbench-panel .lab-time { font-size: 12px; font-variant-numeric: tabular-nums; }
+.workbench-panel .wave-ruler { background: #111316; border-bottom-color: #ffffff07; color: #9fa7b3; }
+.workbench-panel .lab-empty strong { font-weight: 550; letter-spacing: -.02em; }
+.workbench-panel .lab-empty p { color: #a6aebb; max-width: 54ch; line-height: 1.6; }
+.assembly-guide { padding: 14px 18px 10px; gap: 12px; background: linear-gradient(160deg,#17191c,#141619 60%); }
+.assembly-guide-progress { color: #9fa8b5; }
+.assembly-guide-progress>progress { height: 2px; opacity: .8; }
+.assembly-current { grid-template-columns: 74px minmax(0,1fr); gap: 18px; }
+.assembly-current-copy { max-width: 1040px; }
+.assembly-current-meta { font-size: 10px; gap: 6px 14px; color: #a7b0bc; }
+.assembly-current-copy h2 { margin-top: 7px; margin-bottom: 10px; font-size: 18px; font-weight: 550; letter-spacing: -.025em; }
+.assembly-wire-endpoints { gap: 24px; }
+.assembly-wire-endpoints>div { flex: 0 1 420px; min-width: 0; }
+.assembly-wire-endpoints strong { font-size: 12px; font-weight: 450; line-height: 1.6; overflow-wrap: anywhere; }
+.assembly-wire-endpoints>div>span { font-size: 10px; color: #a4adbb; }
+.assembly-guide-actions { padding-top: 10px; border-top-color: #ffffff07; gap: 10px; }
+.assembly-guide-actions>.btn.primary { min-width: 145px; }
+.assembly-back-start { color: #a7afbc; padding-left: 2px; }
+.assembly-pinout>summary { color: #b8c5d5; padding: 5px 0; }
+.assembly-pinout dl { background: #101214; border-color: #ffffff09; }
+.assembly-full-layout .assembly-guide { padding: 20px; }
+.assembly-full-layout .assembly-current { gap: 20px; }
+.assembly-full-layout .assembly-wire-endpoints>div { flex: auto; }
+.assembly-full-layout .assembly-current-copy h2 { font-size: 20px; line-height: 1.3; }
+.assembly-full-layout .assembly-guide-actions>.btn.primary { height: 36px; }
+.assembly-full-layout .assembly-manual-note { color: #a7afbc; }
+.workbench-flexible.is-fullscreen { background: #141619; }
+.workbench-panel .diagnostics-panel,.workbench-panel .notes-panel { background: #141619; }
+.statusbar { border-top-color: #ffffff08; background: #0e1012; }
+.statusbar .item { color: #989fac; }
+.command-dialog { box-shadow: var(--ui-shadow); background: linear-gradient(165deg,#202226,#17191c); border: 0; }
+.command-dialog[open] { animation: none; }
+.command-dialog .command-input { border-bottom-color: var(--ui-edge); }
+.command-dialog .command-results>button { border-radius: 6px; }
+.command-dialog .command-results>button.active { background: #ffffff0a; }
+.workbench-panel .lab-section-head { background: #17191c; border-bottom-color: #ffffff07; }
+.workbench-panel .lab-section-head strong { font-size: 12px; font-weight: 550; }
+.workbench-panel .lab-section-head>span { color: #a2aab7; }
+.workbench-panel .materials-list th { color: #b2bac7; background: #17191c; }
+.workbench-panel .materials-list td:nth-child(2) { color: #aab4c3; }
+.workbench-panel .material-settings>span { color: #a1aab8; }
+@media(hover:hover) and (pointer:fine) {
+  .ui-action-menu>button:hover,.ui-step-list button:hover,.ui-signal-picker .signal-picker button:hover { background: #ffffff0a; color: #fff; }
+  .assembly-index-trigger:hover { color: #f3f5f7; background: #ffffff08; }
+  .workbench-tools>button:not(.active):hover,.workbench-full-tabs>button:not([aria-pressed=true]):hover { background: #ffffff08; color: #e8ecf2; }
+}
+.workbench-panel .btn:active:not(:disabled),.topbar .btn:active:not(:disabled) { transform: scale(.98); }
+@media(max-width:760px) {
+  .workbench-rail { padding: 0 8px; }
+  .workbench-tools { gap: 2px; }
+  .workbench-tools>button { padding: 0 7px; }
+  .assembly-guide { padding: 10px 12px; gap: 8px; }
+  .assembly-current { grid-template-columns: 52px minmax(0,1fr); gap: 12px; }
+  .assembly-wire-endpoints { gap: 6px; }
+  .assembly-wire-endpoints>div { flex: auto; }
+  .assembly-current-copy h2 { font-size: 16px; margin: 5px 0 8px; }
+  .workbench-panel .lab-controls { gap: 4px; }
+  .workbench-panel .lab-controls .lab-time { font-size: 10px; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .ui-tooltip,.ui-popover { transition: none; }
+  .ui-popover[data-ending-style]:not([data-keyboard]) { transition: none; }
+  .workbench-panel .btn:active:not(:disabled),.topbar .btn:active:not(:disabled) { transform: none; }
+}
+@media(prefers-contrast:more) {
+  .ui-tooltip,.ui-popover { background: #202226; outline: 1px solid #a3abb8; }
+}

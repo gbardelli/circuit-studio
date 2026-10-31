@@ -1,3 +1,4 @@
+import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Download, ImagePlus, MoreHorizontal, Printer, X } from 'lucide-react';
 import { useEditor, useSnapshot } from './context';
@@ -19,6 +20,7 @@ export function Assembly() {
     snapshot = useSnapshot();
   const tab=useUi(s=>s.assemblyTab),setTab=useUi(s=>s.setAssemblyTab);
   const [photo,setPhoto]=useState<string|null>(null),[marks,setMarks]=useState<{x:number;y:number}[]>([]);
+  const [menuOpen,setMenuOpen]=useState(false);
   const file=useRef<HTMLInputElement>(null);
   const done=(project.meta.get('assembly.done')??{}) as Record<string,string>,
     prices = (project.meta.get("assembly.prices") ?? {}) as Record<
@@ -67,11 +69,15 @@ export function Assembly() {
   return (
     <div className="assembly-panel">
       <div className="assembly-toolbar">
-        {tab!=='steps'&&<button className="btn ghost sm" onClick={()=>setTab('steps')}><ArrowLeft size={13}/>Guía de montaje</button>}
-        {tab==='steps'?<button className="btn ghost sm" onClick={()=>setTab('materials')}>Materiales<span className="assembly-material-count">{rows.length}</span></button>:<strong>{tab==='materials'?'Materiales':'Comparar foto'}</strong>}
+        {tab!=='steps'&&<HintButton className="btn ghost sm" onClick={()=>setTab('steps')}><ArrowLeft size={13}/>Guía de montaje</HintButton>}
+        {tab==='steps'?<HintButton className="btn ghost sm" onClick={()=>setTab('materials')}>Materiales<span className="assembly-material-count">{rows.length}</span></HintButton>:<strong>{tab==='materials'?'Materiales':'Comparar foto'}</strong>}
         <span className="grow"/>
-        <button className="btn ghost sm" onClick={()=>void print()}><Printer size={13}/><span>Imprimir / PDF</span></button>
-        <details className="assembly-more"><summary aria-label="Más opciones de montaje"><MoreHorizontal size={17}/></summary><div><button onClick={e=>{setTab('photo');e.currentTarget.closest('details')?.removeAttribute('open');}}><ImagePlus size={14}/>Comparar foto</button><button onClick={e=>{useUi.getState().setAssemblyCursor(null);setTab('steps');e.currentTarget.closest('details')?.removeAttribute('open');}}>Volver al inicio de la guía</button></div></details>
+        <HintButton className="btn ghost sm" onClick={()=>void print()}><Printer size={13}/><span>Imprimir / PDF</span></HintButton>
+        <PopoverPanel label="Opciones de montaje" className="ui-action-menu" open={menuOpen} onOpenChange={setMenuOpen} trigger={<HintButton className="icon-btn" aria-label="Más opciones de montaje"><MoreHorizontal size={17}/></HintButton>}>
+          <button onClick={()=>{setTab('photo');setMenuOpen(false);}}><ImagePlus size={14}/>Comparar foto</button>
+          <div className="ui-menu-separator"/>
+          <button onClick={()=>{useUi.getState().setAssemblyCursor(null);setTab('steps');setMenuOpen(false);}}><ArrowLeft size={14}/>Volver al inicio de la guía</button>
+        </PopoverPanel>
       </div>
       {tab==='steps'&&<AssemblySteps/>}
       {tab === "materials" && (
@@ -94,7 +100,7 @@ export function Assembly() {
             <span>
               Precios de tu proveedor; no son cotizaciones automáticas.
             </span>
-            <button
+            <HintButton
               className="btn ghost sm"
               onClick={() =>
                 download(
@@ -120,7 +126,7 @@ export function Assembly() {
               }
             >
               <Download size={13} /> CSV
-            </button>
+            </HintButton>
           </div>
           <table>
             <thead>
@@ -209,14 +215,14 @@ export function Assembly() {
               conexiones que quieras revisar. La imagen permanece en este
               navegador durante la sesión.
             </p>
-            <button className="btn sm" onClick={() => file.current?.click()}>
+            <HintButton className="btn sm" onClick={() => file.current?.click()}>
               <ImagePlus size={14} />
               {photo ? "Cambiar foto" : "Añadir foto"}
-            </button>
+            </HintButton>
             {marks.length > 0 && (
-              <button className="btn ghost sm" onClick={() => setMarks([])}>
+              <HintButton className="btn ghost sm" onClick={() => setMarks([])}>
                 Quitar marcas
-              </button>
+              </HintButton>
             )}
           </div>
           {photo && (
@@ -238,7 +244,7 @@ export function Assembly() {
                 alt="Montaje físico para comparar con el circuito"
               />
               {marks.map((m, i) => (
-                <button
+                <HintButton
                   key={i}
                   style={{ left: `${m.x}%`, top: `${m.y}%` }}
                   aria-label={`Quitar marca ${i + 1}`}
@@ -249,7 +255,7 @@ export function Assembly() {
                 >
                   {i + 1}
                   <X size={9} />
-                </button>
+                </HintButton>
               ))}
             </div>
           )}

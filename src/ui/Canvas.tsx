@@ -229,7 +229,7 @@ export function Canvas() {
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       const ui=useUi.getState();
-      if(e.defaultPrevented || ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps') || (e.target as Element)?.closest?.('.workbench-panel'))return;
+      if(e.defaultPrevented || ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps') || (e.target as Element)?.closest?.('.workbench-panel,[data-menu-popup]'))return;
       if (isTyping(e)) return;
       if (e.code === 'Space') {
         setSpace(true);

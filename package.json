@@ -13,6 +13,7 @@
     "prebuild:hex": "tsx scripts/prebuild-hex.ts"
   },
   "dependencies": {
+    "@base-ui/react": "^1.9.0",
     "@clerk/backend": "^3.26.4",
     "@clerk/react": "^6.18.3",
     "@codemirror/commands": "^6.11.1",

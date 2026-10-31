@@ -1,3 +1,4 @@
+import { HintButton } from './Overlays';
 import { useState } from "react";
 import { Check, MessageSquare, Send } from "lucide-react";
 import { useEditor, useSnapshot } from "./context";
@@ -80,7 +81,7 @@ export function Notes() {
                 key={note.id}
               >
                 <header>
-                  <button onClick={() => select([note.part])}>
+                  <HintButton onClick={() => select([note.part])}>
                     {p
                       ? String(
                           p.props.label ||
@@ -88,7 +89,7 @@ export function Notes() {
                             PARTS[p.type].name,
                         )
                       : "Componente eliminado"}
-                  </button>
+                  </HintButton>
                   <time>
                     {new Date(note.created).toLocaleTimeString("es", {
                       hour: "2-digit",
@@ -107,13 +108,13 @@ export function Notes() {
                     </div>
                   ))}
                 <footer>
-                  <button
+                  <HintButton
                     disabled={project.readOnly}
                     onClick={() => setReply(note.id)}
                   >
                     Responder
-                  </button>
-                  <button
+                  </HintButton>
+                  <HintButton
                     disabled={project.readOnly}
                     onClick={() =>
                       project.setMeta(`note:${note.id}`, {
@@ -124,7 +125,7 @@ export function Notes() {
                   >
                     <Check size={12} />
                     {note.resolved ? "Reabrir" : "Resolver"}
-                  </button>
+                  </HintButton>
                 </footer>
               </article>
             );
@@ -152,13 +153,13 @@ export function Notes() {
         />
         <div>
           <small>Compartido con quienes acceden al circuito.</small>
-          <button
+          <HintButton
             className="btn sm"
             disabled={!text.trim() || project.readOnly || (!selected && !reply)}
             onClick={send}
           >
             <Send size={13} /> Publicar
-          </button>
+          </HintButton>
         </div>
       </div>
     </div>
