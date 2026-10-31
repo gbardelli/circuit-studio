@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { HintButton, PopoverPanel } from './Overlays';
-import { ArrowLeft, ArrowRight, Check, CheckCheck, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { ArrowRight, Check, CheckCheck, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 import { PARTS } from '../parts';
 import { formatSI } from '../core/units';
 import type { PartData } from '../core/types';
@@ -58,6 +58,5 @@ export function AssemblySteps() {
         <HintButton className="icon-btn" onClick={()=>navigate(frame.index+1)} aria-label="Ver paso siguiente sin confirmar" title="Ver paso siguiente sin confirmar"><ChevronRight size={16}/></HintButton>
       </div>
     </>}
-    {cursor!==null&&<HintButton className="assembly-back-start" onClick={()=>navigate(-1)}><ArrowLeft size={12}/>Inicio de la guía</HintButton>}
   </div>;
 }

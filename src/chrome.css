@@ -100,7 +100,7 @@
 .workbench-panel .wave-ruler { background: #111316; border-bottom-color: #ffffff07; color: #9fa7b3; }
 .workbench-panel .lab-empty strong { font-weight: 550; letter-spacing: -.02em; }
 .workbench-panel .lab-empty p { color: #a6aebb; max-width: 54ch; line-height: 1.6; }
-.assembly-guide { padding: 14px 18px 10px; gap: 12px; background: linear-gradient(160deg,#17191c,#141619 60%); }
+.assembly-guide { grid-template-rows: auto minmax(0,1fr) auto; padding: 10px 18px; gap: 8px; background: linear-gradient(160deg,#17191c,#141619 60%); }
 .assembly-guide-progress { color: #9fa8b5; }
 .assembly-guide-progress>progress { height: 2px; opacity: .8; }
 .assembly-current { grid-template-columns: 74px minmax(0,1fr); gap: 18px; }
