@@ -14,7 +14,8 @@ export const HintButton=forwardRef<HTMLButtonElement,HintButtonProps>(function H
   const id=useId(),[open,setOpen]=useState(false);
   const label=hint??title??props['aria-label'];
   if(!label)return <button {...props} ref={ref}>{children}</button>;
-  const [text,key]=label.split(' · ');
+  const shortcutLabel=label.match(/^(.*?) · ((?:Ctrl|⌘|Esc|Alt|Shift|⇧).*)$/);
+  const text=shortcutLabel?.[1]??label,key=shortcutLabel?.[2];
   return <Tooltip.Root onOpenChange={setOpen}>
     <Tooltip.Trigger render={<button {...props} ref={ref} aria-describedby={open?[props['aria-describedby'],id].filter(Boolean).join(' '):props['aria-describedby']}>{children}</button>}/>
     <Tooltip.Portal container={container}>
