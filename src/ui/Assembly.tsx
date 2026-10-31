@@ -1,6 +1,6 @@
 import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useRef, useState } from "react";
-import { Download, ImagePlus, MoreHorizontal, Printer, X, RotateCcw, ChevronDown, ListChecks, Undo2 } from 'lucide-react';
+import { ArrowLeft, Download, ImagePlus, MoreHorizontal, Printer, X, RotateCcw, ChevronDown, ListChecks, Undo2 } from 'lucide-react';
 import { useEditor, useSnapshot } from './context';
 import { useUi } from './store';
 import { csvCell, download, materials } from './lab-utils';
