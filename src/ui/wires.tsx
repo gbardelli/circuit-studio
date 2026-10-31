@@ -43,7 +43,7 @@ export function WireShape({ points, color, selected = false, hovered = false }: 
   return (
     <g pointerEvents="none">
       {(selected || hovered) && <path d={d} stroke="var(--accent)" strokeOpacity={selected ? 0.5 : 0.25} strokeWidth={6.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />}
-      <path d={d} stroke={dark ? '#000' : edge} strokeWidth={3.3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} stroke={dark ? '#68727d' : edge} strokeWidth={3.3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <path d={d} stroke={color} strokeWidth={2.3} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <path d={d} stroke="#fff" strokeOpacity={dark ? 0.12 : 0.16} strokeWidth={0.7} fill="none" strokeLinecap="round" strokeLinejoin="round" transform="translate(-0.35 -0.45)" />
       {[first, last].map((p, i) => (

@@ -33,7 +33,7 @@ export function Editor({ room, template }: { room: string; template: string | nu
       let detail: ProjectDetail | null = null;
       if (CLOUD) {
         try {
-          detail = await api<ProjectDetail>(`/api/projects/${room}`);
+          detail = await api<ProjectDetail>(`/api/projects/${room}${new URLSearchParams(location.search).has('view') ? '?view=1' : ''}`);
         } catch (e) {
           if (!cancelled) setError((e as Error).message);
           return;
@@ -86,8 +86,8 @@ export function Editor({ room, template }: { room: string; template: string | nu
           <Logo size={36} />
           <h1>No puedes abrir este circuito</h1>
           <p>{error}. Pide a quien lo creó que comparta el enlace con acceso.</p>
-          <a className="btn primary" href="/">
-            Volver a mis circuitos
+          <a className="btn primary" href={`?p=${encodeURIComponent(room)}&signin=1`}>
+            Iniciar sesión
           </a>
         </div>
       </div>
@@ -139,10 +139,10 @@ function EditorShell() {
       }
       if (mod && key === 'z' && !e.shiftKey) {
         e.preventDefault();
-        project.undo.undo();
+        if (!project.readOnly) project.undo.undo();
       } else if ((mod && key === 'z' && e.shiftKey) || (mod && key === 'y')) {
         e.preventDefault();
-        project.undo.redo();
+        if (!project.readOnly) project.undo.redo();
       } else if (mod && key === 'd') {
         e.preventDefault();
         if (ui.selection.length) ui.select(project.duplicate(ui.selection, 20, 20), []);
@@ -190,7 +190,7 @@ function EditorShell() {
   }, [shortcuts]);
 
   return (
-    <div className="app" data-panel={compactPanel ?? ''} data-lib={collapsed.library ? 'closed' : 'open'} data-insp={collapsed.inspector ? 'closed' : 'open'}>
+    <div className="app" data-panel={compactPanel ?? ''} data-lib={project.readOnly || collapsed.library ? 'closed' : 'open'} data-insp={collapsed.inspector ? 'closed' : 'open'}>
       <TopBar />
       <div className="compact-panels float" role="toolbar" aria-label="Paneles">
         <button className={`icon-btn ${compactPanel === 'library' ? 'on' : ''}`} aria-label="Componentes" aria-pressed={compactPanel === 'library'} title="Componentes" onClick={() => setCompactPanel(compactPanel === 'library' ? null : 'library')}>
@@ -200,7 +200,7 @@ function EditorShell() {
           {compactPanel === 'inspector' ? <X size={16} /> : <SlidersHorizontal size={16} />}
         </button>
       </div>
-      <Library />
+      {!project.readOnly && <Library />}
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />

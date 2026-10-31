@@ -15,9 +15,10 @@ export const WIRE_COLORS = [
 /** Color sugerido según el pin de origen: rojo para positivo, negro para tierra. */
 export function suggestWireColor(pinId: string): string {
   if (/^(GND(\.\d)?|-|tn\d+|bn\d+|COM)$/i.test(pinId)) return '#26272b';
-  if (/^(5V|3V3|VIN|\+|V\+|tp\d+|bp\d+)$/i.test(pinId)) return '#e5484d';
-  const palette = ['#2fbf71', '#3e7bfa', '#f2862e', '#f5c518', '#9b6bf2'];
-  return palette[Math.floor(Math.random() * palette.length)];
+  if (/^(5V|3V3|VCC|VDD|VIN|\+|V\+|tp\d+|bp\d+)$/i.test(pinId)) return '#e5484d';
+  if (/CLK|CLOCK|CP|OSC/i.test(pinId)) return '#f5c518';
+  if (/RESET|RST|CLR/i.test(pinId)) return '#9b6bf2';
+  return '#3e7bfa';
 }
 
 export function partBounds(p: PartData) {

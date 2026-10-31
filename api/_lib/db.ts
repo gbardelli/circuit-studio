@@ -78,3 +78,10 @@ export async function roleFor(projectId: string, user: Member): Promise<Role | n
     ON CONFLICT (project_id, user_id) DO NOTHING`;
   return role;
 }
+
+/** Anonymous links are explicitly published as view-only; edit links still require an account. */
+export async function publicViewRole(projectId: string): Promise<Role | null> {
+  await ready();
+  const [project] = await sql`SELECT link_access FROM projects WHERE id = ${projectId}`;
+  return project?.link_access === 'view' ? 'viewer' : null;
+}

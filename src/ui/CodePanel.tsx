@@ -49,7 +49,7 @@ export function BottomPanel() {
 }
 
 function CodeEditor({ partId }: { partId: string }) {
-  const { project } = useEditor();
+  const { project, detail } = useEditor();
   const host = useRef<HTMLDivElement>(null);
   const [output, setOutput] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -66,6 +66,8 @@ function CodeEditor({ partId }: { partId: string }) {
         extensions: [
           keymap.of([...yUndoManagerKeymap, indentWithTab]),
           basicSetup,
+          EditorState.readOnly.of(project.readOnly),
+          EditorView.editable.of(!project.readOnly),
           cpp(),
           oneDark,
           EditorView.theme({
@@ -104,7 +106,7 @@ function CodeEditor({ partId }: { partId: string }) {
   return (
     <div className="code-layout" style={{ position: 'relative' }}>
       <div className="code-host" ref={host} />
-      <button className="btn sm" onClick={verify} disabled={busy} style={{ position: 'absolute', top: 8, right: 14, zIndex: 2 }}>
+      <button className="btn sm" onClick={verify} disabled={busy || detail?.guest} style={{ position: 'absolute', top: 8, right: 14, zIndex: 2 }}>
         {busy ? <Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Check size={13} />}
         {busy ? 'Compilando' : 'Verificar'}
       </button>

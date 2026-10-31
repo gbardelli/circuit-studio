@@ -2734,3 +2734,18 @@ body.lib-dragging * {
     transition: none;
   }
 }
+
+/* Wiring information sits at the canvas edge, outside the circuit's visual hierarchy. */
+.connection-guide{position:absolute;bottom:56px;left:16px;max-width:min(600px,calc(100% - 32px));padding:10px 12px;background:#111316ed;border:1px solid #ffffff14;border-radius:7px;color:#bfc5ce;font-size:11px;pointer-events:none;z-index:5}
+.connection-guide.is-focused{pointer-events:auto;border-color:#ffffff26}
+.connection-heading{display:flex;align-items:center;gap:8px;min-width:0}
+.connection-heading strong{color:#eef0f3;font-size:12px;font-weight:550}
+.connection-heading>.icon-btn{margin-left:auto;width:22px;height:22px}
+.connection-swatch{width:16px;height:3px;border-radius:2px;box-shadow:0 0 0 1px #ffffff26;flex:none}
+.connection-ends{display:flex;align-items:baseline;gap:10px;margin-top:5px;line-height:1.5}
+.connection-ends>span{min-width:0;overflow-wrap:anywhere}
+.connection-help{display:block;color:#ced3dc}
+.connection-convention{display:block;margin-top:4px;color:#a0a7b2;font-size:10px}
+@media(max-width:700px){.connection-guide{bottom:58px;left:10px;max-width:calc(100% - 20px)}.connection-ends{flex-wrap:wrap;gap:4px 8px}.connection-convention{display:none}}
+.inspector-fields{border:0;padding:0;margin:0;min-width:0}
+.connection-legend{display:flex;gap:8px 14px;flex-wrap:wrap;margin-bottom:8px;max-width:430px}.connection-legend>span{display:flex;align-items:center;gap:6px;color:#d4d9e0;font-size:10px}.connection-legend i{display:inline-block;width:12px}

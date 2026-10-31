@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircuitBoard, Zap, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
+import { CircuitBoard, Route, Loader2, Zap, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
@@ -15,6 +15,7 @@ import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath } from './wires';
+import { ConnectionGuide, wireNet, wireCrossings } from './ConnectionGuide';
 import { buildSchematic, flagWidth, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
 
 interface PinHit {
@@ -27,7 +28,10 @@ interface PinHit {
 
 /** Último color de cable usado: el siguiente cable nace con él. Sin uso previo, se sugiere uno por el pin. */
 let lastWireColor: string | null = null;
-const nextWireColor = (pinId: string) => lastWireColor ?? suggestWireColor(pinId);
+const nextWireColor = (pinId: string) => {
+  const suggested = suggestWireColor(pinId);
+  return suggested === '#e5484d' || suggested === '#26272b' ? suggested : lastWireColor ?? suggested;
+};
 
 type Drag =
   | { kind: 'parts'; ids: string[]; start: Vec; dx: number; dy: number; moved: boolean }
@@ -70,6 +74,9 @@ export function Canvas() {
   const [hoverPin, setHoverPin] = useState<PinHit | null>(null);
   const [hoverPart, setHoverPart] = useState<string | null>(null);
   const [hoverWire, setHoverWire] = useState<string | null>(null);
+  const [organizing, setOrganizing] = useState(false);
+  const layoutWorker = useRef<Worker | null>(null);
+  useEffect(() => () => layoutWorker.current?.terminate(), []);
   const [menu, setMenu] = useState<{ x: number; y: number; part?: string; wire?: string } | null>(null);
   // Selector de pin: al soltar un cable del esquema sobre el cuerpo de un símbolo.
   const [picker, setPicker] = useState<{ x: number; y: number; part: string; at: Vec } | null>(null);
@@ -96,6 +103,9 @@ export function Canvas() {
   const boardScene = useMemo(() => (snapshot.wires.some((w) => w.sch) ? { parts: snapshot.parts, wires: snapshot.wires.filter((w) => !w.sch) } : snapshot), [snapshot]);
   const scene = useMemo(() => (sch ? { parts: sch.parts, wires: [] as WireData[] } : boardScene), [sch, boardScene]);
 
+  const focusedWire = !sch ? snapshot.wires.find(w => w.id === (hoverWire ?? wireSelection[0])) : undefined;
+  const focusedNet = focusedWire ? wireNet(focusedWire, netlist) : undefined;
+  const crossings = useMemo(() => wireCrossings(boardScene), [boardScene]);
   /** Conexiones del esquema que la protoboard aún no hace: se muestran discontinuas. */
   const pending = useMemo(() => {
     if (sch) return [];
@@ -343,6 +353,7 @@ export function Canvas() {
 
     const partId = target.closest('[data-part]')?.getAttribute('data-part') ?? null;
     const wireId = target.closest('[data-wire]')?.getAttribute('data-wire') ?? null;
+    if (project.readOnly) { select(partId ? [partId] : [], wireId ? [wireId] : []); return; }
     const pin = findPin(w, partId);
 
     if (draft) {
@@ -363,6 +374,7 @@ export function Canvas() {
       const pts = wirePoints(wire, partsById);
       const nearEnd = pin && (Math.hypot(pts[0].x - w.x, pts[0].y - w.y) < pinRadius || Math.hypot(pts[pts.length - 1].x - w.x, pts[pts.length - 1].y - w.y) < pinRadius);
       if (!nearEnd) {
+        if (project.readOnly) { select([], [wireId]); return; }
         if (e.shiftKey) select(selection, toggle(wireSelection, wireId));
         else select([], [wireId]);
         // Si se agarra un codo que ya existe, se mueve ese; arrastrar el tramo crearía otro codo al lado.
@@ -557,6 +569,7 @@ export function Canvas() {
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
+    if (project.readOnly) { e.preventDefault(); return; }
     e.preventDefault();
     const target = under(e);
     const r = svgRef.current!.getBoundingClientRect();
@@ -868,7 +881,10 @@ export function Canvas() {
 
           <g className="wires">
             {scene.wires.map((w) => (
-              <WireView key={w.id} wire={w} points={livePoints(w)} z={z} selected={wireSelection.includes(w.id)} hovered={hoverWire === w.id && !drag} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
+              <g key={w.id} opacity={focusedNet !== undefined && wireNet(w, netlist) !== focusedNet ? .16 : 1}>
+                <WireView wire={w} points={livePoints(w)} z={z} selected={!project.readOnly && wireSelection.includes(w.id)} hovered={!drag && focusedNet !== undefined && wireNet(w, netlist) === focusedNet} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
+                {!drag && !focusedWire && (crossings.get(w.id) ?? []).map((p,i) => <g key={i} pointerEvents="none"><circle cx={p.x} cy={p.y} r={3.8} fill="#101215"/><path d={p.vertical ? `M${p.x} ${p.y-4}Q${p.x+7} ${p.y} ${p.x} ${p.y+4}` : `M${p.x-4} ${p.y}Q${p.x} ${p.y-7} ${p.x+4} ${p.y}`} fill="none" stroke="#101215" strokeWidth={4.5}/><path d={p.vertical ? `M${p.x} ${p.y-4}Q${p.x+7} ${p.y} ${p.x} ${p.y+4}` : `M${p.x-4} ${p.y}Q${p.x} ${p.y-7} ${p.x+4} ${p.y}`} fill="none" stroke={w.color} strokeWidth={2.3}/></g>)}
+              </g>
             ))}
           </g>
 
@@ -998,7 +1014,21 @@ export function Canvas() {
         </div>
       )}
 
+      {!sch && <ConnectionGuide snapshot={snapshot} netlist={netlist} wire={focusedWire} onClear={() => { select([], []); setHoverWire(null); }} />}
       <div className="float toolbar-float" role="toolbar" aria-label="Herramientas">
+        {!sch && !project.readOnly && <button className="icon-btn" disabled={organizing} aria-label={organizing ? 'Ordenando conexiones' : 'Ordenar conexiones'} title="Acercar protoboards y reparar recorridos · Se puede deshacer" onClick={() => {
+          const before = project.snapshot(); setOrganizing(true);
+          const worker = new Worker(new URL('./connectionLayout.worker.ts', import.meta.url), { type: 'module' }); layoutWorker.current = worker;
+          const finish = () => { worker.terminate(); layoutWorker.current = null; setOrganizing(false); };
+          worker.onmessage = ({ data }) => {
+            finish();
+            if (data.error) { showToast(data.error); return; }
+            if (JSON.stringify(project.snapshot()) !== JSON.stringify(before)) { showToast('El circuito cambió mientras se ordenaba. Vuelve a intentarlo.'); return; }
+            project.applyConnectionLayout(data.layout); showToast('Protoboards juntas y recorridos ordenados. Puedes deshacer.', 'ok');
+          };
+          worker.onerror = () => { finish(); showToast('No se pudieron ordenar las conexiones.'); };
+          worker.postMessage(before);
+        }}>{organizing ? <Loader2 size={15} className="spin"/> : <Route size={15}/>}</button>}
         <button className={`icon-btn ${tool === 'select' ? 'on' : ''}`} onClick={() => setTool('select')} aria-label="Seleccionar" title="Seleccionar · V">
           <MousePointer2 size={15} />
         </button>
@@ -1016,7 +1046,7 @@ export function Canvas() {
             <Zap size={15} />
           </button>
         )}
-        {hasSelection && (
+        {hasSelection && !project.readOnly && (
           <>
             <span className="sep" />
             {selection.length > 0 && (

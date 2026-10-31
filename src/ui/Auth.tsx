@@ -63,7 +63,8 @@ function SessionGate({ children }: { children: ReactNode }) {
   }, [isLoaded, user, getToken]);
 
   if (loading) return null;
-  if (!isSignedIn) return <SignInScreen />;
+  const params = new URLSearchParams(location.search);
+  if (!isSignedIn && (!params.has('p') || params.has('signin'))) return <SignInScreen />;
   return <>{children}</>;
 }
 

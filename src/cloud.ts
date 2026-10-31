@@ -50,6 +50,7 @@ export interface ProjectSummary {
 }
 
 export interface ProjectDetail {
+  guest?: boolean;
   id: string;
   name: string;
   owner_id: string;

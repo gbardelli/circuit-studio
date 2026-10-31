@@ -10,7 +10,8 @@ import { useUi } from './store';
 import { HistoryIcon, HistoryPanel } from './History';
 
 export function TopBar() {
-  const { project, engine } = useEditor();
+  const { project, engine, detail } = useEditor();
+  const guest = Boolean(detail?.guest);
   const snapshot = useSnapshot();
   const peers = usePeers();
   useConnection();
@@ -32,7 +33,7 @@ export function TopBar() {
   // está listo (o en camino) y no se espera al servidor.
   const boardIds = snapshot.parts.filter((p) => PARTS[p.type].mcu).map((p) => `${p.id}:${p.type}`).join(',');
   useEffect(() => {
-    if (!boardIds) return;
+    if (!boardIds || guest) return;
     const boards = boardIds.split(',').map((s) => s.split(':') as [string, string]);
     let timer = 0;
     const warm = () => {
@@ -48,7 +49,7 @@ export function TopBar() {
       clearTimeout(timer);
       texts.forEach((t) => t.unobserve(warm));
     };
-  }, [boardIds, project]);
+  }, [boardIds, project, guest]);
   useEffect(() => {
     const t = setInterval(() => force((n) => n + 1), 400);
     return () => clearInterval(t);
@@ -87,7 +88,7 @@ export function TopBar() {
   const share = async () => {
     try {
       await navigator.clipboard.writeText(location.href);
-      showToast('Enlace copiado. Quien lo abra podrá editar contigo.', 'ok');
+      showToast('Enlace copiado.', 'ok');
     } catch {
       showToast(location.href);
     }
@@ -104,7 +105,7 @@ export function TopBar() {
           <Logo size={26} />
           <Wordmark size={15} />
         </a>
-        <PanelToggle panel="library" />
+        {!project.readOnly && <PanelToggle panel="library" />}
         <span className="crumb-sep">/</span>
         <input
           className="project-name"
@@ -118,10 +119,10 @@ export function TopBar() {
         />
         <SyncBadge state={project.connection} synced={project.synced} />
         <span className="tb-divider" />
-        <button className="icon-btn" disabled={!project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
+        <button className="icon-btn" disabled={project.readOnly || !project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
           <Undo2 size={16} />
         </button>
-        <button className="icon-btn" disabled={!project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
+        <button className="icon-btn" disabled={project.readOnly || !project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
           <Redo2 size={16} />
         </button>
       </div>
@@ -132,7 +133,7 @@ export function TopBar() {
             <Code2 size={14} /> Código
           </button>
         )}
-        <button className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting}>
+        <button className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest} title={guest ? 'Inicia sesión para simular' : undefined}>
           {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
         </button>
@@ -146,7 +147,7 @@ export function TopBar() {
 
       <div className="tb-right">
         {project.readOnly && (
-          <span className="pill" title="Puedes mirar y simular, pero no modificar el circuito">
+          <span className="pill" title="Este enlace permite explorar el circuito sin modificarlo">
             <Eye size={12} /> Solo lectura
           </span>
         )}
@@ -158,18 +159,18 @@ export function TopBar() {
           <Avatar name={`${project.user.name} (tú)`} color={project.user.color} image={project.user.image} me />
         </div>
         <div style={{ position: 'relative' }}>
-          <button className="btn sm" onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} title="Historial de versiones">
+          <button className="btn sm" disabled={guest} onClick={() => setHistoryOpen((o) => !o)} aria-expanded={historyOpen} title="Historial de versiones">
             <HistoryIcon size={14} /> Historial
           </button>
           {historyOpen && <HistoryPanel onClose={() => setHistoryOpen(false)} />}
         </div>
         <div style={{ position: 'relative' }}>
-          <button className="btn primary sm" onClick={() => (CLOUD ? setShareOpen((o) => !o) : share())} aria-expanded={shareOpen}>
+          <button className="btn primary sm" onClick={() => (CLOUD && !guest ? setShareOpen((o) => !o) : share())} aria-expanded={shareOpen}>
             <Link2 size={14} /> Compartir
           </button>
-          {shareOpen && <SharePopover onClose={() => setShareOpen(false)} onCopy={share} />}
+          {shareOpen && <SharePopover onClose={() => setShareOpen(false)} />}
         </div>
-        {CLOUD && <UserButton />}
+        {CLOUD && (guest ? <a className="btn sm" href={`?p=${project.room}&signin=1`}>Iniciar sesión</a> : <UserButton />)}
       </div>
     </header>
   );
@@ -294,14 +295,16 @@ function Avatar({ name, color, image, me = false }: { name: string; color: strin
 
 const ACCESS: { value: LinkAccess; label: string; hint: string }[] = [
   { value: 'edit', label: 'Pueden editar', hint: 'Cualquiera con cuenta y el enlace entra como editor.' },
-  { value: 'view', label: 'Pueden ver', hint: 'Con el enlace se mira y se simula, sin cambiar nada.' },
+  { value: 'view', label: 'Pueden ver', hint: 'Cualquiera con el enlace puede verlo sin cuenta. Solo lectura.' },
   { value: 'none', label: 'Restringido', hint: 'Solo quienes ya son miembros.' },
 ];
 
-function SharePopover({ onClose, onCopy }: { onClose: () => void; onCopy: () => void }) {
+function SharePopover({ onClose }: { onClose: () => void }) {
   const { project, detail } = useEditor();
   const [access, setAccess] = useState<LinkAccess>(detail?.link_access ?? 'edit');
   const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
   const owner = detail?.role === 'owner';
 
@@ -311,9 +314,27 @@ function SharePopover({ onClose, onCopy }: { onClose: () => void; onCopy: () => 
     return () => window.removeEventListener('pointerdown', close);
   }, [onClose]);
 
-  const change = (value: LinkAccess) => {
-    setAccess(value);
-    void api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: value }) });
+  const change = async (value: LinkAccess) => {
+    setBusy(true); setError(null);
+    try {
+      await api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: value }) });
+      setAccess(value);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
+  };
+  const copyView = async () => {
+    setBusy(true); setError(null);
+    try {
+      if (access !== 'view') {
+        if (!owner) throw new Error('El propietario debe activar «Pueden ver» para compartir sin cuenta.');
+        await api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: 'view' }) });
+        setAccess('view');
+      }
+      const url = new URL(location.href); url.search = new URLSearchParams({ p: project.room, view: '1' }).toString(); url.hash = '';
+      await navigator.clipboard.writeText(url.href);
+      setCopied(true); setTimeout(() => setCopied(false), 1600);
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(false); }
   };
 
   return (
@@ -332,12 +353,13 @@ function SharePopover({ onClose, onCopy }: { onClose: () => void; onCopy: () => 
       {owner && (
         <div className="segmented" role="group" aria-label="Acceso con el enlace">
           {ACCESS.map((a) => (
-            <button key={a.value} aria-pressed={access === a.value} onClick={() => change(a.value)}>
+            <button key={a.value} aria-pressed={access === a.value} disabled={busy} onClick={() => void change(a.value)}>
               {a.label}
             </button>
           ))}
         </div>
       )}
+      {error && <p role="alert" style={{ color: 'var(--red)', fontSize: 12 }}>{error}</p>}
       <ul className="share-members">
         {detail?.members.map((m) => (
           <li key={m.id}>
@@ -350,13 +372,10 @@ function SharePopover({ onClose, onCopy }: { onClose: () => void; onCopy: () => 
       <button
         className="btn accent"
         style={{ width: '100%' }}
-        onClick={() => {
-          onCopy();
-          setCopied(true);
-          setTimeout(() => setCopied(false), 1600);
-        }}
+        disabled={busy}
+        onClick={() => void copyView()}
       >
-        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : 'Copiar enlace'}
+        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : busy ? 'Preparando enlace…' : 'Copiar enlace de visualización'}
       </button>
     </div>
   );

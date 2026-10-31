@@ -32,6 +32,7 @@ const SWATCHES: Record<string, Record<string, string>> = {
 };
 
 export function Inspector() {
+  const { project } = useEditor();
   const snapshot = useSnapshot();
   const selection = useUi((s) => s.selection);
   const wireSelection = useUi((s) => s.wireSelection);
@@ -40,6 +41,7 @@ export function Inspector() {
 
   return (
     <aside className="inspector" aria-label="Propiedades">
+      <fieldset disabled={project.readOnly && parts.length + wires.length > 0} className="inspector-fields">
       {parts.length === 1 && wires.length === 0 ? (
         <PartInspector key={parts[0].id} part={parts[0]} />
       ) : parts.length === 0 && wires.length > 0 ? (
@@ -53,6 +55,7 @@ export function Inspector() {
       ) : (
         <EmptyInspector />
       )}
+      </fieldset>
     </aside>
   );
 }

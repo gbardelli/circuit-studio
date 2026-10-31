@@ -101,7 +101,7 @@ export class Project {
       const provider = this.provider;
       const refresh = async () => {
         const token = await sessionToken();
-        if (token) provider.params = { ...provider.params, token };
+        provider.params = { ...(this.readOnly ? { view: '1' } : {}), ...(token ? { token } : {}) };
       };
       void refresh().then(() => provider.connect());
       provider.on('connection-close', () => void refresh());
@@ -273,6 +273,7 @@ export class Project {
 
   sketch(partId: string): Y.Text {
     let text = this.code.get(partId);
+    if (!text && this.readOnly) return new Y.Text(DEFAULT_SKETCH);
     if (!text) {
       this.doc.transact(() => {
         text = new Y.Text(DEFAULT_SKETCH);
@@ -334,6 +335,24 @@ export class Project {
         if (m.get('y') !== mv.y) m.set('y', mv.y);
       }
     });
+  }
+
+  /** A layout is one undoable operation; connectivity, code and properties stay untouched. */
+  applyConnectionLayout(layout: CircuitSnapshot) {
+    this.undo.stopCapturing();
+    this.tx(() => {
+      for (const p of layout.parts) {
+        const m = this.parts.get(p.id);
+        if (!m) continue;
+        if (m.get('x') !== p.x) m.set('x', p.x);
+        if (m.get('y') !== p.y) m.set('y', p.y);
+      }
+      for (const w of layout.wires) {
+        const m = this.wires.get(w.id);
+        if (m && JSON.stringify(m.get('points')) !== JSON.stringify(w.points)) m.set('points', w.points);
+      }
+    });
+    this.undo.stopCapturing();
   }
 
   /** Posición de los símbolos en la vista de esquema. */
