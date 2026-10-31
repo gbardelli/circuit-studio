@@ -70,6 +70,7 @@ export function Assembly() {
       : "Extremo libre";
   };
   useEffect(() => {
+    if(wire) useUi.getState().setView('board');
     highlight(wire?.id ?? null);
     return () => highlight(null);
   }, [wire?.id, highlight]);

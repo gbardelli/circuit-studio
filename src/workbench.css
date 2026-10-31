@@ -1337,3 +1337,6 @@
   }
 }
 .assembly-intro{margin:0;color:var(--text-2);font-size:12px;line-height:1.5;max-width:100ch}
+.assembly-intro{grid-column:1/-1}.assembly-steps{grid-template-columns:155px minmax(0,1fr)}.assembly-instruction,.assembly-actions{grid-column:2;min-width:0}.assembly-actions{flex-wrap:wrap}
+@media(max-width:800px){.assembly-steps{grid-template-columns:minmax(0,1fr)}.assembly-instruction,.assembly-actions{grid-column:1}}
+.canvas-wrap.assembly-focus{padding-bottom:0}.assembly-focus .connection-guide{display:none}.assembly-focus .zoom-float{bottom:12px}

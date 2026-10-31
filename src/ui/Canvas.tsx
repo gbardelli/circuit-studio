@@ -10,7 +10,7 @@ import { CircuitOverlays } from './CircuitOverlays';
 import { magneticPosition,occupiedHoles } from './magnet';
 import { ProbeReadout } from './ProbeReadout';
 import { FrameMeter } from './FrameMeter';
-import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } from './geometry';
+import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints, endPosition } from './geometry';
 import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
@@ -48,7 +48,7 @@ interface Draft {
   color: string;
 }
 
-const MIN_ZOOM = 0.25;
+const MIN_ZOOM = 0.1;
 const MAX_ZOOM = 8;
 
 export function Canvas() {
@@ -63,6 +63,7 @@ export function Canvas() {
   const placing = useUi((s) => s.placing);
   const setPlacing = useUi((s) => s.setPlacing);
   const simRunning = useUi((s) => s.simRunning);
+  const assemblyWire = useUi((s) => s.assemblyWire);
   const openCode = useUi((s) => s.openCode);
   const tool = useUi((s) => s.tool);
   const setTool = useUi((s) => s.setTool);
@@ -310,6 +311,26 @@ export function Canvas() {
     },
     [drag, partsById, offsets, hoverPin],
   );
+
+  // Wait for the bottom panel and ResizeObserver before framing the current assembly step.
+  useEffect(() => {
+    if (!assemblyWire || sch) return;
+    const wire = wiresById.get(assemblyWire);
+    if (!wire) return;
+    let nextFrame = 0;
+    const frame = requestAnimationFrame(() => {
+      nextFrame = requestAnimationFrame(() => {
+        const svg = svgRef.current;
+        if (!svg) return;
+        const a = endPosition(wire.a, partsById), b = endPosition(wire.b, partsById);
+        const r = svg.getBoundingClientRect();
+        if (r.width < 50 || r.height < 50) return;
+        const zoom = Math.min(2, Math.max(MIN_ZOOM, Math.min(r.width / (Math.abs(a.x-b.x)+140), r.height / (Math.abs(a.y-b.y)+100))));
+        setViewport({zoom,x:r.width/2-(a.x+b.x)/2*zoom,y:r.height/2-(a.y+b.y)/2*zoom});
+      });
+    });
+    return () => { cancelAnimationFrame(frame); cancelAnimationFrame(nextFrame); };
+  }, [assemblyWire, sch, wiresById, partsById, setViewport]);
 
   // ── Puntero ────────────────────────────────────────────────────────────────
   const onPointerDown = (e: React.PointerEvent) => {
@@ -824,7 +845,7 @@ export function Canvas() {
   const hasSelection = selection.length + wireSelection.length > 0;
 
   return (
-    <div className={`canvas-wrap ${!sch ? 'with-connections' : ''} ${libDrag?.over ? 'lib-target' : ''}`}>
+    <div className={`canvas-wrap ${assemblyWire && !sch ? 'assembly-focus' : ''} ${!sch ? 'with-connections' : ''} ${libDrag?.over ? 'lib-target' : ''}`}>
       <svg
         ref={svgRef}
         className={`canvas ${sch ? 'schematic' : ''} ${space || tool === 'hand' || drag?.kind === 'pan' ? 'panning' : ''} ${draft ? 'wiring' : ''} ${hoverPin && !hoverWire ? 'on-pin' : ''}`}
@@ -882,7 +903,7 @@ export function Canvas() {
           {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && p.props.label).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill="#d6dce4" stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" pointerEvents="none">{String(p.props.label)}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
-              <g key={w.id} opacity={focusedNet !== undefined && wireNet(w, netlist) !== focusedNet ? .16 : 1}>
+              <g key={w.id} opacity={assemblyWire ? w.id===assemblyWire ? 1 : .12 : focusedNet !== undefined && wireNet(w, netlist) !== focusedNet ? .16 : 1}>
                 <WireView wire={w} points={livePoints(w)} z={z} selected={!project.readOnly && wireSelection.includes(w.id)} hovered={!drag && focusedNet !== undefined && wireNet(w, netlist) === focusedNet} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
                 {!drag && !focusedWire && (crossings.get(w.id) ?? []).map((p,i) => {
                   const onBoard = scene.parts.some(part=>{if(!part.type.startsWith('breadboard'))return false;const b=partBounds(part);return p.x>b.x && p.x<b.x+b.w && p.y>b.y && p.y<b.y+b.h;});
