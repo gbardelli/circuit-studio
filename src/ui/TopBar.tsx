@@ -12,6 +12,7 @@ import { HistoryIcon, HistoryPanel } from './History';
 export function TopBar() {
   const { project, engine, detail } = useEditor();
   const guest = Boolean(detail?.guest);
+  const guiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
   const snapshot = useSnapshot();
   const peers = usePeers();
   useConnection();
@@ -105,7 +106,7 @@ export function TopBar() {
           <Logo size={26} />
           <Wordmark size={15} />
         </a>
-        {!project.readOnly && <PanelToggle panel="library" />}
+        {!guiding && !project.readOnly && <PanelToggle panel="library" />}
         <span className="crumb-sep">/</span>
         <input
           className="project-name"
@@ -119,10 +120,10 @@ export function TopBar() {
         />
         <SyncBadge state={project.connection} synced={project.synced} />
         <span className="tb-divider" />
-        <button className="icon-btn" disabled={project.readOnly || !project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
+        <button className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canUndo()} onClick={() => project.undo.undo()} aria-label="Deshacer" title="Deshacer · Ctrl Z">
           <Undo2 size={16} />
         </button>
-        <button className="icon-btn" disabled={project.readOnly || !project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
+        <button className="icon-btn" disabled={guiding || project.readOnly || !project.undo.canRedo()} onClick={() => project.undo.redo()} aria-label="Rehacer" title="Rehacer · Ctrl ⇧ Z">
           <Redo2 size={16} />
         </button>
       </div>
@@ -133,7 +134,7 @@ export function TopBar() {
             <Code2 size={14} /> Código
           </button>
         )}
-        <button className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest} title={guest ? 'Inicia sesión para simular' : undefined}>
+        <button className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guest ? 'Inicia sesión para simular' : undefined}>
           {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
         </button>
@@ -151,7 +152,7 @@ export function TopBar() {
             <Eye size={12} /> Solo lectura
           </span>
         )}
-        <PanelToggle panel="inspector" />
+        {!guiding && <PanelToggle panel="inspector" />}
         <div className="avatars" aria-label={`${peers.length + 1} personas en el circuito`}>
           {peers.slice(0, 5).map((p) => (
             <Avatar key={p.clientId} name={p.user.name} color={p.user.color} image={p.user.image} />

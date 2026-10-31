@@ -86,3 +86,16 @@ viaje completo: 9 de 1 a 4, 6 para dos tramos y 3 para uno. U16 conserva la temp
 por piso; el GIGA entrega el BCD total a U17 y muestra 0 al llegar. RESET vuelve a apagar
 el indicador. La variante `elevatorTemplate(false)` conserva el indicador por tramo
 para comprobar la lógica de los integrados sin firmware.
+
+## Guía de montaje
+
+Montaje abre una mesa vacía y presenta las placas, las piezas y luego cada cable.
+La pieza pendiente se muestra translúcida, con su orientación y las filas y columnas
+del patillaje. El índice permite revisar pasos sin confirmarlos. Las confirmaciones
+manuales se guardan como metadatos; la guía nunca modifica el circuito ni su código.
+Los visitantes de un enlace público pueden recorrerla con progreso local de sesión.
+
+Arrastra el borde superior del laboratorio para ajustar su altura. Cada sección
+recuerda su tamaño. El botón de ampliar ocupa la ventana y Esc restaura el tamaño
+anterior. Imprimir / PDF incluye el plano completo, los materiales y todos los pasos,
+aunque la vista guiada aún esté incompleta.

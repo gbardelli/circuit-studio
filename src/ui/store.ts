@@ -11,6 +11,8 @@ export interface Toast {
   tone: 'ok' | 'info';
 }
 
+export type LabPanel = 'signals'|'diagnostics'|'assembly'|'notes';
+export type AssemblyTab = 'steps'|'materials'|'photo';
 export type Tool = 'select' | 'hand';
 export type View = 'board' | 'schematic';
 
@@ -25,7 +27,18 @@ export interface LibDrag {
 export interface UiState {
   performanceVisible:boolean;
   setPerformanceVisible(on:boolean):void;
-  labPanel:'signals'|'diagnostics'|'assembly'|'notes'|null;
+  labPanel:LabPanel|null;
+  labFullscreen:boolean;
+  setLabFullscreen(on:boolean):void;
+  labSizes:Record<LabPanel,number>;
+  setLabSize(panel:LabPanel,height:number):void;
+  assemblyTab:AssemblyTab;
+  setAssemblyTab(tab:AssemblyTab):void;
+  assemblyCursor:string|null;
+  setAssemblyCursor(key:string|null):void;
+  assemblyLocalDone:Record<string,string>;
+  setAssemblyLocalDone(key:string,signature:string):void;
+  resetAssembly():void;
   setLabPanel(panel:UiState['labPanel']):void;
   commandOpen:boolean;
   setCommandOpen(open:boolean):void;
@@ -77,9 +90,22 @@ function readPanels(): UiState['collapsed'] {
   }
 }
 
+const LAB_SIZES_KEY='cs-workbench-sizes';
+function readLabSizes():Record<LabPanel,number> {
+  const defaults={signals:320,diagnostics:290,assembly:280,notes:260};
+  try {const saved=JSON.parse(localStorage.getItem(LAB_SIZES_KEY)??'{}');for(const key of Object.keys(defaults) as LabPanel[]) if(Number.isFinite(saved[key]))defaults[key]=Math.max(180,Math.min(1600,saved[key]));}catch{/* optional local preference */}
+  return defaults;
+}
+
 export const useUi = create<UiState>((set) => ({
   performanceVisible:false,setPerformanceVisible:(performanceVisible)=>set({performanceVisible}),
-  labPanel:null,setLabPanel:(labPanel)=>set(labPanel?{labPanel,codeFor:null,bottomTab:null}:{labPanel}),
+  labPanel:null,setLabPanel:(labPanel)=>set(labPanel?{labPanel,codeFor:null,bottomTab:null}:{labPanel,labFullscreen:false}),
+  labFullscreen:false,setLabFullscreen:(labFullscreen)=>set({labFullscreen}),
+  labSizes:readLabSizes(),setLabSize:(panel,height)=>set(s=>{const labSizes={...s.labSizes,[panel]:Math.max(180,Math.min(1600,height))};try{localStorage.setItem(LAB_SIZES_KEY,JSON.stringify(labSizes));}catch{/* optional local preference */}return{labSizes};}),
+  assemblyTab:'steps',setAssemblyTab:(assemblyTab)=>set({assemblyTab}),
+  assemblyCursor:null,setAssemblyCursor:(assemblyCursor)=>set({assemblyCursor}),
+  assemblyLocalDone:{},setAssemblyLocalDone:(key,signature)=>set(s=>({assemblyLocalDone:{...s.assemblyLocalDone,[key]:signature}})),
+  resetAssembly:()=>set({assemblyTab:'steps',assemblyCursor:null,assemblyLocalDone:{},labFullscreen:false}),
   commandOpen:false,setCommandOpen:(commandOpen)=>set({commandOpen}),
   pinnedSignal:null,pinSignal:(pinnedSignal)=>set({pinnedSignal}),
   assemblyWire:null,setAssemblyWire:(assemblyWire)=>set({assemblyWire}),
@@ -116,7 +142,7 @@ export const useUi = create<UiState>((set) => ({
   setViewport: (viewport) => set({ viewport }),
   setPlacing: (placing) => set({ placing }),
   setSim: (simRunning) => set({ simRunning }),
-  openCode: (codeFor, tab = 'code') => set({ codeFor, bottomTab: codeFor ? tab : null,...(codeFor?{labPanel:null}:{}) }),
+  openCode: (codeFor, tab = 'code') => set({ codeFor, bottomTab: codeFor ? tab : null,...(codeFor?{labPanel:null,labFullscreen:false}:{}) }),
   showToast: (text, tone = 'info') => {
     clearTimeout(toastTimer);
     set({ toast: text ? { text, tone } : null });

@@ -1,20 +1,11 @@
 import { useEffect, useRef, useState } from "react";
-import {
-  Check,
-  ChevronLeft,
-  ChevronRight,
-  Download,
-  ImagePlus,
-  Printer,
-  X,
-} from "lucide-react";
-import { useEditor, useSnapshot } from "./context";
-import { useUi } from "./store";
-import { PARTS } from "../parts";
-import { csvCell, download, materials } from "./lab-utils";
-const signature = (wire: { a: unknown; b: unknown; color: string }) =>
-  JSON.stringify([wire.a, wire.b, wire.color]);
-const powerPin = (pin = '') => /^(?:3V3|5V|VIN|VCC|VDD|VSS|GND(?:\.\d+)?|[tb][pn]\d+|\+|-)$/i.test(pin);
+import { ArrowLeft, Download, ImagePlus, MoreHorizontal, Printer, X } from 'lucide-react';
+import { useEditor, useSnapshot } from './context';
+import { useUi } from './store';
+import { csvCell, download, materials } from './lab-utils';
+import { AssemblySteps } from './AssemblySteps';
+import { assemblyEndLabel, buildAssemblyPlan, orientationText } from './assembly-plan';
+import { CircuitPreview } from './Preview';
 const escape = (s: unknown) =>
   String(s).replace(
     /[&<>"']/g,
@@ -24,83 +15,45 @@ const escape = (s: unknown) =>
       ]!,
   );
 export function Assembly() {
-  const { project } = useEditor(),
+  const { project, engine } = useEditor(),
     snapshot = useSnapshot();
-  const [tab, setTab] = useState<"steps" | "materials" | "photo">("steps"),
-    [index, setIndex] = useState(0),
-    [photo, setPhoto] = useState<string | null>(null),
-    [marks, setMarks] = useState<{ x: number; y: number }[]>([]);
-  const file = useRef<HTMLInputElement>(null),
-    highlight = useUi((s) => s.setAssemblyWire),
-    select = useUi((s) => s.select);
-  const done = (project.meta.get("assembly.done") ?? {}) as Record<
-      string,
-      string
-    >,
+  const tab=useUi(s=>s.assemblyTab),setTab=useUi(s=>s.setAssemblyTab);
+  const [photo,setPhoto]=useState<string|null>(null),[marks,setMarks]=useState<{x:number;y:number}[]>([]);
+  const file=useRef<HTMLInputElement>(null);
+  const done=(project.meta.get('assembly.done')??{}) as Record<string,string>,
     prices = (project.meta.get("assembly.prices") ?? {}) as Record<
       string,
       number
     >;
   const currency = String(project.meta.get("assembly.currency") ?? "PEN");
-  const wires = [...snapshot.wires]
-    .filter((w) => !w.sch)
-    .sort(
-      (a, b) =>
-        Number(
-          powerPin(b.a.pin) || powerPin(b.b.pin),
-        ) -
-        Number(
-          powerPin(a.a.pin) || powerPin(a.b.pin),
-        ),
-    );
-  const at = Math.min(index, Math.max(0, wires.length - 1)),
-    wire = wires[at],
-    finished = wires.filter((w) => done[w.id] === signature(w)).length,
-    rows = materials(snapshot);
-  const label = (end: { part?: string; pin?: string }) => {
-    const part = snapshot.parts.find((p) => p.id === end.part);
-    let pin = end.pin ?? '?';
-    if(part?.type.startsWith('breadboard')) {
-      const hole=pin.match(/^([a-j])(\d+)$/i),rail=pin.match(/^([tb])([pn])(\d+)$/i);
-      if(hole) pin=`fila ${hole[1].toUpperCase()}, columna ${hole[2]}`;
-      if(rail) pin=`riel ${rail[2]==='p'?'+':'−'} ${rail[1]==='t'?'superior':'inferior'}, columna ${rail[3]}`;
-    }
-    return part
-      ? `${part.props.label || PARTS[part.type].partNumber || PARTS[part.type].name} · ${pin}`
-      : "Extremo libre";
-  };
-  useEffect(() => {
-    if(wire) useUi.getState().setView('board');
-    highlight(wire?.id ?? null);
-    return () => highlight(null);
-  }, [wire?.id, highlight]);
+  const plan=buildAssemblyPlan(snapshot),wires=plan.steps.flatMap(step=>step.kind==='wire'?[step.wire]:[]),rows=materials(snapshot);
+  const label=(end:Parameters<typeof assemblyEndLabel>[0])=>assemblyEndLabel(end,snapshot);
+  useEffect(()=>{
+    useUi.getState().setAssemblyWire(null);
+    const resume=useUi.getState().simRunning&&!engine.lab.paused;
+    if(resume)engine.pause(true);
+    return()=>{if(resume&&useUi.getState().simRunning&&engine.lab.paused)engine.pause(false);};
+  },[engine]);
   useEffect(
     () => () => {
       if (photo) URL.revokeObjectURL(photo);
     },
     [photo],
   );
-  const print = () => {
-    const svgNode = document
-      .querySelector(".canvas-wrap svg")
-      ?.cloneNode(true) as SVGElement | undefined;
-    const defs = document.querySelector("#g-metal")?.parentElement;
-    if (svgNode && defs) svgNode.prepend(defs.cloneNode(true));
-    const originalRoot = document.querySelector(
-      ".canvas-wrap svg > g[transform]",
-    ) as SVGGElement | null;
-    const root = svgNode?.querySelector(":scope > g[transform]");
-    if (originalRoot && root && svgNode) {
-      const box = originalRoot.getBBox();
-      root.removeAttribute("transform");
-      svgNode.setAttribute(
-        "viewBox",
-        `${box.x - 20} ${box.y - 20} ${box.width + 40} ${box.height + 40}`,
-      );
-      svgNode.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    }
-    const svg = svgNode?.outerHTML ?? "";
-    const html = `<!doctype html><html><head><title>${escape(project.name)}</title><style>@page{size:A4 landscape;margin:12mm}body{font:11px Arial;color:#111}h1{font-size:24px;margin:0 0 8px}header{border-bottom:2px solid;padding:0 0 12px}table{border-collapse:collapse;width:100%;margin:16px 0}td,th{text-align:left;border-bottom:1px solid #ddd;padding:6px}svg{width:100%;height:440px;background:#101216;--accent:#499dff;--canvas:#101216;--grid-dot:#222;--text:#fff;--sch-ink:#c9d1dc;--sch-wire:#6fb4ff;--sch-soft:#7b8594;--sch-supply:#ff8f6b;--sch-frame:#999;--sch-frame-ink:#aaa;--sch-flag-fill:#162232;--sch-flag-ink:#eee}footer{border-top:1px solid;padding-top:8px}.break{break-before:page}img{max-width:90%;max-height:450px}</style></head><body><header><h1>${escape(project.name)}</h1>Circuit Studio · Plano de montaje · ${new Date().toLocaleDateString("es-PE")}<br>${snapshot.parts.length} componentes · ${wires.length} conexiones · Importes introducidos por el usuario, ${escape(currency)}</header>${svg}<footer>Revisión: ${escape(project.name)} · Verifica el patillaje y los valores antes del montaje físico.</footer><h2 class="break">Materiales</h2><table><tr><th>Componente</th><th>Referencia / valor</th><th>Cantidad</th><th>Precio unitario</th></tr>${rows.map((r) => `<tr><td>${escape(r.name)}</td><td>${escape(r.reference)}</td><td>${r.quantity}</td><td>${prices[r.key] === undefined ? "—" : escape(prices[r.key])}</td></tr>`).join("")}</table><h2>Conexiones</h2><table><tr><th>Paso</th><th>Desde</th><th>Hasta</th><th>Color</th><th>Hecho</th></tr>${wires.map((w, i) => `<tr><td>${i + 1}</td><td>${escape(label(w.a))}</td><td>${escape(label(w.b))}</td><td>${escape(w.color)}</td><td>${done[w.id] === signature(w) ? "✓" : ""}</td></tr>`).join("")}</table></body></html>`;
+  const print = async () => {
+    const {renderToStaticMarkup}=await import('react-dom/server');
+    const diagram=renderToStaticMarkup(<CircuitPreview snapshot={snapshot} labels/>);
+    const defs=document.querySelector('#g-metal')?.parentElement?.outerHTML??'';
+    const svg=diagram.replace(/(<svg[^>]*>)/,'$1'+defs);
+    const placed=(project.meta.get('assembly.parts')??{}) as Record<string,string>;
+    const steps=plan.steps.map((step,i)=>{
+      const checked=step.kind==='part'?placed[step.part.id]===step.signature:done[step.wire.id]===step.signature;
+      const instruction=step.kind==='part'
+        ? `${orientationText(step.part)} ${step.placements.map(p=>`${p.pin}: ${label({part:p.board,pin:p.hole,x:0,y:0})}`).join('; ')}`
+        : `${label(step.wire.a)} → ${label(step.wire.b)} · ${step.wire.color}`;
+      return `<tr><td>${i+1}</td><td>${step.kind==='part'?'Colocar pieza':'Conectar cable'}</td><td>${escape(step.title)}</td><td>${escape(instruction)}</td><td>${checked?'✓':''}</td></tr>`;
+    }).join('');
+    const html = `<!doctype html><html><head><title>${escape(project.name)}</title><style>@page{size:A4 landscape;margin:12mm}body{font:11px Arial;color:#111}h1{font-size:24px;margin:0 0 8px}header{border-bottom:2px solid;padding:0 0 12px}table{border-collapse:collapse;width:100%;margin:16px 0}td,th{text-align:left;border-bottom:1px solid #ddd;padding:6px}svg{width:100%;height:440px;background:#101216;--accent:#499dff;--canvas:#101216;--grid-dot:#222;--text:#fff;--sch-ink:#c9d1dc;--sch-wire:#6fb4ff;--sch-soft:#7b8594;--sch-supply:#ff8f6b;--sch-frame:#999;--sch-frame-ink:#aaa;--sch-flag-fill:#162232;--sch-flag-ink:#eee}footer{border-top:1px solid;padding-top:8px}.break{break-before:page}img{max-width:90%;max-height:450px}</style></head><body><header><h1>${escape(project.name)}</h1>Circuit Studio · Plano de montaje · ${new Date().toLocaleDateString("es-PE")}<br>${snapshot.parts.length} componentes · ${wires.length} conexiones · Importes introducidos por el usuario, ${escape(currency)}</header>${svg}<footer>Revisión: ${escape(project.name)} · Verifica el patillaje y los valores antes del montaje físico.</footer><h2 class="break">Materiales</h2><table><tr><th>Componente</th><th>Referencia / valor</th><th>Cantidad</th><th>Precio unitario</th></tr>${rows.map((r) => `<tr><td>${escape(r.name)}</td><td>${escape(r.reference)}</td><td>${r.quantity}</td><td>${prices[r.key] === undefined ? "—" : escape(prices[r.key])}</td></tr>`).join("")}</table><h2 class="break">Montaje paso a paso</h2><table><tr><th>Paso</th><th>Acción</th><th>Elemento</th><th>Indicaciones</th><th>Hecho</th></tr>${steps}</table></body></html>`;
     const iframe = document.createElement("iframe");
     iframe.style.cssText = "position:fixed;width:0;height:0;border:0";
     iframe.srcdoc = html;
@@ -113,114 +66,14 @@ export function Assembly() {
   };
   return (
     <div className="assembly-panel">
-      <div className="lab-controls">
-        <div className="segmented">
-          {(
-            [
-              ["steps", "Montaje"],
-              ["materials", "Materiales"],
-              ["photo", "Comparar foto"],
-            ] as const
-          ).map(([key, name]) => (
-            <button
-              key={key}
-              className={tab === key ? "on" : ""}
-              onClick={() => setTab(key)}
-            >
-              {name}
-            </button>
-          ))}
-        </div>
-        <span className="grow" />
-        <button className="btn ghost sm" onClick={print}>
-          <Printer size={13} /> Imprimir / PDF
-        </button>
+      <div className="assembly-toolbar">
+        {tab!=='steps'&&<button className="btn ghost sm" onClick={()=>setTab('steps')}><ArrowLeft size={13}/>Guía de montaje</button>}
+        {tab==='steps'?<button className="btn ghost sm" onClick={()=>setTab('materials')}>Materiales<span className="assembly-material-count">{rows.length}</span></button>:<strong>{tab==='materials'?'Materiales':'Comparar foto'}</strong>}
+        <span className="grow"/>
+        <button className="btn ghost sm" onClick={()=>void print()}><Printer size={13}/><span>Imprimir / PDF</span></button>
+        <details className="assembly-more"><summary aria-label="Más opciones de montaje"><MoreHorizontal size={17}/></summary><div><button onClick={e=>{setTab('photo');e.currentTarget.closest('details')?.removeAttribute('open');}}><ImagePlus size={14}/>Comparar foto</button><button onClick={e=>{useUi.getState().setAssemblyCursor(null);setTab('steps');e.currentTarget.closest('details')?.removeAttribute('open');}}>Volver al inicio de la guía</button></div></details>
       </div>
-      {tab === "steps" && (
-        <div className="assembly-steps">
-          <p className="assembly-intro">Primero coloca las piezas como en el lienzo, respetando la orientación de los integrados. Después instala cada cable y márcalo como hecho. La verificación es manual.</p>
-          <div className="assembly-progress">
-            <span>
-              {finished}
-              <small> / {wires.length}</small>
-            </span>
-            <div>
-              <strong>Conexiones verificadas</strong>
-              <progress value={finished} max={Math.max(1, wires.length)} />
-            </div>
-          </div>
-          {wire ? (
-            <>
-              <div className="assembly-instruction">
-                <small>
-                  Paso {at + 1} de {wires.length}
-                </small>
-                <strong>
-                  <i style={{ background: wire.color }} />
-                  {label(wire.a)}
-                  <ChevronRight size={18} />
-                  {label(wire.b)}
-                </strong>
-                <p>
-                  Los dos extremos están resaltados en el lienzo. Comprueba la
-                  fila, la columna y la tira interna de la protoboard.
-                </p>
-              </div>
-              <div className="assembly-actions">
-                <button
-                  className="icon-btn"
-                  aria-label="Paso anterior"
-                  disabled={!at}
-                  onClick={() => setIndex(at - 1)}
-                >
-                  <ChevronLeft size={16} />
-                </button>
-                <button
-                  className={`btn ${done[wire.id] === signature(wire) ? "assembly-complete" : ""}`}
-                  disabled={project.readOnly}
-                  onClick={() => {
-                    const next = { ...done };
-                    if (next[wire.id] === signature(wire)) delete next[wire.id];
-                    else next[wire.id] = signature(wire);
-                    project.setMeta("assembly.done", next);
-                    if (at < wires.length - 1) setIndex(at + 1);
-                  }}
-                >
-                  <Check size={15} />
-                  {done[wire.id] === signature(wire)
-                    ? "Verificado"
-                    : "Marcar como hecho"}
-                </button>
-                <button
-                  className="icon-btn"
-                  aria-label="Paso siguiente"
-                  disabled={at >= wires.length - 1}
-                  onClick={() => setIndex(at + 1)}
-                >
-                  <ChevronRight size={16} />
-                </button>
-                <button
-                  className="btn ghost sm"
-                  onClick={() => {
-                    select([], [wire.id]);
-                    useUi.getState().setView("board");
-                  }}
-                >
-                  Seleccionar cable
-                </button>
-              </div>
-            </>
-          ) : (
-            <div className="lab-empty">
-              <strong>Primero conecta el circuito.</strong>
-              <p>
-                Las conexiones físicas se convierten en pasos de montaje. Los
-                enlaces pendientes del esquema se muestran en el lienzo.
-              </p>
-            </div>
-          )}
-        </div>
-      )}
+      {tab==='steps'&&<AssemblySteps/>}
       {tab === "materials" && (
         <div className="materials-list">
           <div className="material-settings">

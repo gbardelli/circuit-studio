@@ -16,6 +16,7 @@ import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
 import { useStartupTask } from './Startup';
 import { useAutoVersions } from './History';
+import { AssemblyStage } from './AssemblyStage';
 import { WorkbenchPanel, WorkbenchRail } from './Workbench';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
@@ -74,7 +75,7 @@ export function Editor({ room, template }: { room: string; template: string | nu
       engine.dispose();
       project.destroy();
       setCtx(null);
-      useUi.getState().setSim(false);
+      useUi.getState().setSim(false);useUi.getState().resetAssembly();
       useUi.getState().pinSignal(null);useUi.getState().setAssemblyWire(null);useUi.getState().setLabPanel(null);useUi.getState().setCommandOpen(false);useUi.getState().select([]);
     };
   }
@@ -101,11 +102,13 @@ export function Editor({ room, template }: { room: string; template: string | nu
   );
 }
 
-function EditorShell() {
+export function EditorShell() {
   const { project, engine } = useEditor();
   const snapshot = useSnapshot();
   const toast = useUi((s) => s.toast);
   const compactPanel = useUi((s) => s.compactPanel);
+  const guiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
+  const labFullscreen=useUi(s=>s.labFullscreen);
   const collapsed = useUi((s) => s.collapsed);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
 
@@ -133,11 +136,13 @@ function EditorShell() {
 
   const shortcuts = useMemo(
     () => (e: KeyboardEvent) => {
+      if(e.defaultPrevented)return;
       const ui = useUi.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if(mod && key==='k'){e.preventDefault();e.stopPropagation();ui.setCommandOpen(!ui.commandOpen);return;}
-      if (isTyping(e)) return;
+      if (isTyping(e) || (e.target as Element)?.closest?.('.workbench-panel')) return;
+      if(ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps')) return;
       if (mod && (e.key === '[' || e.key === ']')) {
         e.preventDefault();
         ui.togglePanel(e.key === '[' ? 'library' : 'inspector');
@@ -196,9 +201,9 @@ function EditorShell() {
   }, [shortcuts]);
 
   return (
-    <div className="app" data-panel={compactPanel ?? ''} data-lib={project.readOnly || collapsed.library ? 'closed' : 'open'} data-insp={collapsed.inspector ? 'closed' : 'open'}>
+    <div className="app" data-panel={compactPanel ?? ''} data-lib={guiding || project.readOnly || collapsed.library ? 'closed' : 'open'} data-insp={guiding || collapsed.inspector ? 'closed' : 'open'}>
       <TopBar />
-      <div className="compact-panels float" role="toolbar" aria-label="Paneles">
+      <div className="compact-panels float" style={guiding?{display:'none'}:undefined} role="toolbar" aria-label="Paneles">
         <button className={`icon-btn ${compactPanel === 'library' ? 'on' : ''}`} aria-label="Componentes" aria-pressed={compactPanel === 'library'} title="Componentes" onClick={() => setCompactPanel(compactPanel === 'library' ? null : 'library')}>
           {compactPanel === 'library' ? <X size={16} /> : <Component size={16} />}
         </button>
@@ -210,7 +215,8 @@ function EditorShell() {
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />
-        <Canvas />
+        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}><Canvas/></div>
+        {guiding&&!labFullscreen&&<AssemblyStage/>}
         <WorkbenchPanel />
         <Suspense fallback={null}>
           <BottomPanel />

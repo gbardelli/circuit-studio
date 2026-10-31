@@ -63,6 +63,8 @@ export function Canvas() {
   const placing = useUi((s) => s.placing);
   const setPlacing = useUi((s) => s.setPlacing);
   const simRunning = useUi((s) => s.simRunning);
+  const assemblyActive=useUi(s=>s.labPanel==='assembly');
+  const assemblyGuiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
   const assemblyWire = useUi((s) => s.assemblyWire);
   const openCode = useUi((s) => s.openCode);
   const tool = useUi((s) => s.tool);
@@ -180,11 +182,11 @@ export function Canvas() {
   }, [scene, sch, partsById, setViewport]);
 
   useEffect(() => {
-    if (!fitted.current && scene.parts.length > 0) {
+    if (!fitted.current && !assemblyGuiding && scene.parts.length > 0) {
       fitted.current = true;
       requestAnimationFrame(fit);
     }
-  }, [scene, fit]);
+  }, [scene, fit, assemblyGuiding]);
 
   // Al cambiar de vista se encuadra de nuevo; un cable a medias no tiene sentido en la otra.
   useEffect(() => {
@@ -226,6 +228,8 @@ export function Canvas() {
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
+      const ui=useUi.getState();
+      if(e.defaultPrevented || ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps') || (e.target as Element)?.closest?.('.workbench-panel'))return;
       if (isTyping(e)) return;
       if (e.code === 'Space') {
         setSpace(true);
@@ -792,7 +796,7 @@ export function Canvas() {
   // rápido cuanto más corriente, y de color según su tensión (azul 0 V → rojo la más alta).
   const showFlow = useUi((s) => s.showFlow);
   const setShowFlow = useUi((s) => s.setShowFlow);
-  const flowOn = simRunning && showFlow && !sch;
+  const flowOn = !assemblyActive && simRunning && showFlow && !sch;
   const flowPaths = useRef(new Map<string, SVGPathElement>());
   const flowEdges = useMemo(() => connectionEdges(snapshot, PARTS), [snapshot]);
   useEffect(() => {
