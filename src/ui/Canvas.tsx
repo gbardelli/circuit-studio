@@ -14,7 +14,7 @@ import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints } 
 import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
-import { WireShape, roundedPath } from './wires';
+import { WireShape, roundedPath, shade } from './wires';
 import { ConnectionGuide, wireNet, wireCrossings } from './ConnectionGuide';
 import { buildSchematic, flagWidth, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
 
@@ -879,11 +879,16 @@ export function Canvas() {
             </g>
           )}
 
+          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && p.props.label).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill="#d6dce4" stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" pointerEvents="none">{String(p.props.label)}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
               <g key={w.id} opacity={focusedNet !== undefined && wireNet(w, netlist) !== focusedNet ? .16 : 1}>
                 <WireView wire={w} points={livePoints(w)} z={z} selected={!project.readOnly && wireSelection.includes(w.id)} hovered={!drag && focusedNet !== undefined && wireNet(w, netlist) === focusedNet} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
-                {!drag && !focusedWire && (crossings.get(w.id) ?? []).map((p,i) => <g key={i} pointerEvents="none"><circle cx={p.x} cy={p.y} r={3.8} fill="#101215"/><path d={p.vertical ? `M${p.x} ${p.y-4}Q${p.x+7} ${p.y} ${p.x} ${p.y+4}` : `M${p.x-4} ${p.y}Q${p.x} ${p.y-7} ${p.x+4} ${p.y}`} fill="none" stroke="#101215" strokeWidth={4.5}/><path d={p.vertical ? `M${p.x} ${p.y-4}Q${p.x+7} ${p.y} ${p.x} ${p.y+4}` : `M${p.x-4} ${p.y}Q${p.x} ${p.y-7} ${p.x+4} ${p.y}`} fill="none" stroke={w.color} strokeWidth={2.3}/></g>)}
+                {!drag && !focusedWire && (crossings.get(w.id) ?? []).map((p,i) => {
+                  const onBoard = scene.parts.some(part=>{if(!part.type.startsWith('breadboard'))return false;const b=partBounds(part);return p.x>b.x && p.x<b.x+b.w && p.y>b.y && p.y<b.y+b.h;});
+                  const d = p.vertical ? `M${p.x} ${p.y-4}V${p.y+4}` : `M${p.x-4} ${p.y}H${p.x+4}`;
+                  return <g key={i} pointerEvents="none"><path d={d} fill="none" stroke={onBoard?'#e7e8e5':'#0d0f12'} strokeWidth={6.5}/><path d={d} fill="none" stroke={shade(w.color,-.45)} strokeWidth={3.3}/><path d={d} fill="none" stroke={w.color} strokeWidth={2.3}/></g>;
+                })}
               </g>
             ))}
           </g>
@@ -1016,7 +1021,7 @@ export function Canvas() {
 
       {!sch && <ConnectionGuide snapshot={snapshot} netlist={netlist} wire={focusedWire} onClear={() => { select([], []); setHoverWire(null); }} />}
       <div className="float toolbar-float" role="toolbar" aria-label="Herramientas">
-        {!sch && !project.readOnly && <button className="icon-btn" disabled={organizing} aria-label={organizing ? 'Ordenando conexiones' : 'Ordenar conexiones'} title="Acercar protoboards y reparar recorridos · Se puede deshacer" onClick={() => {
+        {!sch && !project.readOnly && <button className="icon-btn" disabled={organizing} aria-label={organizing ? 'Ordenando conexiones' : 'Ordenar conexiones'} title="Separar etapas, colorear señales y ordenar cables · Se puede deshacer" onClick={() => {
           const before = project.snapshot(); setOrganizing(true);
           const worker = new Worker(new URL('./connectionLayout.worker.ts', import.meta.url), { type: 'module' }); layoutWorker.current = worker;
           const finish = () => { worker.terminate(); layoutWorker.current = null; setOrganizing(false); };
@@ -1024,11 +1029,11 @@ export function Canvas() {
             finish();
             if (data.error) { showToast(data.error); return; }
             if (JSON.stringify(project.snapshot()) !== JSON.stringify(before)) { showToast('El circuito cambió mientras se ordenaba. Vuelve a intentarlo.'); return; }
-            project.applyConnectionLayout(data.layout); showToast('Protoboards juntas y recorridos ordenados. Puedes deshacer.', 'ok');
+            project.applyConnectionLayout(data.layout); showToast('Etapas separadas y señales coloreadas. Puedes deshacer.', 'ok');
           };
           worker.onerror = () => { finish(); showToast('No se pudieron ordenar las conexiones.'); };
           worker.postMessage(before);
-        }}>{organizing ? <Loader2 size={15} className="spin"/> : <Route size={15}/>}</button>}
+        }}>{organizing ? <Loader2 size={15} style={{animation:'spin .8s linear infinite'}}/> : <Route size={15}/>}</button>}
         <button className={`icon-btn ${tool === 'select' ? 'on' : ''}`} onClick={() => setTool('select')} aria-label="Seleccionar" title="Seleccionar · V">
           <MousePointer2 size={15} />
         </button>

@@ -1,6 +1,7 @@
 import type { CircuitSnapshot } from "../core/types";
 import type { LabState } from "../sim/session";
 import { PARTS } from "../parts";
+import { formatSI } from '../core/units';
 export function download(name: string, text: string, type = "text/plain") {
   const url = URL.createObjectURL(new Blob([text], { type })),
     a = document.createElement("a");
@@ -47,20 +48,21 @@ export function materials(snapshot: CircuitSnapshot) {
   >();
   for (const p of snapshot.parts) {
     const def = PARTS[p.type];
-    const value = Object.entries(p.props)
+    const values = Object.entries(p.props)
       .filter(([key]) =>
         ["resistance", "capacitance", "color", "cols"].includes(key),
-      )
-      .map(([key, v]) => `${key}=${v}`)
-      .join(" · ");
-    const key = `${p.type}|${value}`;
+      );
+    const identity=values.map(([key,v])=>`${key}=${v}`).join(' · ');
+    const value = values.map(([key, v]) => key==='resistance' ? formatSI(Number(v),'Ω') : key==='capacitance' ? formatSI(Number(v),'F') : key==='cols' ? `${v} columnas` : String(v)).join(' · ');
+    const reference=typeof p.props.partNumber==='string' ? p.props.partNumber : def.partNumber;
+    const key = `${p.type}|${reference!==def.partNumber?`${reference}|`:''}${identity}`;
     const old = rows.get(key);
     if (old) old.quantity++;
     else
       rows.set(key, {
         key,
         name: def.name,
-        reference: [def.partNumber, value].filter(Boolean).join(" · "),
+        reference: [reference, value].filter(Boolean).join(" · "),
         quantity: 1,
       });
   }

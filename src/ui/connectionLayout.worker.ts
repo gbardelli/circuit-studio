@@ -1,7 +1,7 @@
 import type { CircuitSnapshot } from '../core/types';
-import { compactConnections } from './connectionLayout';
+import { readableConnections } from './readableConnections';
 
 self.onmessage = (event: MessageEvent<CircuitSnapshot>) => {
-  try { self.postMessage({ layout: compactConnections(event.data) }); }
+  try { self.postMessage({ layout: readableConnections(event.data) }); }
   catch (e) { self.postMessage({ error: (e as Error).message }); }
 };

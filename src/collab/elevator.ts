@@ -16,6 +16,7 @@
 //   4 · Display e indicadores       U14 CD4511 · display de cátodo común · LS y LB
 import { Bench, WIRE, type Ref } from './bench';
 import { ELEVATOR_GIGA } from './elevatorSketch';
+import { TRIP_OUTPUTS } from './totalCountdown';
 import type { Template } from './templates';
 
 /** Pines del GIGA (columna impar del cabezal lateral: queda de cara a las placas). */
@@ -52,10 +53,10 @@ export const NET_NAMES: Record<string, string> = {
   u17: 'SA=T_A;SB=T_B;SC=T_C;SD=T_D;SE=T_E;SF=T_F;SG=T_G',
   u18: '1Y=/CLK_1HZ;2Y=CARGA;3Y=/CARGA',
   screen: 'TX=NX_TX',
-  giga: 'D18=NX_RX',
+  giga: 'D18=NX_RX;D24=TIME0;D26=TIME1;D28=TIME2;D30=TIME3;D32=TIME_ENABLE',
 };
 
-export function elevatorTemplate(): Template {
+export function elevatorTemplate(totalCountdown = true): Template {
   const r = new Bench();
   const [B1, B2, B3, B4, B5] = ['b1', 'b2', 'b3', 'b4', 'b5'];
   r.board(B1, 0, 0, '1 · Pulsadores y codificación');
@@ -317,9 +318,9 @@ export function elevatorTemplate(): Template {
   gnd(['u17', 'VSS']);
   vcc(['u17', 'LT']);
   gnd(['u17', 'LE']);
-  r.wire(['u18', '2B'], ['u17', 'BL'], WIRE.control);
-  ['A', 'B', 'C', 'D'].forEach((pin, bit) => r.wire(['u16', `Q${bit}`], ['u17', pin], WIRE.current));
-  r.put('seg2', 'seven-segment', B5, 59, 'c', { label: 'Display · segundos al siguiente piso' });
+  r.wire(totalCountdown ? ['giga', TRIP_OUTPUTS[4]] : ['u18', '2B'], ['u17', 'BL'], WIRE.control);
+  ['A', 'B', 'C', 'D'].forEach((pin, bit) => r.wire(totalCountdown ? ['giga', TRIP_OUTPUTS[bit]] : ['u16', `Q${bit}`], ['u17', pin], WIRE.current));
+  r.put('seg2', 'seven-segment', B5, 59, 'c', { label: totalCountdown ? 'Display · segundos restantes del viaje' : 'Display · segundos al siguiente piso' });
   gnd(['seg2', 'COM2']);
   // g y e quedan en la columna del display: su resistencia lo toca sin cable.
   for (const [s, col, row] of [
@@ -371,7 +372,10 @@ export function elevatorTemplate(): Template {
   ]);
 
   // Nombres de las señales para el esquema: las etiquetas de red se leen como en el plano.
-  for (const p of r.parts) if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
+  for (const p of r.parts) {
+    if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
+    if (p.key==='u4' || p.key==='u15') p.props = {...p.props, partNumber:'TLC555'};
+  }
 
   return r.template({
     id: 'elevator-course',

@@ -47,3 +47,9 @@ Board artwork includes solder pads, plated contacts, component leads, small pass
 - [Keysight E36300 bench supplies](https://www.keysight.com/us/en/products/dc-power-supplies/bench-power-supplies/e36300-series-triple-output-power-supply-80-160w.html): recessed displays, machined knobs and binding posts.
 
 These references inform original vector artwork. They are not a claim of dimensional, electrical or manufacturer-certified replication.
+
+## Wiring readability
+
+Large physical circuits use two columns of named stages, with 220 world units between columns and 200 between board rows. The router reserves stage captions, component bodies and parallel tracks. Power, ground, cabin requests, external calls, destination, current floor, control, clock, reset, countdown, segments and UART each have a distinct family. Related bits use different tones, and one electrical net retains one color across stages. The legend sits in a reserved canvas rail.
+
+Physical remounts must preserve the complete partition of device pins into electrical nets. Display cases share a baseline and leave visible space between them. Fitting the whole circuit is an overview; tracing a named net and zooming into a stage remain available.

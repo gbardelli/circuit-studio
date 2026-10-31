@@ -2757,3 +2757,6 @@ body.lib-dragging * {
 .connection-guide.has-legend .connection-convention{display:none}
 .with-connections .zoom-float{bottom:68px}
 @media(max-width:700px){.canvas-wrap.with-connections{padding-bottom:76px}.connection-guide{height:76px;padding:8px 10px}.connection-help{font-size:10px}.connection-ends{font-size:10px;line-height:1.3}.with-connections .zoom-float{bottom:88px}}
+.connection-tones{display:flex;gap:2px;align-items:center;flex:none}.connection-legend .connection-tones i{width:6px;height:8px;box-shadow:none;border-radius:1px}.connection-legend{gap:4px 14px;line-height:12px}.connection-legend>span{flex:none}
+.canvas-wrap.with-connections{padding-bottom:68px}.connection-guide{height:68px}.with-connections .zoom-float{bottom:80px}
+@media(max-width:700px){.canvas-wrap.with-connections{padding-bottom:76px}.connection-guide{height:76px}.connection-legend{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.with-connections .zoom-float{bottom:88px}}

@@ -14,6 +14,7 @@ import { PARTS } from "../parts";
 import { csvCell, download, materials } from "./lab-utils";
 const signature = (wire: { a: unknown; b: unknown; color: string }) =>
   JSON.stringify([wire.a, wire.b, wire.color]);
+const powerPin = (pin = '') => /^(?:3V3|5V|VIN|VCC|VDD|VSS|GND(?:\.\d+)?|[tb][pn]\d+|\+|-)$/i.test(pin);
 const escape = (s: unknown) =>
   String(s).replace(
     /[&<>"']/g,
@@ -46,12 +47,10 @@ export function Assembly() {
     .sort(
       (a, b) =>
         Number(
-          /VCC|VDD|5V|GND|VSS/.test(b.a.pin ?? "") ||
-            /VCC|VDD|5V|GND|VSS/.test(b.b.pin ?? ""),
+          powerPin(b.a.pin) || powerPin(b.b.pin),
         ) -
         Number(
-          /VCC|VDD|5V|GND|VSS/.test(a.a.pin ?? "") ||
-            /VCC|VDD|5V|GND|VSS/.test(a.b.pin ?? ""),
+          powerPin(a.a.pin) || powerPin(a.b.pin),
         ),
     );
   const at = Math.min(index, Math.max(0, wires.length - 1)),
@@ -60,8 +59,14 @@ export function Assembly() {
     rows = materials(snapshot);
   const label = (end: { part?: string; pin?: string }) => {
     const part = snapshot.parts.find((p) => p.id === end.part);
+    let pin = end.pin ?? '?';
+    if(part?.type.startsWith('breadboard')) {
+      const hole=pin.match(/^([a-j])(\d+)$/i),rail=pin.match(/^([tb])([pn])(\d+)$/i);
+      if(hole) pin=`fila ${hole[1].toUpperCase()}, columna ${hole[2]}`;
+      if(rail) pin=`riel ${rail[2]==='p'?'+':'−'} ${rail[1]==='t'?'superior':'inferior'}, columna ${rail[3]}`;
+    }
     return part
-      ? `${part.props.label || PARTS[part.type].partNumber || PARTS[part.type].name} · ${end.pin}`
+      ? `${part.props.label || PARTS[part.type].partNumber || PARTS[part.type].name} · ${pin}`
       : "Extremo libre";
   };
   useEffect(() => {
@@ -132,6 +137,7 @@ export function Assembly() {
       </div>
       {tab === "steps" && (
         <div className="assembly-steps">
+          <p className="assembly-intro">Primero coloca las piezas como en el lienzo, respetando la orientación de los integrados. Después instala cada cable y márcalo como hecho. La verificación es manual.</p>
           <div className="assembly-progress">
             <span>
               {finished}

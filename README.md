@@ -28,10 +28,13 @@ El esquema permite conectar pines y simular el circuito directamente. Las conexi
 del esquema aparecen discontinuas en la protoboard hasta que se cablean físicamente.
 Ambas vistas comparten la topología y conservan posiciones independientes.
 
-«Ordenar conexiones» acerca las protoboards de una misma columna, mueve sus piezas
-insertadas y repara los recorridos diagonales. La operación se puede deshacer y se
-rechaza si cambia una conexión eléctrica. Al señalar un cable se destaca su red
-completa y se identifican sus extremos; los cruces llevan puentes visuales.
+«Ordenar conexiones» distribuye cuatro o más etapas en dos columnas, con corredores
+amplios, y mueve las piezas junto con sus protoboards. Recalcula los recorridos para
+evitar cuerpos de componentes y reserva espacio entre trazados paralelos. Los colores
+identifican familias y bits de señal; cada red mantiene el mismo color de punta a punta.
+La operación se puede deshacer y se rechaza si cambia una conexión eléctrica. Al
+señalar un cable se destaca su red completa y se identifican sus extremos; los cruces
+se distinguen con cortes de paso, sin puntos de unión.
 
 En Compartir, «Copiar enlace de visualización» activa el acceso público de solo
 lectura y copia un enlace `?p=…&view=1`. Se abre sin cuenta y sin cargar Clerk.
@@ -77,3 +80,9 @@ Los proyectos se guardan en `data/<sala>.ydoc` (escritura atómica + `.bak`).
 - Los modelos lógicos son aproximaciones educativas; no reproducen todos los parámetros de las hojas de datos.
 - ESP32, OLED e instrumentos de análisis avanzado siguen pendientes.
 - Un solo Arduino por proyecto está probado; varios funcionan pero comparten la misma ventana de tiempo.
+
+En el ascensor, el display de tiempo y la Nextion muestran los segundos restantes del
+viaje completo: 9 de 1 a 4, 6 para dos tramos y 3 para uno. U16 conserva la temporización
+por piso; el GIGA entrega el BCD total a U17 y muestra 0 al llegar. RESET vuelve a apagar
+el indicador. La variante `elevatorTemplate(false)` conserva el indicador por tramo
+para comprobar la lógica de los integrados sin firmware.

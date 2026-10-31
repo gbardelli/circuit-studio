@@ -4,6 +4,7 @@ import type { CircuitSnapshot, WireData, WireEnd, Vec } from '../core/types';
 import { PARTS } from '../parts';
 import { wirePoints } from './geometry';
 import { useEditor } from './context';
+import { namedPins, SIGNAL_FAMILIES } from './readableConnections';
 
 export function wireNet(w: WireData, nets: Netlist) {
   return w.a.part && w.a.pin ? nets.netOf.get(pinKey(w.a.part, w.a.pin)) : w.b.part && w.b.pin ? nets.netOf.get(pinKey(w.b.part, w.b.pin)) : undefined;
@@ -42,7 +43,10 @@ export function wireCrossings(snapshot: CircuitSnapshot): Map<string, (Vec & { v
 export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot: CircuitSnapshot; netlist: Netlist; wire?: WireData; onClear: () => void }) {
   const { project } = useEditor();
   const rawLegend = project.meta.get('wiring.legend');
-  const legend = (Array.isArray(rawLegend) ? rawLegend : []).filter((entry): entry is { color: string; label: string } => entry && typeof entry.color === 'string' && /^#[a-f\d]{6}$/i.test(entry.color) && typeof entry.label === 'string').slice(0, 12);
+  const configuredLegend = (Array.isArray(rawLegend) ? rawLegend : []).filter((entry): entry is { color: string; colors?: string[]; label: string } => entry && typeof entry.color === 'string' && /^#[a-f\d]{6}$/i.test(entry.color) && typeof entry.label === 'string').slice(0, 12);
+  const usedColors=new Set(snapshot.wires.map(w=>w.color));
+  const families=SIGNAL_FAMILIES.filter(f=>f.colors.some(c=>usedColors.has(c))).map(f=>({color:f.colors[0],colors:f.colors.filter(c=>usedColors.has(c)),label:f.label}));
+  const legend = families.length>=6 ? families : configuredLegend;
   const net = wire && wireNet(wire,netlist);
   const endpoint = (end: WireEnd) => {
     const part = snapshot.parts.find(p=>p.id===end.part);
@@ -59,9 +63,8 @@ export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot
       if (/^(3V3|5V|VCC|VDD)$/i.test(pin)) name='Alimentación';
     }
     for (const p of snapshot.parts) {
-      for (const named of String(p.props.nets ?? '').split(';')) {
-        const [pin,label] = named.split('=');
-        if (label && netlist.netOf.get(pinKey(p.id,pin.trim())) === net) name=label.trim();
+      for (const [pin,label] of namedPins(p)) {
+        if (label && netlist.netOf.get(pinKey(p.id,pin)) === net) name=label;
       }
     }
   }
@@ -71,7 +74,7 @@ export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot
       <div className="connection-heading"><span className="connection-swatch" style={{background:wire.color}}/><strong>{name}</strong><span>{count} {count===1?'cable':'cables'} en esta red</span><button className="icon-btn" aria-label="Dejar de seguir la conexión" onClick={onClear}><X size={13}/></button></div>
       <div className="connection-ends"><span>{endpoint(wire.a)}</span><span aria-hidden="true">→</span><span>{endpoint(wire.b)}</span></div>
     </> : <>
-      {legend.length > 0 && <div className="connection-legend">{legend.map(entry=><span key={entry.color}><i className="connection-swatch" style={{background:entry.color}}/>{entry.label}</span>)}</div>}
-      <span className="connection-help">Señala un cable para seguir su red · Los cruces no unen cables</span><span className="connection-convention">Cruce con puente = sin unión · Punto metálico = extremo insertado</span></>}
+      {legend.length > 0 && <div className="connection-legend">{legend.map(entry=><span key={entry.color}><span className="connection-tones">{(Array.isArray(entry.colors) ? entry.colors.filter(c=>typeof c==='string' && /^#[a-f\d]{6}$/i.test(c)).slice(0,8) : [entry.color]).map(color=><i key={color} className="connection-swatch" style={{background:color}}/>)}</span>{entry.label}</span>)}</div>}
+      <span className="connection-help">Señala un cable para seguir su red · Los cruces no unen cables</span><span className="connection-convention">Cruce con corte = sin unión · Punto metálico = extremo insertado</span></>}
   </aside>;
 }

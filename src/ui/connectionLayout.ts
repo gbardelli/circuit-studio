@@ -97,13 +97,29 @@ export function compactConnections(input: CircuitSnapshot): CircuitSnapshot {
 }
 
 /** Grid routing with bend, crossing and shared-track costs. Parts are obstacles, boards are not. */
-class OrthogonalRouter {
+export class OrthogonalRouter {
   private occupied = new Map<string, number>();
+  private horizontal = new Set<string>();
+  private vertical = new Set<string>();
+  private blockedCells = new Set<string>();
   private boxes: ReturnType<typeof partBounds>[];
   private bounds: { left: number; top: number; right: number; bottom: number };
-  constructor(parts: CircuitSnapshot['parts']) {
+  constructor(parts: CircuitSnapshot['parts'], private spaced = false) {
     const all = parts.map(partBounds);
-    this.boxes = parts.filter(p => !p.type.startsWith('breadboard')).map(partBounds).map(b => ({ x: b.x - 3, y: b.y - 3, w: b.w + 6, h: b.h + 6 }));
+    this.boxes = parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
+      const b = partBounds(p);
+      if (!this.spaced) return b;
+      if (/^(74hc|cd4|ne555)/.test(p.type)) return { x:b.x+3, y:b.y+5, w:b.w-6, h:b.h-10 };
+      if (p.type === 'resistor') return p.rot === 90 || p.rot === 270 ? {x:b.x+1,y:b.y+9,w:b.w-2,h:b.h-18} : {x:b.x+9,y:b.y+1,w:b.w-18,h:b.h-2};
+      if (p.type === 'led' || p.type === 'capacitor') return { ...b, h:b.h-9 };
+      return b;
+    }).map(b => ({ x: b.x - 2, y: b.y - 2, w: b.w + 4, h: b.h + 4 }));
+    if(this.spaced) for(const p of parts) if(p.type.startsWith('breadboard') && p.props.label) {
+      this.boxes.push({x:p.x,y:p.y-44,w:Math.min(partBounds(p).w,String(p.props.label).length*10+20),h:30});
+    }
+    for(const box of this.boxes) for(let x=Math.floor(box.x/5);x<=Math.ceil((box.x+box.w)/5);x++) for(let y=Math.floor(box.y/5);y<=Math.ceil((box.y+box.h)/5);y++) {
+      if(x*5>box.x && x*5<box.x+box.w && y*5>box.y && y*5<box.y+box.h) this.blockedCells.add(this.key(x,y));
+    }
     this.bounds = { left: Math.floor((Math.min(...all.map(b => b.x)) - 100) / 5), top: Math.floor((Math.min(...all.map(b => b.y)) - 80) / 5), right: Math.ceil((Math.max(...all.map(b => b.x + b.w)) + 140) / 5), bottom: Math.ceil((Math.max(...all.map(b => b.y + b.h)) + 80) / 5) };
   }
   private key(x: number, y: number) { return `${x},${y}`; }
@@ -114,13 +130,28 @@ class OrthogonalRouter {
       for (let t = 0; t <= len; t += 5) {
         const key = this.key(Math.round((a.x + (b.x - a.x) * t / (len || 1)) / 5), Math.round((a.y + (b.y - a.y) * t / (len || 1)) / 5));
         this.occupied.set(key, (this.occupied.get(key) ?? 0) + 1);
+        (Math.abs(a.y-b.y)<.01 ? this.horizontal : this.vertical).add(key);
       }
     }
   }
   route(a: Vec, b: Vec): Vec[] {
-    const start = { x: Math.round(a.x / 5), y: Math.round(a.y / 5) }, goal = { x: Math.round(b.x / 5), y: Math.round(b.y / 5) };
+    const escape = (p: Vec): Vec => {
+      if(!this.spaced) return p;
+      let pos = {x:Math.round(p.x/5)*5,y:Math.round(p.y/5)*5};
+      for(let tries=0;tries<8 && this.blockedCells.has(this.key(pos.x/5,pos.y/5));tries++) {
+        const candidates: Vec[] = [];
+        for(const box of this.boxes) if(pos.x>box.x && pos.x<box.x+box.w && pos.y>box.y && pos.y<box.y+box.h) {
+          candidates.push({x:Math.floor(box.x/5)*5,y:pos.y},{x:Math.ceil((box.x+box.w)/5)*5,y:pos.y},{x:pos.x,y:Math.floor(box.y/5)*5},{x:pos.x,y:Math.ceil((box.y+box.h)/5)*5});
+        }
+        candidates.sort((a,b)=>Math.hypot(a.x-pos.x,a.y-pos.y)-Math.hypot(b.x-pos.x,b.y-pos.y));
+        pos = candidates.find(c=>!this.blockedCells.has(this.key(c.x/5,c.y/5))) ?? candidates[0] ?? pos;
+      }
+      return pos;
+    };
+    const escapeA=escape(a), escapeB=escape(b);
+    const start = { x: Math.round(escapeA.x / 5), y: Math.round(escapeA.y / 5) }, goal = { x: Math.round(escapeB.x / 5), y: Math.round(escapeB.y / 5) };
     const endpointBoxes = this.boxes.filter(box => [a,b].some(p => p.x >= box.x && p.x <= box.x + box.w && p.y >= box.y && p.y <= box.y + box.h));
-    const blocked = (x: number, y: number) => this.boxes.some(box => !endpointBoxes.includes(box) && x * 5 > box.x && x * 5 < box.x + box.w && y * 5 > box.y && y * 5 < box.y + box.h);
+    const blocked = (x: number, y: number) => this.spaced ? this.blockedCells.has(this.key(x,y)) : this.boxes.some(box => !endpointBoxes.includes(box) && x * 5 > box.x && x * 5 < box.x + box.w && y * 5 > box.y && y * 5 < box.y + box.h);
     type Node = { x: number; y: number; dir: number; g: number; f: number; prev?: Node };
     const heap: Node[] = [], costs = new Map<string, number>();
     const push = (n: Node) => { heap.push(n); let i = heap.length - 1; while (i) { const p = (i - 1) >> 1; if (heap[p].f <= n.f) break; heap[i] = heap[p]; i = p; } heap[i] = n; };
@@ -138,7 +169,11 @@ class OrthogonalRouter {
         const x = n.x + dirs[dir][0], y = n.y + dirs[dir][1], bounds = this.bounds;
         if (x < Math.min(bounds.left, start.x, goal.x) || x > Math.max(bounds.right, start.x, goal.x) || y < Math.min(bounds.top, start.y, goal.y) || y > Math.max(bounds.bottom, start.y, goal.y) || blocked(x,y)) continue;
         const occupied = this.occupied.get(this.key(x,y)) ?? 0;
-        const g = n.g + 1 + (n.dir >= 0 && dir !== n.dir ? 5 : 0) + occupied * 8;
+        const horizontal = dir % 2 === 0, own = horizontal ? this.horizontal : this.vertical;
+        const parallel = own.has(this.key(x,y));
+        const nearby = horizontal ? own.has(this.key(x,y-1)) || own.has(this.key(x,y+1)) : own.has(this.key(x-1,y)) || own.has(this.key(x+1,y));
+        const congestion = this.spaced ? (parallel ? 55 : occupied ? 9 : nearby ? 5 : 0) : occupied*8;
+        const g = n.g + 1 + (n.dir >= 0 && dir !== n.dir ? (this.spaced ? 9 : 5) : 0) + congestion;
         const k = `${x},${y},${dir}`;
         if (g >= (costs.get(k) ?? Infinity)) continue;
         costs.set(k,g); push({ x,y,dir,g,f:g + estimate(x,y),prev:n });

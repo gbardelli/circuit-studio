@@ -1336,3 +1336,4 @@
     grid-template-rows: minmax(70px, 1fr) minmax(100px, 1fr);
   }
 }
+.assembly-intro{margin:0;color:var(--text-2);font-size:12px;line-height:1.5;max-width:100ch}

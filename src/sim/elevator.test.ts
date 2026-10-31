@@ -4,12 +4,14 @@ import { elevatorTemplate } from '../collab/elevator';
 import { templateSnapshot } from '../collab/applyTemplate';
 import { ELEVATOR_GIGA } from '../collab/elevatorSketch';
 import { SimEngine } from './engine';
+import { connectTotalCountdown } from '../collab/totalCountdown';
 
 const SEGMENTS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 const DIGITS: Record<string, number> = { bc: 1, abdeg: 2, abcdg: 3, bcfg: 4 };
 
-function fixture(hex?: string) {
-  const snapshot = templateSnapshot(elevatorTemplate());
+function fixture(hex?: string, totalCountdown = false) {
+  const original = templateSnapshot(elevatorTemplate(false));
+  const snapshot = totalCountdown ? connectTotalCountdown(original, {mcu:'giga',decoder:'u17',display:'seg2'}) : original;
   const engine = new SimEngine();
   engine.update(snapshot);
   if (hex) engine.setProgram('giga', hex);
@@ -29,7 +31,7 @@ function fixture(hex?: string) {
   const seconds = () => {
     const v = engine.getVisual('seg2');
     const on = SEGMENTS.filter((s) => Number(v?.[s] ?? 0) > 0.001).join('');
-    return on === '' ? null : ({ abcdef: 0, bc: 1, abdeg: 2, abcdg: 3 } as Record<string, number>)[on] ?? on;
+    return on === '' ? null : ({ abcdef: 0, bc: 1, abdeg: 2, abcdg: 3, bcfg:4, acdfg:5, acdefg:6, cdefg:6, abc:7, abcdefg:8, abcdfg:9, abcfg:9 } as Record<string, number>)[on] ?? on;
   };
   const down = () => bit('u13', '4Y');
   const digit = () => {
@@ -153,6 +155,30 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
 });
 
 describe.skipIf(!compilerAvailable())('ascensor con el GIGA: pantalla táctil y motor de la cabina', () => {
+  it('shows total remaining seconds from 9, 6 and 3 down to 0 without reloading between floors',async()=>{
+    const compiled=await compileSketch(ELEVATOR_GIGA,'arduino:avr:mega:cpu=atmega2560');
+    expect(compiled.ok,compiled.stderr).toBe(true);
+    const h=fixture(compiled.hex!,true);
+    try {
+      h.tick(1.5);expect(h.seconds()).toBe(null);
+      for(const [target,start] of [[4,9],[2,6],[1,3]]) {
+        h.tick(1.6);h.press(`pp${target}`);
+        h.tick(.05);
+        const changes=[h.seconds()];expect(changes[0]).toBe(start);
+        let bcd=start;
+        for(let t=0;t<13 && h.busy();t+=.1){
+          h.tick(.1);
+          const n=['A','B','C','D'].reduce((v,p,i)=>v|(h.bit('u17',p)?1<<i:0),0);
+          if(n!==bcd){bcd=n;h.tick(.05);const rendered=h.seconds();if(changes.at(-1)!==rendered)changes.push(rendered);}
+        }
+        h.tick(.3);if(changes.at(-1)!==h.seconds())changes.push(h.seconds());
+        expect(changes).toEqual(Array.from({length:start+1},(_,i)=>start-i));
+        expect(h.value('u11')).toBe(target);expect(h.busy()).toBe(false);expect(h.seconds()).toBe(0);
+        expect(String(h.engine.getVisual('screen')?.scene)).toContain('0 s');
+      }
+      h.engine.setInput('reset','pressed',true);h.tick(.3);expect(h.seconds()).toBe(null);
+    } finally {h.engine.stop();}
+  },240_000);
   it('atiende pedido tras pedido, por botones y por la pantalla, y la cabina se mueve sola', async () => {
     const compiled = await compileSketch(ELEVATOR_GIGA, 'arduino:avr:mega:cpu=atmega2560');
     expect(compiled.ok, compiled.stderr).toBe(true);

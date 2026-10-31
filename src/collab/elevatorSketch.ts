@@ -7,7 +7,7 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 //  1. Llamadas desde la pantalla táctil: pulsa la línea del piso como un botón más.
 //  2. Motor de la cabina: el ritmo lo marca la cuenta regresiva de los CI (U16, 3 s por
 //     piso). Cuando llega a 0, la cabina alcanza el siguiente piso y el GIGA activa su
-//     sensor (MANUAL: lo haces tú con el DIP SP1-SP4 cuando el display marca 0).
+//     sensor (MANUAL: activa el DIP SP1-SP4 al terminar cada tramo de 3 segundos).
 //  3. Pantalla: piso actual, destino, sentido y la cabina moviéndose por el hueco.
 //
 // Todo a 3,3 V. Llamadas y sensores en drenador abierto: INPUT suelta la línea (la sube el
@@ -21,6 +21,8 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 
 const int CALL[4]   = {23, 25, 27, 29};  // llamada de piso 1-4
 const int SENSOR[4] = {31, 33, 35, 37};  // sensor de planta 1-4
+const int TRIP_BCD[4] = {24, 26, 28, 30}; // BCD del tiempo total hacia el CD4511 U17
+const int TRIP_ENABLE = 32;              // BL de U17: muestra 0 al llegar, se apaga con RESET
 const int COUNT[2] = {39, 41};           // cuenta regresiva de U16 (Q0, Q1): 3, 2, 1, 0
 const int BUSY = 43, VALID = 45;
 const int DEST[3] = {47, 49, 51};        // destino guardado en U8 (Q0-Q2)
@@ -43,6 +45,7 @@ int dir = 0;             // +1 sube, -1 baja, 0 parada
 unsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};
 bool wasBusy = false;
 int lastCount = 3;
+int tripSeconds = 0, previousTripCount = 3;
 
 // Lo último que se dibujó: solo se envía lo que cambia
 int shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -100, shownCalls = -1, shownMode = -1;
@@ -86,7 +89,13 @@ int readDest() {
 }
 
 int readCount() {
-  return digitalRead(COUNT[0]) | (digitalRead(COUNT[1]) << 1);
+  static int candidate = 3, stable = 3;
+  static unsigned long since = 0;
+  int raw = digitalRead(COUNT[0]) | (digitalRead(COUNT[1]) << 1);
+  unsigned long now = millis();
+  if (raw != candidate) { candidate = raw; since = now; }
+  if ((unsigned long)(now - since) >= 4) stable = candidate;
+  return stable;
 }
 
 // Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.
@@ -144,7 +153,7 @@ void drawShaft(int cab, bool doors) {
   else fill(SX + SW / 2 - 1, cab + 4, 2, SLOT - 16, RULE);
 }
 
-void render(unsigned long now, bool busy, bool valid, int dest, int count) {
+void render(unsigned long now, bool busy, bool valid, int dest, int total) {
   bool doors = (long)(now - doorsUntil) < 0;
   int heading = dir != 0 ? dir : wanted(busy, valid, dest);
 
@@ -162,19 +171,17 @@ void render(unsigned long now, bool busy, bool valid, int dest, int count) {
   }
 
   int status = heading > 0 ? 1 : heading < 0 ? 2 : doors ? 3 : busy ? 4 : 0;
-  // Con el ascensor en marcha, los segundos de la cuenta regresiva acompañan al sentido.
-  int key = status * 8 + (status == 1 || status == 2 ? count : 7);
+  // Tiempo TOTAL del viaje: 3 s por tramo, de 0 a 9. No recarga al cambiar de piso.
+  int key = status * 16 + (valid ? total : 15);
   if (key != shownStatus) {
     const char* label[] = {"EN ESPERA", "SUBIENDO", "BAJANDO", "PUERTAS", "ESPERANDO"};
     unsigned color[] = {DIM, GREEN, RED, BLUE, AMBER};
-    if (status != shownStatus / 8) {
+    if (status != shownStatus / 16) {
       fill(196, 56, 110, 34, CARD);
       arrow(204, 58, status, color[status]);
     }
-    if (status == 1 || status == 2) {
-      snprintf(buf, sizeof buf, "%d s", count);
-      text(240, 58, 66, 32, 2, TEXT, CARD, 0, buf);
-    }
+    if (valid) snprintf(buf, sizeof buf, "%d s", total); else snprintf(buf, sizeof buf, "--");
+    text(240, 58, 66, 32, 2, valid ? TEXT : DIM, CARD, 0, buf);
     text(196, 92, 110, 22, 0, color[status], CARD, 0, label[status]);
     shownStatus = key;
   }
@@ -224,6 +231,8 @@ void touch(int x, int y, unsigned long now) {
 }
 
 void setup() {
+  for (int i = 0; i < 4; i++) { digitalWrite(TRIP_BCD[i], LOW); pinMode(TRIP_BCD[i], OUTPUT); }
+  digitalWrite(TRIP_ENABLE, LOW); pinMode(TRIP_ENABLE, OUTPUT);
   for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }
   pinMode(COUNT[0], INPUT); pinMode(COUNT[1], INPUT); pinMode(BUSY, INPUT); pinMode(VALID, INPUT);
   for (int i = 0; i < 3; i++) pinMode(DEST[i], INPUT);
@@ -255,11 +264,20 @@ void loop() {
 
   bool busy = digitalRead(BUSY), valid = digitalRead(VALID);
   int dest = valid ? readDest() : 0, count = readCount();
-  if (!wasBusy && busy) segStart = now;                // empieza la cuenta: la cabina sale
+  if (!wasBusy && busy) {
+    segStart = now;
+    tripSeconds = constrain(abs(dest - floorNow) * 3, 0, 9);
+    previousTripCount = count;
+  }
+  if (busy && count < previousTripCount) tripSeconds = max(0, tripSeconds - (previousTripCount - count));
+  previousTripCount = count;
+  if (!busy) tripSeconds = 0;
   if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas
   wasBusy = busy;
 
   motor(now, busy, valid, dest, count);
-  render(now, busy, valid, dest, count);
+  for (int i = 0; i < 4; i++) digitalWrite(TRIP_BCD[i], (tripSeconds >> i) & 1);
+  digitalWrite(TRIP_ENABLE, valid ? HIGH : LOW);
+  render(now, busy, valid, dest, tripSeconds);
 }
 `;

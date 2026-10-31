@@ -39,7 +39,8 @@ export function WireShape({ points, color, selected = false, hovered = false }: 
   const first = points[0];
   const last = points[points.length - 1];
   const edge = shade(color, -0.45);
-  const dark = parseInt(color.slice(1), 16) < 0x404040;
+  const rgb = parseInt(color.slice(1), 16);
+  const dark = ((rgb >> 16) & 255) * .2126 + ((rgb >> 8) & 255) * .7152 + (rgb & 255) * .0722 < 90;
   return (
     <g pointerEvents="none">
       {(selected || hovered) && <path d={d} stroke="var(--accent)" strokeOpacity={selected ? 0.5 : 0.25} strokeWidth={6.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />}

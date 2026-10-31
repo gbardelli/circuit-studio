@@ -5,7 +5,7 @@ import { partBounds, wirePoints } from './geometry';
 import { WireShape } from './wires';
 
 /** Miniatura estática de un circuito (plantillas y proyectos recientes). */
-export const CircuitPreview = memo(function CircuitPreview({ snapshot, pad = 30 }: { snapshot: CircuitSnapshot; pad?: number }) {
+export const CircuitPreview = memo(function CircuitPreview({ snapshot, pad = 30, labels = false }: { snapshot: CircuitSnapshot; pad?: number; labels?: boolean }) {
   const { box, parts } = useMemo(() => {
     const parts = new Map(snapshot.parts.map((p) => [p.id, p]));
     let x0 = Infinity;
@@ -39,6 +39,7 @@ export const CircuitPreview = memo(function CircuitPreview({ snapshot, pad = 30 
           </g>
         );
       })}
+      {labels && snapshot.parts.filter(p=>p.type.startsWith('breadboard') && p.props.label).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill="#d6dce4" stroke="#0c0e10" strokeWidth={5} paintOrder="stroke">{String(p.props.label)}</text>)}
       {snapshot.wires.map((w) => (
         <WireShape key={w.id} points={wirePoints(w, parts)} color={w.color} />
       ))}

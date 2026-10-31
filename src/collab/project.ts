@@ -349,7 +349,9 @@ export class Project {
       }
       for (const w of layout.wires) {
         const m = this.wires.get(w.id);
-        if (m && JSON.stringify(m.get('points')) !== JSON.stringify(w.points)) m.set('points', w.points);
+        if (!m) continue;
+        if (JSON.stringify(m.get('points')) !== JSON.stringify(w.points)) m.set('points', w.points);
+        if (m.get('color') !== w.color) m.set('color', w.color);
       }
     });
     this.undo.stopCapturing();
