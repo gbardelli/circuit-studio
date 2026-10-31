@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { HintButton, PopoverPanel } from './Overlays';
-import { ArrowRight, Check, CheckCheck, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
+import { ArrowRight, Check, CheckCheck, ChevronLeft, ChevronRight, RotateCcw, Undo2 } from 'lucide-react';
 import { PARTS } from '../parts';
 import { formatSI } from '../core/units';
-import type { PartData } from '../core/types';
+import type { PartData, WireEnd } from '../core/types';
 import { partBounds } from './geometry';
-import { ASSEMBLY_PHASES, assemblyEndLabel, holeLabel, orientationText, partTitle } from './assembly-plan';
+import { ASSEMBLY_PHASES, holeLabel, orientationText, partTitle } from './assembly-plan';
 import { useAssemblyGuide } from './useAssemblyGuide';
 import { useUi } from './store';
 
@@ -15,9 +15,14 @@ function PieceThumbnail({part}:{part:PartData}) {
 }
 
 export function AssemblySteps() {
-  const {project,snapshot,plan,frame,cursor,completed,firstPending,isDone,navigate,confirm}=useAssemblyGuide();
+  const {project,snapshot,plan,frame,cursor,completed,firstPending,isDone,navigate,confirm,unconfirm}=useAssemblyGuide();
   const [indexOpen,setIndexOpen]=useState(false);
   const step=frame.current,byId=new Map(snapshot.parts.map(p=>[p.id,p]));
+  const previous=plan.steps[frame.index-1];
+  const endpoint=(end:WireEnd,label:string)=>{
+    const part=byId.get(end.part??'');
+    return <div className="assembly-connection-point"><span>{label}</span><strong>{part?partTitle(part):'Extremo libre'}</strong><span className="assembly-terminal">{part?.type.startsWith('breadboard')?holeLabel(end.pin??'?'):`Pin ${end.pin??'?'}`}</span></div>;
+  };
   const phase=step&&ASSEMBLY_PHASES.find(p=>p.id===step.phase);
   const phaseSteps=step?plan.steps.filter(s=>s.phase===step.phase):[];
   const phaseIndex=step?phaseSteps.findIndex(s=>s.key===step.key)+1:0;
@@ -26,10 +31,10 @@ export function AssemblySteps() {
   return <div className="assembly-guide">
     <div className="assembly-guide-progress">
       <progress value={completed} max={plan.steps.length} aria-label={project.readOnly?'Pasos vistos':'Pasos confirmados'}/>
-      <span>{completed} de {plan.steps.length} {project.readOnly?'vistos':'confirmados'}</span>
+      <span>{completed} de {plan.steps.length} pasos {project.readOnly?'vistos':'completados'}</span>
       <PopoverPanel label="Pasos del montaje" className="ui-step-index" open={indexOpen} onOpenChange={setIndexOpen} trigger={<button className="assembly-index-trigger">Ver pasos</button>}>
         <div className="ui-menu-heading">Pasos del montaje<span>{plan.steps.length} pasos</span></div>
-        <div className="ui-step-list">{ASSEMBLY_PHASES.map(p=><div key={p.id}><strong>{p.label}</strong>{plan.steps.filter(s=>s.phase===p.id).map(s=><button key={s.key} aria-current={s.key===cursor?'step':undefined} className={s.key===cursor?'current':''} onClick={()=>{navigate(plan.steps.indexOf(s));setIndexOpen(false);}}>{isDone(s)?<Check size={13}/>:<span className="assembly-step-dot"/>}<span>{s.title}</span></button>)}</div>)}</div>
+        <div className="ui-step-list">{ASSEMBLY_PHASES.map(p=><div key={p.id}><strong>{p.label}</strong>{plan.steps.filter(s=>s.phase===p.id).map(s=><div className="assembly-index-row" key={s.key}><button aria-current={s.key===cursor?'step':undefined} className={s.key===cursor?'current':''} onClick={()=>{navigate(plan.steps.indexOf(s));setIndexOpen(false);}}>{isDone(s)?<Check size={13}/>:<span className="assembly-step-dot"/>}<span>{s.title}</span></button>{isDone(s)&&<HintButton className="assembly-index-unmark" aria-label={`Desmarcar ${s.title}`} onClick={()=>unconfirm(s)}>Desmarcar</HintButton>}</div>)}</div>)}</div>
       </PopoverPanel>
     </div>
     {cursor===null ? <div className="assembly-welcome">
@@ -42,20 +47,21 @@ export function AssemblySteps() {
       <div className="assembly-current" key={step.key}>
         <div className="assembly-current-art">{step.kind==='part'?<PieceThumbnail part={step.part}/>:<span className="assembly-cable-sample" style={{color:step.wire.color}}><span/><i/><span/></span>}</div>
         <div className="assembly-current-copy" aria-live="polite" aria-atomic="true">
-          <div className="assembly-current-meta"><span>{phase?.label} · {phaseIndex} de {phaseSteps.length}</span><span>Paso {frame.index+1} de {plan.steps.length}</span>{isDone(step)&&<span className="assembly-already-done"><Check size={12}/>{project.readOnly?'Visto':'Confirmado'}</span>}</div>
-          <h2>{step.kind==='part'?step.title:'Conecta este cable'}</h2>
+          <div className="assembly-current-meta"><span>{phase?.label} · {phaseIndex} de {phaseSteps.length}</span><span>Paso {frame.index+1} de {plan.steps.length}</span>{isDone(step)&&<span className="assembly-already-done"><Check size={12}/>{project.readOnly?'Visto':step.kind==='wire'?'Conectado':'Colocado'}</span>}</div>
+          <h2>{step.kind==='part'?step.title:'Conecta los puntos resaltados'}</h2>
           {step.kind==='part'?<>
             <p>{step.owner?`En ${partTitle(byId.get(step.owner)!)}, coloca la pieza como se indica en el lienzo.`:'Coloca la pieza en la posición señalada en el lienzo.'} {orientationText(step.part)}</p>
             <div className="assembly-placement-summary">{step.placements.slice(0,2).map(p=><span key={`${p.pin}-${p.board}`}><strong>{p.pin}</strong><ArrowRight size={12}/>{holeLabel(p.hole)}</span>)}{typeof step.part.props.resistance==='number'&&<span>{formatSI(step.part.props.resistance,'Ω')}</span>}{typeof step.part.props.capacitance==='number'&&<span>{formatSI(step.part.props.capacitance,'F')}</span>}</div>
             {step.placements.length>2&&<details className="assembly-pinout"><summary>Ver las {step.placements.length} patillas</summary><dl>{step.placements.map(p=><div key={`${p.pin}-${p.board}`}><dt>{p.pin}</dt><dd>{p.board!==step.owner?`${partTitle(byId.get(p.board)!)} · `:''}{holeLabel(p.hole)}</dd></div>)}</dl></details>}
-          </>:<div className="assembly-wire-endpoints"><div><span>Desde</span><strong>{assemblyEndLabel(step.wire.a,snapshot)}</strong></div><ArrowRight size={16}/><div><span>Hasta</span><strong>{assemblyEndLabel(step.wire.b,snapshot)}</strong></div></div>}
+          </>:<div className="assembly-wire-endpoints">{endpoint(step.wire.a,'Origen')}<ArrowRight size={18}/>{endpoint(step.wire.b,'Destino')}</div>}
         </div>
       </div>
       <div className="assembly-guide-actions">
-        <HintButton className="btn ghost sm" onClick={()=>navigate(frame.index-1)} aria-label="Paso anterior"><ChevronLeft size={15}/><span>Anterior</span></HintButton>
-        <span className="assembly-manual-note">{project.readOnly?'Vista guiada · progreso en esta sesión':'La confirmación es manual y se guarda en el proyecto.'}</span>
-        <HintButton className="btn primary" onClick={e=>{if(e.detail<2)confirm();}}>{isDone(step)?'Siguiente':project.readOnly?(step.kind==='part'?'Mostrar pieza':'Mostrar cable'):step.kind==='part'?'Pieza colocada':'Cable conectado'}<Check size={14}/></HintButton>
-        <HintButton className="icon-btn" onClick={()=>navigate(frame.index+1)} aria-label="Ver paso siguiente sin confirmar" title="Ver paso siguiente sin confirmar"><ChevronRight size={16}/></HintButton>
+        <div className="assembly-step-navigation"><HintButton className="btn ghost" onClick={()=>navigate(frame.index-1)} aria-label="Paso anterior"><ChevronLeft size={16}/>Anterior</HintButton><HintButton className="btn ghost" onClick={()=>navigate(frame.index+1)} title="Avanza sin marcar este paso como completado">Ver siguiente<ChevronRight size={16}/></HintButton></div>
+        <div className="assembly-step-completion">
+          {isDone(step)?<HintButton className="btn" onClick={()=>unconfirm(step)}><Undo2 size={15}/>Desmarcar {step.kind==='wire'?'cable':'pieza'}</HintButton>:previous&&isDone(previous)&&<HintButton className="btn ghost" onClick={()=>{unconfirm(previous);navigate(frame.index-1);}}><Undo2 size={15}/>Desmarcar anterior</HintButton>}
+          <HintButton className="btn primary" onClick={e=>{if(e.detail<2)confirm();}}>{isDone(step)?'Siguiente':project.readOnly?(step.kind==='part'?'Mostrar pieza':'Mostrar cable'):step.kind==='part'?'Pieza colocada':'Cable conectado'}{isDone(step)?<ArrowRight size={16}/>:<Check size={16}/>}</HintButton>
+        </div>
       </div>
     </>}
   </div>;

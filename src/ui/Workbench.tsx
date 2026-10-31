@@ -68,9 +68,9 @@ export function WorkbenchRail() {
     </div>
   );
 }
-export function clampPanelHeight(height:number,available:number) {
+export function clampPanelHeight(height:number,available:number,minimum=200) {
   const max=Math.max(180,available-140);
-  return Math.max(Math.min(200,max),Math.min(max,height));
+  return Math.max(Math.min(minimum,max),Math.min(max,height));
 }
 
 export function WorkbenchPanel() {
@@ -79,7 +79,8 @@ export function WorkbenchPanel() {
   const [toolbarHost,setToolbarHost]=useState<HTMLDivElement|null>(null);
   const [available,setAvailable]=useState(typeof window==='undefined'?700:window.innerHeight-100),[dragHeight,setDragHeight]=useState<number|null>(null);
   const resize=useRef<{y:number;height:number;last:number;available:number}|null>(null);
-  const height=clampPanelHeight(dragHeight??(panel?sizes[panel]:280),available);
+  const minimum=panel==='assembly'?360:200;
+  const height=clampPanelHeight(dragHeight??(panel?sizes[panel]:280),available,minimum);
   useEffect(()=>{resize.current=null;setDragHeight(null);},[panel,full]);
   useEffect(()=>{
     const parent=node.current?.closest('.workspace');if(!parent)return;
@@ -107,11 +108,11 @@ export function WorkbenchPanel() {
   },[full,setFull,panel]);
   const assemblyFull=full&&panel==='assembly'&&assemblyTab==='steps';
   return <><CommandPalette/>{panel&&<section ref={node} className={`workbench-panel workbench-flexible ${full?'is-fullscreen':''} ${resize.current?'is-resizing':''}`} data-panel={panel} role={full?'dialog':'region'} aria-modal={full||undefined} aria-label={`Panel de ${TABS.find(t=>t.id===panel)?.name}`} style={full?undefined:{height}}>
-    {!full&&<div className="workbench-resizer" role="separator" aria-label="Ajustar altura del laboratorio" aria-orientation="horizontal" aria-valuenow={Math.round(height)} aria-valuemin={180} aria-valuemax={Math.round(Math.max(180,available-140))} tabIndex={0} title="Arrastra para ajustar · Doble clic para restablecer"
-      onDoubleClick={()=>setSize(panel,panel==='signals'?320:280)}
-      onKeyDown={e=>{let value:number|undefined;if(e.key==='ArrowUp')value=height+(e.shiftKey?50:20);if(e.key==='ArrowDown')value=height-(e.shiftKey?50:20);if(e.key==='Home')value=180;if(e.key==='End')value=available-140;if(value!==undefined){e.preventDefault();e.stopPropagation();setSize(panel,clampPanelHeight(value,available));}}}
+    {!full&&<div className="workbench-resizer" role="separator" aria-label="Ajustar altura del laboratorio" aria-orientation="horizontal" aria-valuenow={Math.round(height)} aria-valuemin={Math.round(Math.min(minimum,Math.max(180,available-140)))} aria-valuemax={Math.round(Math.max(180,available-140))} tabIndex={0} title="Arrastra para ajustar · Doble clic para restablecer"
+      onDoubleClick={()=>setSize(panel,panel==='assembly'?400:panel==='signals'?320:280)}
+      onKeyDown={e=>{let value:number|undefined;if(e.key==='ArrowUp')value=height+(e.shiftKey?50:20);if(e.key==='ArrowDown')value=height-(e.shiftKey?50:20);if(e.key==='Home')value=minimum;if(e.key==='End')value=available-140;if(value!==undefined){e.preventDefault();e.stopPropagation();setSize(panel,clampPanelHeight(value,available,minimum));}}}
       onPointerDown={e=>{if(e.button!==0)return;e.preventDefault();e.currentTarget.setPointerCapture(e.pointerId);resize.current={y:e.clientY,height,last:height,available};setDragHeight(height);}}
-      onPointerMove={e=>{const r=resize.current;if(!r)return;r.last=clampPanelHeight(r.height+r.y-e.clientY,r.available);setDragHeight(r.last);}}
+      onPointerMove={e=>{const r=resize.current;if(!r)return;r.last=clampPanelHeight(r.height+r.y-e.clientY,r.available,minimum);setDragHeight(r.last);}}
       onPointerUp={e=>{if(!resize.current)return;setSize(panel,resize.current.last);resize.current=null;setDragHeight(null);if(e.currentTarget.hasPointerCapture(e.pointerId))e.currentTarget.releasePointerCapture(e.pointerId);}}
       onPointerCancel={()=>{resize.current=null;setDragHeight(null);}}><span/></div>}
     <WorkbenchToolbarTarget.Provider value={toolbarHost}><div className="workbench-heading">

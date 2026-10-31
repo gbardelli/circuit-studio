@@ -44,5 +44,6 @@ describe('progressive assembly plan',()=>{
   });
   it('bounds panel resizing while retaining usable canvas space',()=>{
     expect(clampPanelHeight(500,700)).toBe(500);expect(clampPanelHeight(900,700)).toBe(560);expect(clampPanelHeight(50,700)).toBe(200);expect(clampPanelHeight(300,250)).toBe(180);
+    expect(clampPanelHeight(280,700,320)).toBe(320);expect(clampPanelHeight(280,400,320)).toBe(260);
   });
 });

@@ -1,12 +1,13 @@
 import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Download, ImagePlus, MoreHorizontal, Printer, X } from 'lucide-react';
+import { Download, ImagePlus, MoreHorizontal, Printer, X, RotateCcw, ChevronDown, ListChecks, Undo2 } from 'lucide-react';
 import { useEditor, useSnapshot } from './context';
 import { useUi } from './store';
 import { csvCell, download, materials } from './lab-utils';
 import { AssemblySteps } from './AssemblySteps';
 import { assemblyEndLabel, buildAssemblyPlan, orientationText } from './assembly-plan';
 import { CircuitPreview } from './Preview';
+import { useAssemblyGuide } from './useAssemblyGuide';
 import { WorkbenchToolbar } from './WorkbenchToolbar';
 const escape = (s: unknown) =>
   String(s).replace(
@@ -22,6 +23,11 @@ export function Assembly() {
   const tab=useUi(s=>s.assemblyTab),setTab=useUi(s=>s.setAssemblyTab);
   const [photo,setPhoto]=useState<string|null>(null),[marks,setMarks]=useState<{x:number;y:number}[]>([]);
   const [menuOpen,setMenuOpen]=useState(false);
+  const guide=useAssemblyGuide();
+  const [progressOpen,setProgressOpen]=useState(false),[resetConfirm,setResetConfirm]=useState(false);
+  const [undoReset,setUndoReset]=useState<(()=>void)|null>(null);
+  const resetCancel=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{if(resetConfirm){const id=requestAnimationFrame(()=>resetCancel.current?.focus());return()=>cancelAnimationFrame(id);}},[resetConfirm]);
   const file=useRef<HTMLInputElement>(null);
   const done=(project.meta.get('assembly.done')??{}) as Record<string,string>,
     prices = (project.meta.get("assembly.prices") ?? {}) as Record<
@@ -70,19 +76,27 @@ export function Assembly() {
   return (
     <div className="assembly-panel">
       <WorkbenchToolbar><div className="assembly-toolbar">
-        {tab!=='steps'&&<HintButton className="btn ghost sm" onClick={()=>setTab('steps')}><ArrowLeft size={13}/>Guía de montaje</HintButton>}
-        {tab==='steps'?<HintButton className="btn ghost sm" onClick={()=>setTab('materials')}>Materiales<span className="assembly-material-count">{rows.length}</span></HintButton>:<strong>{tab==='materials'?'Materiales':'Comparar foto'}</strong>}
+        <div className="assembly-view-switcher" role="group" aria-label="Vistas del montaje"><button aria-pressed={tab==='steps'} onClick={()=>setTab('steps')}>Guía</button><button aria-pressed={tab==='materials'} onClick={()=>setTab('materials')}>Materiales<span>{rows.length}</span></button>{tab==='photo'&&<button aria-pressed="true" onClick={()=>setTab('photo')}>Comparar foto</button>}</div>
         <span className="grow"/>
+        <PopoverPanel label="Progreso del montaje" className="assembly-progress-popover" open={progressOpen} onOpenChange={value=>{setProgressOpen(value);if(!value)setResetConfirm(false);}} trigger={<HintButton className="btn ghost sm"><ListChecks size={15}/>Progreso<ChevronDown size={12}/></HintButton>}>
+          {resetConfirm?<div className="assembly-reset-confirm"><h3>¿Empezar de cero?</h3><p>Se quitarán todas las marcas de piezas y cables. El circuito, el código y los precios se conservarán.</p><div><HintButton ref={resetCancel} className="btn" onClick={()=>setResetConfirm(false)}>Cancelar</HintButton><HintButton className="btn primary" onClick={()=>{const restore=guide.resetProgress();setUndoReset(()=>restore);setTab('steps');setProgressOpen(false);setResetConfirm(false);}}>Reiniciar progreso</HintButton></div></div>:<>
+            <div className="assembly-progress-summary"><h3>Tu progreso</h3><strong>{guide.completed}<span> / {guide.plan.steps.length} pasos {project.readOnly?'vistos':'completados'}</span></strong></div>
+            <button className="assembly-progress-option" disabled={guide.firstPending<0} onClick={()=>{guide.navigate(guide.firstPending);setTab('steps');setProgressOpen(false);}}><ListChecks size={17}/><span>Continuar montaje<small>Ir al primer paso pendiente</small></span></button>
+            <button className="assembly-progress-option" onClick={()=>{guide.navigate(0);setTab('steps');setProgressOpen(false);}}><ArrowLeft size={17}/><span>Revisar desde el principio<small>Conserva los pasos completados</small></span></button>
+            <div className="ui-menu-separator"/>
+            <button className="assembly-progress-option" onClick={()=>setResetConfirm(true)}><RotateCcw size={17}/><span>Reiniciar progreso…<small>Quitar todas las marcas y volver a cero</small></span></button>
+          </>}
+        </PopoverPanel>
         <HintButton className="btn ghost sm" onClick={()=>void print()}><Printer size={13}/><span>Imprimir / PDF</span></HintButton>
         <PopoverPanel label="Opciones de montaje" className="ui-action-menu" open={menuOpen} onOpenChange={setMenuOpen} trigger={<HintButton className="icon-btn" aria-label="Más opciones de montaje"><MoreHorizontal size={17}/></HintButton>}>
           <button onClick={()=>{setTab('photo');setMenuOpen(false);}}><ImagePlus size={14}/>Comparar foto</button>
-          <div className="ui-menu-separator"/>
-          <button onClick={()=>{useUi.getState().setAssemblyCursor(null);setTab('steps');setMenuOpen(false);}}><ArrowLeft size={14}/>Volver al inicio de la guía</button>
         </PopoverPanel>
       </div></WorkbenchToolbar>
+      {undoReset&&<div className="assembly-reset-notice" role="status"><RotateCcw size={15}/>Progreso reiniciado.<HintButton className="btn ghost" onClick={()=>{undoReset();setUndoReset(null);}}><Undo2 size={14}/>Deshacer reinicio</HintButton></div>}
       {tab==='steps'&&<AssemblySteps/>}
       {tab === "materials" && (
-        <div className="materials-list">
+        <div className="materials-panel">
+          <div className="materials-summary"><div><h2>Lista de materiales</h2><p>{snapshot.parts.length} piezas · {rows.length} referencias</p></div><span>Introduce los precios de tu proveedor.</span></div>
           <div className="material-settings">
             <label>
               Moneda{" "}
@@ -99,7 +113,7 @@ export function Assembly() {
               </select>
             </label>
             <span>
-              Precios de tu proveedor; no son cotizaciones automáticas.
+              Los importes se guardan en este proyecto.
             </span>
             <HintButton
               className="btn ghost sm"
@@ -126,15 +140,15 @@ export function Assembly() {
                 )
               }
             >
-              <Download size={13} /> CSV
+              <Download size={15} /> Exportar CSV
             </HintButton>
           </div>
-          <table>
+          <div className="materials-list"><table aria-label="Lista de materiales">
             <thead>
               <tr>
                 <th>Componente</th>
                 <th>Referencia / valor</th>
-                <th>Cant.</th>
+                <th>Cantidad</th>
                 <th>Precio unitario</th>
                 <th>Subtotal</th>
               </tr>
@@ -147,7 +161,7 @@ export function Assembly() {
                   <td>{row.quantity}</td>
                   <td>
                     <input
-                      aria-label={`Precio de ${row.name}`}
+                      aria-label={`Precio unitario de ${row.name}${row.reference?` · ${row.reference}`:''}`}
                       type="number"
                       min={0}
                       step="0.01"
@@ -157,8 +171,10 @@ export function Assembly() {
                       onChange={(e) => {
                         const next = { ...prices };
                         if (e.target.value === "") delete next[row.key];
-                        else
-                          next[row.key] = Math.max(0, Number(e.target.value));
+                        else {
+                          const value=Number(e.target.value);if(!Number.isFinite(value))return;
+                          next[row.key] = Math.max(0,value);
+                        }
                         project.setMeta("assembly.prices", next);
                       }}
                     />
@@ -175,17 +191,17 @@ export function Assembly() {
               <tr>
                 <td colSpan={4}>Total de partidas con precio · {currency}</td>
                 <td>
-                  {rows
+                  {rows.some(row=>prices[row.key]!==undefined)?rows
                     .reduce(
                       (total, row) =>
                         total + (prices[row.key] ?? 0) * row.quantity,
                       0,
                     )
-                    .toFixed(2)}
+                    .toFixed(2):'—'}
                 </td>
               </tr>
             </tfoot>
-          </table>
+          </table></div>
         </div>
       )}
       {tab === "photo" && (
