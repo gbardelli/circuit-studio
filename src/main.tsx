@@ -1,4 +1,4 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { SvgDefs } from './parts/common';
 import { CLOUD } from './cloud';
@@ -12,6 +12,8 @@ import './workbench.css';
 import './chrome.css';
 
 const params = new URLSearchParams(location.search);
+const AssemblyConcept = lazy(() => import('./previews/AssemblyConcept'));
+const preview = params.get('preview') === 'assembly';
 const room = params.get('p');
 const valid = room && /^[A-Za-z0-9_-]{1,64}$/.test(room);
 // ?example=1 se mantiene por compatibilidad con enlaces antiguos.
@@ -23,7 +25,7 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <SvgDefs />
     <ErrorBoundary>
-      <Startup cloud={CLOUD}>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</Startup>
+      {preview ? <Suspense fallback={<div role="status">Cargando vista preliminar…</div>}><AssemblyConcept/></Suspense> : <Startup cloud={CLOUD}>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</Startup>}
     </ErrorBoundary>
   </StrictMode>,
 );
