@@ -66,12 +66,12 @@ export function ConnectionGuide({ snapshot, netlist, wire, onClear }: { snapshot
     }
   }
   const count = wire ? snapshot.wires.filter(w=>wireNet(w,netlist)===net).length : 0;
-  return <aside className={`connection-guide ${wire ? 'is-focused' : ''}`} aria-label="Guía de conexiones" aria-live="polite">
+  return <aside className={`connection-guide ${wire ? 'is-focused' : ''} ${legend.length ? 'has-legend' : ''}`} aria-label="Guía de conexiones" aria-live="polite">
     {wire ? <>
       <div className="connection-heading"><span className="connection-swatch" style={{background:wire.color}}/><strong>{name}</strong><span>{count} {count===1?'cable':'cables'} en esta red</span><button className="icon-btn" aria-label="Dejar de seguir la conexión" onClick={onClear}><X size={13}/></button></div>
       <div className="connection-ends"><span>{endpoint(wire.a)}</span><span aria-hidden="true">→</span><span>{endpoint(wire.b)}</span></div>
     </> : <>
       {legend.length > 0 && <div className="connection-legend">{legend.map(entry=><span key={entry.color}><i className="connection-swatch" style={{background:entry.color}}/>{entry.label}</span>)}</div>}
-      <span className="connection-help">Señala un cable para seguir su red completa</span><span className="connection-convention">Cruce con puente = sin unión · Punto metálico = extremo insertado</span></>}
+      <span className="connection-help">Señala un cable para seguir su red · Los cruces no unen cables</span><span className="connection-convention">Cruce con puente = sin unión · Punto metálico = extremo insertado</span></>}
   </aside>;
 }

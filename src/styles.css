@@ -2749,3 +2749,11 @@ body.lib-dragging * {
 @media(max-width:700px){.connection-guide{bottom:58px;left:10px;max-width:calc(100% - 20px)}.connection-ends{flex-wrap:wrap;gap:4px 8px}.connection-convention{display:none}}
 .inspector-fields{border:0;padding:0;margin:0;min-width:0}
 .connection-legend{display:flex;gap:8px 14px;flex-wrap:wrap;margin-bottom:8px;max-width:430px}.connection-legend>span{display:flex;align-items:center;gap:6px;color:#d4d9e0;font-size:10px}.connection-legend i{display:inline-block;width:12px}
+/* Reserve a rail for wiring information so it never obscures a board or a terminal. */
+.canvas-wrap.with-connections{padding-bottom:56px}
+.connection-guide{bottom:0;left:0;width:100%;max-width:none;height:56px;padding:8px 12px;border:0;border-top:1px solid #ffffff12;border-radius:0;background:var(--panel)}
+.connection-guide.is-focused{border-color:#ffffff12}
+.connection-legend{max-width:none;margin-bottom:6px}
+.connection-guide.has-legend .connection-convention{display:none}
+.with-connections .zoom-float{bottom:68px}
+@media(max-width:700px){.canvas-wrap.with-connections{padding-bottom:76px}.connection-guide{height:76px;padding:8px 10px}.connection-help{font-size:10px}.connection-ends{font-size:10px;line-height:1.3}.with-connections .zoom-float{bottom:88px}}

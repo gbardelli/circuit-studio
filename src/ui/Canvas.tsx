@@ -824,7 +824,7 @@ export function Canvas() {
   const hasSelection = selection.length + wireSelection.length > 0;
 
   return (
-    <div className={`canvas-wrap ${libDrag?.over ? 'lib-target' : ''}`}>
+    <div className={`canvas-wrap ${!sch ? 'with-connections' : ''} ${libDrag?.over ? 'lib-target' : ''}`}>
       <svg
         ref={svgRef}
         className={`canvas ${sch ? 'schematic' : ''} ${space || tool === 'hand' || drag?.kind === 'pan' ? 'panning' : ''} ${draft ? 'wiring' : ''} ${hoverPin && !hoverWire ? 'on-pin' : ''}`}

@@ -109,6 +109,12 @@ function EditorShell() {
   const collapsed = useUi((s) => s.collapsed);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
 
+  useEffect(() => {
+    if (project.readOnly && new URLSearchParams(location.search).has('view')) {
+      useUi.setState({ collapsed: { library: true, inspector: true }, compactPanel: null });
+    }
+  }, [project]);
+
   useAutoVersions(project, snapshot);
 
   // El motor sigue al documento: cambios de topología reconstruyen, cambios de valores no.
