@@ -53,7 +53,8 @@ export function materials(snapshot: CircuitSnapshot) {
         ["resistance", "capacitance", "color", "cols"].includes(key),
       );
     const identity=values.map(([key,v])=>`${key}=${v}`).join(' · ');
-    const value = values.map(([key, v]) => key==='resistance' ? formatSI(Number(v),'Ω') : key==='capacitance' ? formatSI(Number(v),'F') : key==='cols' ? `${v} columnas` : String(v)).join(' · ');
+    const colors:Record<string,string>={red:'Rojo',green:'Verde',blue:'Azul',yellow:'Amarillo',white:'Blanco',orange:'Naranja',purple:'Violeta',pink:'Rosa'};
+    const value = values.map(([key, v]) => key==='resistance' ? formatSI(Number(v),'Ω') : key==='capacitance' ? formatSI(Number(v),'F') : key==='cols' ? `${v} columnas` : key==='color' ? colors[String(v)]??String(v) : String(v)).join(' · ');
     const reference=typeof p.props.partNumber==='string' ? p.props.partNumber : def.partNumber;
     const key = `${p.type}|${reference!==def.partNumber?`${reference}|`:''}${identity}`;
     const old = rows.get(key);
@@ -66,14 +67,13 @@ export function materials(snapshot: CircuitSnapshot) {
         quantity: 1,
       });
   }
-  if (snapshot.wires.length)
+  const physicalWires = snapshot.wires.filter(wire => !wire.sch).length;
+  if (physicalWires)
     rows.set("wire", {
       key: "wire",
       name: "Cables de conexión",
       reference: "Jumper",
-      quantity: snapshot.wires.length,
+      quantity: physicalWires,
     });
   return [...rows.values()];
 }
-export const csvCell = (value: unknown) =>
-  `"${String(value).replaceAll('"', '""')}"`;

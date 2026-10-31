@@ -230,7 +230,7 @@ export function Signals() {
         </div>
         {!lab.probes.length ? (
           <div className="lab-empty">
-            <strong>Observa lo que cambia.</strong>
+            <strong>Añade señales al analizador</strong>
             <p>
               Añade una señal o fija una red desde el lienzo. Selecciona un
               flanco para inspeccionar el circuito en ese instante.

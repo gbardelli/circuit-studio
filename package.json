@@ -25,6 +25,8 @@
     "@vercel/sandbox": "^3.9.1",
     "avr8js": "^0.21.1",
     "codemirror": "^6.0.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.9",
     "lib0": "^0.2.109",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

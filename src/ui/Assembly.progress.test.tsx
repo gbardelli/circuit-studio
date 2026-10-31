@@ -7,17 +7,45 @@ import { EditorContext } from './context';
 import type { SimClient } from '../sim/client';
 import { useAssemblyGuide } from './useAssemblyGuide';
 import { useUi } from './store';
+import { AssemblySteps } from './AssemblySteps';
+import { Materials } from './Materials';
+import { materials } from './lab-utils';
 
 vi.mock('../cloud',()=>({CLOUD:false,sessionUser:()=>null,sessionToken:async()=>null,colorFor:()=> '#888'}));
+vi.mock('./Overlays',()=>({HintButton:(props:Record<string,unknown>)=><button {...props}/>,PopoverPanel:()=>null}));
 const opened:Project[]=[];let renderer:ReactTestRenderer|undefined,guide:ReturnType<typeof useAssemblyGuide>;
-function Harness(){guide=useAssemblyGuide();return <div/>;}
+function Harness({controls=false}:{controls?:boolean|'materials'}){guide=useAssemblyGuide();return controls==='materials'?<Materials exporting={false} onPdf={()=>{}}/>:controls?<AssemblySteps/>:<div/>;}
 async function open(role:'owner'|'viewer'='owner'){
   const p=new Project(crypto.randomUUID(),role);opened.push(p);await p.persistence.whenSynced;return p;
 }
-function mount(project:Project){act(()=>{renderer=create(<EditorContext.Provider value={{project,engine:{} as SimClient}}><Harness/></EditorContext.Provider>);});}
+function mount(project:Project,controls:boolean|'materials'=false){act(()=>{renderer=create(<EditorContext.Provider value={{project,engine:{} as SimClient}}><Harness controls={controls}/></EditorContext.Provider>);});}
 beforeEach(()=>{vi.stubEnv('DEV',false);vi.stubEnv('VITE_COLLAB_URL','');useUi.getState().resetAssembly();});
 afterEach(()=>{act(()=>renderer?.unmount());renderer=undefined;opened.splice(0).forEach(p=>p.destroy());vi.unstubAllEnvs();});
 describe('assembly progress persistence',()=>{
+  it('tracks purchased quantities without altering components and reopens a row when its quantity increases',async()=>{
+    const project=await open();project.addPart('led',0,0);project.addPart('led',100,0);mount(project,'materials');
+    const row=materials(project.snapshot())[0],source=structuredClone(project.snapshot());
+    const checkbox=()=>renderer!.root.findAllByType('input').find(input=>input.props['aria-label']?.startsWith('Marcar como conseguido:'))!;
+    await act(async()=>checkbox().props.onChange());
+    expect(project.meta.get('assembly.purchased')).toEqual({[row.key]:2});expect(project.snapshot()).toEqual(source);expect(checkbox().props.checked).toBe(true);
+    await act(async()=>{project.addPart('led',200,0);});expect(checkbox().props.checked).toBe(false);
+    await act(async()=>{const activate=checkbox().props.onChange;activate();activate();});expect(checkbox().props.checked).toBe(false);
+  });
+  it('keeps the visitor shopping checklist local across panel remounts',async()=>{
+    const owner=await open();owner.addPart('led',0,0);const row=materials(owner.snapshot())[0];owner.setMeta('assembly.purchased',{[row.key]:1});
+    const viewer=await open('viewer');Y.applyUpdate(viewer.doc,Y.encodeStateAsUpdate(owner.doc));const metadata=structuredClone(viewer.meta.toJSON());mount(viewer,'materials');
+    const checkbox=()=>renderer!.root.findAllByType('input').find(input=>input.props['aria-label']?.startsWith('Marcar como conseguido:'))!;
+    expect(checkbox().props.checked).toBe(false);act(()=>checkbox().props.onChange());expect(checkbox().props.checked).toBe(true);
+    act(()=>renderer!.unmount());renderer=undefined;mount(viewer,'materials');expect(checkbox().props.checked).toBe(true);expect(viewer.meta.toJSON()).toEqual(metadata);
+  });
+  it('accepts the second activation of a rapid click sequence',async()=>{
+    const project=await open();project.addPart('breadboard-full',0,0);project.addPart('led',200,100);project.addPart('resistor',300,100);
+    mount(project,true);act(()=>guide.navigate(0));
+    const primary=()=>renderer!.root.findAllByType('button').find(b=>b.props.className==='btn primary')!;
+    act(()=>primary().props.onClick({detail:1}));expect(guide.completed).toBe(1);
+    act(()=>primary().props.onClick({detail:2}));expect(guide.completed).toBe(2);
+    act(()=>primary().props.onClick({detail:0}));expect(guide.completed).toBe(3);
+  });
   it('unmarks one wire without clearing placed parts or other connections',async()=>{
     const project=await open(),board=project.addPart('breadboard-full',0,0);
     project.addWire({part:board,pin:'tp1',x:0,y:0},{part:board,pin:'bp1',x:0,y:0},[],'#e6535b');

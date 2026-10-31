@@ -102,7 +102,7 @@ export function Diagnostics() {
         {!findings.length ? (
           <div className="lab-empty">
             <Check size={21} />
-            <strong>Sin avisos en las comprobaciones disponibles.</strong>
+            <strong>Sin avisos detectados</strong>
             <p>
               {status.running
                 ? "Se revisan conexiones, umbrales, alimentación y corrientes medidas."
@@ -138,7 +138,7 @@ export function Diagnostics() {
         <div className="diagnostic-search">
           <input
             aria-label="Buscar una señal para explicar"
-            placeholder="Por qué no se activa… busca LS, Q0, OUT…"
+            placeholder="Buscar componente o pin: LS, Q0, OUT…"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -165,11 +165,9 @@ export function Diagnostics() {
           </ul>
         ) : (
           <div className="lab-empty">
-            <strong>De la salida a sus entradas.</strong>
+            <strong>Selecciona una señal</strong>
             <p>
-              Selecciona una pieza o fija una red para recorrer las conexiones
-              con sus valores medidos. Los estados secuenciales requieren
-              revisar también su historia.
+              Busca un pin o selecciónalo en el lienzo para ver sus conexiones y valores.
             </p>
           </div>
         )}

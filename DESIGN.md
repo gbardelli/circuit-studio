@@ -79,3 +79,11 @@ short vertical gradient, a brighter top edge and a short contact shadow. Sharing
 uses this secondary treatment so the current assembly confirmation keeps priority.
 Read assembly metadata at 11 px and cable endpoint names at 13 px; retain the
 complete instruction at the normal 280 px panel height.
+
+## Laboratory panels and materials
+
+Panel headers use one structural surface, with quieter controls and readable 14–16 px content. Assembly instructions put the physical terminal ahead of the board name; the decorative cable thumbnail is removed. Every native click on confirmation advances one step, including repeated clicks. The wiring legend uses 12 px labels with space reserved beneath the canvas.
+
+Materials starts as a shopping checklist. Search matches component names and references; the pending filter excludes acquired quantities. Editors save purchase quantities as project metadata, while visitors keep a project-scoped session checklist. A quantity increase makes a previously completed row pending again. Prices are optional, and missing prices remain visibly absent from the subtotal. The list has explicit expand/reduce controls and retains its state during resizing.
+
+PDF exports load jsPDF and AutoTable only on demand. Local OFL-licensed Noto Sans fonts preserve electrical symbols and Spanish accents. Materials uses portrait A4; the complete assembly guide includes a landscape circuit overview, materials and numbered instructions. Tables repeat headers, avoid splitting ordinary rows and include page numbers. No CSV export is shown in Materials.

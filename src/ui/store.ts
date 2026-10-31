@@ -37,6 +37,7 @@ export interface UiState {
   assemblyCursor:string|null;
   setAssemblyCursor(key:string|null):void;
   assemblyLocalDone:Record<string,string>;
+  assemblyLocalPurchased:Record<string,number>;
   setAssemblyLocalDone(key:string,signature:string):void;
   resetAssembly():void;
   setLabPanel(panel:UiState['labPanel']):void;
@@ -105,7 +106,8 @@ export const useUi = create<UiState>((set) => ({
   assemblyTab:'steps',setAssemblyTab:(assemblyTab)=>set({assemblyTab}),
   assemblyCursor:null,setAssemblyCursor:(assemblyCursor)=>set({assemblyCursor}),
   assemblyLocalDone:{},setAssemblyLocalDone:(key,signature)=>set(s=>({assemblyLocalDone:{...s.assemblyLocalDone,[key]:signature}})),
-  resetAssembly:()=>set({assemblyTab:'steps',assemblyCursor:null,assemblyLocalDone:{},labFullscreen:false}),
+  assemblyLocalPurchased:{},
+  resetAssembly:()=>set({assemblyTab:'steps',assemblyCursor:null,assemblyLocalDone:{},assemblyLocalPurchased:{},labFullscreen:false}),
   commandOpen:false,setCommandOpen:(commandOpen)=>set({commandOpen}),
   pinnedSignal:null,pinSignal:(pinnedSignal)=>set({pinnedSignal}),
   assemblyWire:null,setAssemblyWire:(assemblyWire)=>set({assemblyWire}),
