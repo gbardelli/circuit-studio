@@ -397,7 +397,7 @@ export function Assembly() {
                   }}
                 >
                   {i + 1}
-                  <X size={9} />
+                  <X size={16} />
                 </HintButton>
               ))}
             </div>

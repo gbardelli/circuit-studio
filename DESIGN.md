@@ -77,18 +77,26 @@ the stateful assembly body mounted when its toolbar is placed in the heading.
 Narrow windows wrap those actions into a second row. Neutral raised buttons use a
 short vertical gradient, a brighter top edge and a short contact shadow. Sharing
 uses this secondary treatment so the current assembly confirmation keeps priority.
-Read assembly metadata at 11 px and cable endpoint names at 13 px; retain the
-complete instruction at the normal 280 px panel height.
+Read assembly metadata at 13 px and terminal instructions at 18 px. The initial assembly panel is 320 px high and remains resizable.
 
 ## Laboratory panels and materials
 
-Panel headers use one structural surface, with quieter controls and readable 14–16 px content. Assembly instructions put the physical terminal ahead of the board name; the decorative cable thumbnail is removed. Every native click on confirmation advances one step, including repeated clicks. The wiring legend uses 12 px labels with space reserved beneath the canvas.
+Panel headers use one structural surface, with quieter controls and readable 14–16 px content. Assembly instructions put the physical terminal ahead of the board name; the decorative cable thumbnail is removed. Every native click on confirmation advances one step, including repeated clicks. The wiring legend uses 13 px labels. Idle and selected states share one grid cell and both contribute to its reserved height; selecting a wire must never change canvas bounds.
 
-Materials starts as a shopping checklist. Search matches component names and references; the pending filter excludes acquired quantities. Editors save purchase quantities as project metadata, while visitors keep a project-scoped session checklist. A quantity increase makes a previously completed row pending again. Prices are optional, and missing prices remain visibly absent from the subtotal. The list has explicit expand/reduce controls and retains its state during resizing.
+Materials starts as a shopping checklist. Search matches component names and references; the pending filter excludes acquired quantities. Editors save purchase quantities as project metadata, while visitors keep a project-scoped session checklist. A quantity increase makes a previously completed row pending again. Prices are optional, and missing prices remain visibly absent from the subtotal. The shared panel header exposes labelled expand/reduce controls, and the list retains its state during resizing.
 
 PDF exports load jsPDF and AutoTable only on demand. Local OFL-licensed Noto Sans fonts preserve electrical symbols and Spanish accents. Materials uses portrait A4; the complete assembly guide includes a landscape circuit overview, materials and numbered instructions. Tables repeat headers, avoid splitting ordinary rows and include page numbers. No CSV export is shown in Materials.
 
-Connection labels come from saved project metadata or actual net aliases and power pins, never a color-to-example mapping. Selecting or hovering a wire overlays details while the idle legend retains its layout space. Editors can name each wire color in Properties and rename individual breadboards; clearing a manual legend label restores automatic naming.
+Connection labels come from saved project metadata or actual net aliases and power pins, never a color-to-example mapping. Selecting or hovering a wire reveals details in the shared guide grid while the idle legend retains its layout space. Editors can name each wire color in Properties and rename individual breadboards; clearing a manual legend label restores automatic naming.
 
 Participant rows keep names on one line and expose full names on hover. Status uses an icon and uppercase text. Use the account profile photo when supplied; missing or failed photos use a neutral person icon.
 
+## Panel review contract
+
+Use `ConnectionEndpoint` for physical wire instructions and the assembly index. Label Origin and Destination, emphasize the terminal, and show the authored board name as secondary context. Do not flatten structured data into punctuation chains. Do not alter punctuation inside authored names.
+
+Panel controls have 32 px targets with 16 px glyphs, increasing to 44 px for coarse pointers. Closing and expanding share one header. Static dots may not stand in for actual status. Icons must communicate an action or state; remove decorative duplicates. Use one primary action per task and expose undo beside the task it affects.
+
+Group transport separately from waveform viewing and export. Keep the channel column wide enough to distinguish names, with full names available on hover. In diagnostics, show the finding and explanation first; expand upstream evidence on demand. In materials, separate counts with layout and keep PDF export distinct from optional costing.
+
+Verify hierarchy in actual browser screenshots, including laptop and narrow widths. Check long names, keyboard focus, repeated activation, resize/fullscreen state, and constant canvas bounds during wire hover. Do not accept a visual change merely because the build passes.

@@ -1,13 +1,6 @@
-import { HintButton } from './Overlays';
+import { HintButton } from "./Overlays";
 import { useMemo, useState } from "react";
-import {
-  Check,
-  ChevronRight,
-  Crosshair,
-  Search,
-  ShieldCheck,
-  TriangleAlert,
-} from "lucide-react";
+import { Check, ChevronRight, Crosshair, TriangleAlert } from "lucide-react";
 import { useEditor, useSimStatus, useSnapshot } from "./context";
 import {
   electricalChecks,
@@ -31,11 +24,14 @@ function EvidenceNode({ node }: { node: Evidence }) {
       </HintButton>
       <p>{node.explanation}</p>
       {node.children.length > 0 && (
-        <ul>
-          {node.children.map((child) => (
-            <EvidenceNode key={child.key} node={child} />
-          ))}
-        </ul>
+        <details className="diagnostic-evidence">
+          <summary>Ver {node.children.length} conexiones de origen</summary>
+          <ul>
+            {node.children.map((child) => (
+              <EvidenceNode key={child.key} node={child} />
+            ))}
+          </ul>
+        </details>
       )}
     </li>
   );
@@ -51,7 +47,13 @@ export function Diagnostics() {
   const [query, setQuery] = useState("");
   const normalized = diagnosticQuery(query);
   const findings = useMemo(
-    () => electricalChecks(snapshot, engine.readings(), engine.pinCurrents(),engine.pinModes()),
+    () =>
+      electricalChecks(
+        snapshot,
+        engine.readings(),
+        engine.pinCurrents(),
+        engine.pinModes(),
+      ),
     [snapshot, status],
   );
   const candidates = snapshot.parts
@@ -95,7 +97,6 @@ export function Diagnostics() {
     <div className="diagnostics-layout">
       <section className="checks-list">
         <div className="lab-section-head">
-          <ShieldCheck size={15} />
           <strong>Comprobación eléctrica</strong>
           <span>{findings.length} avisos</span>
         </div>
@@ -131,9 +132,7 @@ export function Diagnostics() {
       </section>
       <section className="signal-explanation">
         <div className="lab-section-head">
-          <Search size={15} />
           <strong>Seguir una señal</strong>
-          <span>Valores y conexiones</span>
         </div>
         <div className="diagnostic-search">
           <input
@@ -167,7 +166,8 @@ export function Diagnostics() {
           <div className="lab-empty">
             <strong>Selecciona una señal</strong>
             <p>
-              Busca un pin o selecciónalo en el lienzo para ver sus conexiones y valores.
+              Busca un pin o selecciónalo en el lienzo para ver sus conexiones y
+              valores.
             </p>
           </div>
         )}

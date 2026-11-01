@@ -93,7 +93,7 @@ function readPanels(): UiState['collapsed'] {
 
 const LAB_SIZES_KEY='cs-workbench-sizes';
 function readLabSizes():Record<LabPanel,number> {
-  const defaults={signals:320,diagnostics:290,assembly:400,notes:260};
+  const defaults={signals:320,diagnostics:290,assembly:320,notes:260};
   try {const saved=JSON.parse(localStorage.getItem(LAB_SIZES_KEY)??'{}');for(const key of Object.keys(defaults) as LabPanel[]) if(Number.isFinite(saved[key]))defaults[key]=Math.max(180,Math.min(1600,saved[key]));}catch{/* optional local preference */}
   return defaults;
 }

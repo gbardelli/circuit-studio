@@ -1,4 +1,4 @@
-import { HintButton, PopoverPanel } from './Overlays';
+import { HintButton, PopoverPanel } from "./Overlays";
 import { useEffect, useMemo, useState } from "react";
 import {
   Download,
@@ -112,108 +112,138 @@ export function Signals() {
   return (
     <div className="signals-panel">
       <div className="lab-controls">
-        <HintButton
-          className="btn sm transport-control"
-          disabled={!engine.running || lab.seeking}
-          onClick={() => engine.pause(!lab.paused)}
+        <div
+          className="signal-transport-controls"
+          role="group"
+          aria-label="Reproducción"
         >
-          {lab.paused ? <Play size={13} /> : <Pause size={13} />}{" "}
-          {lab.seeking
-            ? "Reconstruyendo…"
-            : lab.paused
-              ? "Reanudar desde aquí"
-              : "Pausar"}
-        </HintButton>
-        <HintButton
-          className="icon-btn"
-          aria-label="Flanco anterior"
-          disabled={!engine.running || !edges.length}
-          onClick={() => seekEdge(-1)}
-        >
-          <SkipBack size={14} />
-        </HintButton>
-        <HintButton
-          className="icon-btn"
-          aria-label="Flanco siguiente"
-          disabled={!engine.running || !edges.length}
-          onClick={() => seekEdge(1)}
-        >
-          <SkipForward size={14} />
-        </HintButton>
-        <span className="lab-time">
-          {lab.cursor.toFixed(4)} s <span>/ {lab.duration.toFixed(2)} s</span>
-        </span>
-        {lab.seeking ? (
-          <span className="lab-caption" role="status">
-            Reconstruyendo estado…
+          <HintButton
+            className="btn sm transport-control"
+            disabled={!engine.running || lab.seeking}
+            onClick={() => engine.pause(!lab.paused)}
+          >
+            {lab.paused ? <Play size={13} /> : <Pause size={13} />}{" "}
+            {lab.seeking
+              ? "Reconstruyendo…"
+              : lab.paused
+                ? "Reanudar desde aquí"
+                : "Pausar"}
+          </HintButton>
+          <HintButton
+            className="icon-btn panel-control"
+            aria-label="Flanco anterior"
+            disabled={!engine.running || !edges.length}
+            onClick={() => seekEdge(-1)}
+          >
+            <SkipBack size={14} />
+          </HintButton>
+          <HintButton
+            className="icon-btn panel-control"
+            aria-label="Flanco siguiente"
+            disabled={!engine.running || !edges.length}
+            onClick={() => seekEdge(1)}
+          >
+            <SkipForward size={14} />
+          </HintButton>
+          <span className="lab-time">
+            {lab.cursor.toFixed(4)} s <span>/ {lab.duration.toFixed(2)} s</span>
           </span>
-        ) : lab.paused && lab.cursor < lab.duration ? (
-          <span className="lab-caption">
-            Al reanudar se crea una nueva trayectoria.
-          </span>
-        ) : null}
-        <span className="grow" />
-        <HintButton
-          className="icon-btn"
-          aria-label="Ampliar tiempo"
-          onClick={() => setSpan((s) => Math.max(0.001, s / 2))}
-        >
-          <ZoomIn size={14} />
-        </HintButton>
-        <HintButton
-          className="icon-btn"
-          aria-label="Reducir tiempo"
-          onClick={() => setSpan((s) => Math.min(600, s * 2))}
-        >
-          <ZoomOut size={14} />
-        </HintButton>
-        <HintButton
-          className={`btn ghost sm ${offset === null ? "is-on" : ""}`}
-          onClick={() => setOffset(null)}
-        >
-          Seguir
-        </HintButton>
-        <HintButton
-          className="btn ghost sm"
-          disabled={!lab.probes.length}
-          onClick={() => download("circuit-studio.vcd", vcd(lab))}
-        >
-          <Download size={13} /> VCD
-        </HintButton>
-        <PopoverPanel label="Añadir señal" className="ui-signal-picker" open={adding} onOpenChange={setAdding} trigger={<button className="btn sm"><Plus size={13}/>Señal</button>}>
-        <div className="signal-picker">
-          <input
-            autoFocus
-            placeholder="Buscar componente o pin…"
-            aria-label="Buscar señal"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-          <div>
-            {!options.some(o=>o.name.toLowerCase().includes(search.toLowerCase())&&!lab.probes.some(p=>p.key===o.key))&&<p className="ui-signal-empty">No hay señales disponibles para esta búsqueda.</p>}
-            {options
-              .filter(
-                (o) =>
-                  o.name.toLowerCase().includes(search.toLowerCase()) &&
-                  !lab.probes.some((p) => p.key === o.key),
-              )
-              .slice(0, 30)
-              .map((o) => (
-                <HintButton
-                  key={o.key}
-                  onClick={() => {
-                    add(o.key, o.name);
-                    setAdding(false);
-                    setSearch("");
-                  }}
-                >
-                  {o.name}
-                  <Plus size={12} />
-                </HintButton>
-              ))}
-          </div>
+          {lab.seeking ? (
+            <span className="lab-caption" role="status">
+              Reconstruyendo estado…
+            </span>
+          ) : lab.paused && lab.cursor < lab.duration ? (
+            <span className="lab-caption">
+              Al reanudar se crea una nueva trayectoria.
+            </span>
+          ) : null}
         </div>
-        </PopoverPanel>
+        <div
+          className="signal-view-controls"
+          role="group"
+          aria-label="Vista y exportación"
+        >
+          <HintButton
+            className="icon-btn panel-control"
+            aria-label="Ampliar tiempo"
+            onClick={() => setSpan((s) => Math.max(0.001, s / 2))}
+          >
+            <ZoomIn size={14} />
+          </HintButton>
+          <HintButton
+            className="icon-btn panel-control"
+            aria-label="Reducir tiempo"
+            onClick={() => setSpan((s) => Math.min(600, s * 2))}
+          >
+            <ZoomOut size={14} />
+          </HintButton>
+          <HintButton
+            className={`btn ghost sm ${offset === null ? "is-on" : ""}`}
+            onClick={() => setOffset(null)}
+          >
+            Seguir
+          </HintButton>
+          <HintButton
+            className="btn ghost sm"
+            disabled={!lab.probes.length}
+            onClick={() => download("circuit-studio.vcd", vcd(lab))}
+          >
+            <Download size={16} /> Exportar VCD
+          </HintButton>
+          <PopoverPanel
+            label="Añadir señal"
+            className="ui-signal-picker"
+            open={adding}
+            onOpenChange={setAdding}
+            trigger={
+              <button className="btn sm">
+                <Plus size={16} />
+                Añadir señal
+              </button>
+            }
+          >
+            <div className="signal-picker">
+              <input
+                autoFocus
+                placeholder="Buscar componente o pin…"
+                aria-label="Buscar señal"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+              <div>
+                {!options.some(
+                  (o) =>
+                    o.name.toLowerCase().includes(search.toLowerCase()) &&
+                    !lab.probes.some((p) => p.key === o.key),
+                ) && (
+                  <p className="ui-signal-empty">
+                    No hay señales disponibles para esta búsqueda.
+                  </p>
+                )}
+                {options
+                  .filter(
+                    (o) =>
+                      o.name.toLowerCase().includes(search.toLowerCase()) &&
+                      !lab.probes.some((p) => p.key === o.key),
+                  )
+                  .slice(0, 30)
+                  .map((o) => (
+                    <HintButton
+                      key={o.key}
+                      onClick={() => {
+                        add(o.key, o.name);
+                        setAdding(false);
+                        setSearch("");
+                      }}
+                    >
+                      {o.name}
+                      <Plus size={12} />
+                    </HintButton>
+                  ))}
+              </div>
+            </div>
+          </PopoverPanel>
+        </div>
       </div>
       <div className="wave-scroll">
         <div className="wave-ruler">
@@ -268,6 +298,7 @@ export function Signals() {
                 />
                 <input
                   aria-label={`Nombre de ${probe.name}`}
+                  title={probe.name}
                   value={probe.name}
                   onFocus={() => pinSignal(probe.key)}
                   onChange={(e) =>
@@ -281,13 +312,13 @@ export function Signals() {
                   }
                 />
                 <HintButton
-                  className="icon-btn"
+                  className="icon-btn panel-control"
                   aria-label={`Quitar ${probe.name}`}
                   onClick={() =>
                     engine.watch(lab.probes.filter((p) => p.key !== probe.key))
                   }
                 >
-                  <X size={11} />
+                  <X size={16} />
                 </HintButton>
               </div>
               <svg

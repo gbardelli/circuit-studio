@@ -1,12 +1,13 @@
 import { X } from "lucide-react";
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { pinKey, type Netlist } from "../core/netlist";
-import type { CircuitSnapshot, WireData, WireEnd, Vec } from "../core/types";
-import { PARTS } from "../parts";
+import type { CircuitSnapshot, WireData, Vec } from "../core/types";
 import { wirePoints } from "./geometry";
 import { useEditor } from "./context";
 import { namedPins } from "./readableConnections";
 import { connectionLegend } from "./wiring-legend";
+import { ConnectionEndpoint } from "./ConnectionEndpoint";
+import { HintButton } from "./Overlays";
 
 export function wireNet(w: WireData, nets: Netlist) {
   return w.a.part && w.a.pin
@@ -107,17 +108,6 @@ export function ConnectionGuide({
     [snapshot, netlist, rawLegend],
   );
   const net = wire && wireNet(wire, netlist);
-  const endpoint = (end: WireEnd) => {
-    const part = snapshot.parts.find((p) => p.id === end.part);
-    if (!part || !end.pin) return "Extremo suelto";
-    const name = String(
-      part.props.label ||
-        PARTS[part.type]?.partNumber ||
-        PARTS[part.type]?.name ||
-        part.type,
-    );
-    return `${name} · ${end.pin.toUpperCase()}`;
-  };
   let name = "Conexión";
   if (net !== undefined) {
     for (const [key, id] of netlist.netOf) {
@@ -132,42 +122,51 @@ export function ConnectionGuide({
       }
     }
   }
-  const count = wire
-    ? snapshot.wires.filter((w) => wireNet(w, netlist) === net).length
-    : 0;
+  const count =
+    wire && net !== undefined
+      ? snapshot.wires.filter((w) => wireNet(w, netlist) === net).length
+      : wire ? 1 : 0;
   return (
     <aside
       ref={guide}
       className={`connection-guide ${wire ? "is-focused" : ""} ${legend.length ? "has-legend" : ""}`}
       aria-label="Guía de conexiones"
-      aria-live="polite"
     >
-      {wire && (
-        <div className="connection-guide-details">
-          <div className="connection-heading">
-            <span
-              className="connection-swatch"
-              style={{ background: wire.color }}
-            />
-            <strong>{name}</strong>
-            <span>
-              {count} {count === 1 ? "cable" : "cables"} en esta red
-            </span>
-            <button
-              className="icon-btn"
-              aria-label="Dejar de seguir la conexión"
-              onClick={onClear}
-            >
-              <X size={13} />
-            </button>
-          </div>
-          <div className="connection-ends">
-            <span title={endpoint(wire.a)}>{endpoint(wire.a)}</span>
-            <span aria-hidden="true">→</span>
-            <span title={endpoint(wire.b)}>{endpoint(wire.b)}</span>
-          </div>
+      <div
+        className="connection-guide-details"
+        aria-hidden={!wire || undefined}
+      >
+        <div className="connection-heading">
+          <span
+            className="connection-swatch"
+            style={{ background: wire?.color }}
+          />
+          <strong>{name}</strong>
+          <span>
+            {count} {count === 1 ? "cable" : "cables"}
+          </span>
         </div>
-      )}
+        <div className="connection-ends">
+          <ConnectionEndpoint
+            label="Origen"
+            end={wire?.a ?? { x: 0, y: 0 }}
+            part={snapshot.parts.find((p) => p.id === wire?.a.part)}
+          />
+          <ConnectionEndpoint
+            label="Destino"
+            end={wire?.b ?? { x: 0, y: 0 }}
+            part={snapshot.parts.find((p) => p.id === wire?.b.part)}
+          />
+        </div>
+        <HintButton
+          className="icon-btn panel-control"
+          aria-label="Dejar de seguir la conexión"
+          onClick={onClear}
+          tabIndex={wire ? 0 : -1}
+        >
+          <X size={16} />
+        </HintButton>
+      </div>
       <div
         className="connection-guide-idle"
         aria-hidden={wire ? true : undefined}
@@ -201,10 +200,7 @@ export function ConnectionGuide({
           </div>
         )}
         <span className="connection-help">
-          Señala un cable para seguir su red · Los cruces no unen cables
-        </span>
-        <span className="connection-convention">
-          Cruce con corte = sin unión · Punto metálico = extremo insertado
+          Los cruces de cables no crean una conexión.
         </span>
       </div>
     </aside>

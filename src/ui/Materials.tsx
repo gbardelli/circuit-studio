@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, FileDown, Maximize2, Minimize2, Search, X } from "lucide-react";
+import { Check, FileDown, Search, X } from "lucide-react";
 import { useEditor, useSnapshot } from "./context";
 import { useUi } from "./store";
 import { materials } from "./lab-utils";
@@ -28,8 +28,6 @@ export function Materials({
   const localPurchased = useUi((s) => s.assemblyLocalPurchased);
   const checklist = project.readOnly ? localPurchased : purchased;
   const [showPrices, setShowPrices] = useState(Object.keys(prices).length > 0);
-  const full = useUi((s) => s.labFullscreen),
-    setFull = useUi((s) => s.setLabFullscreen);
   const currency = String(project.meta.get("assembly.currency") ?? "PEN");
   const isReady = (row: (typeof rows)[number]) =>
     (checklist[row.key] ?? 0) >= row.quantity;
@@ -69,22 +67,14 @@ export function Materials({
     <section className="bom-panel" aria-label="Lista de materiales">
       <header className="bom-heading">
         <div>
-          <h2>Materiales</h2>
+          <h2>Lista de materiales</h2>
           <p>
-            {snapshot.parts.length} componentes ·{" "}
-            {snapshot.wires.filter((w) => !w.sch).length} cables · {rows.length}{" "}
-            referencias
+            <span>{snapshot.parts.length} componentes</span>
+            <span>{snapshot.wires.filter((w) => !w.sch).length} cables</span>
+            <span>{rows.length} referencias</span>
           </p>
         </div>
         <div className="bom-heading-actions">
-          <HintButton
-            className="btn"
-            onClick={() => setFull(!full)}
-            aria-label={full ? "Reducir materiales" : "Ampliar materiales"}
-          >
-            {full ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
-            <span>{full ? "Reducir" : "Ampliar"}</span>
-          </HintButton>
           <HintButton
             className="btn primary"
             disabled={exporting || !rows.length}
@@ -107,7 +97,7 @@ export function Materials({
           />
           {search && (
             <HintButton
-              className="icon-btn"
+              className="icon-btn panel-control"
               aria-label="Limpiar búsqueda de materiales"
               onClick={() => setSearch("")}
             >
