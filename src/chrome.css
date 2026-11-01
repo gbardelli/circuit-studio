@@ -564,3 +564,32 @@
   .assembly-step-navigation,.assembly-step-completion { width: auto; }
   .assembly-step-completion>.btn { flex: none; }
 }
+
+/* Instructions adapt to their own column, including the fullscreen sidebar. */
+.assembly-current-copy { container-type: inline-size; container-name: assembly-instruction; }
+@container assembly-instruction (max-width:440px) {
+  .assembly-placement-summary { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; margin-top: 16px; }
+  .assembly-pin-placement { display: grid; grid-template-columns: 72px minmax(0,1fr); align-items: center; gap: 12px; padding: 12px 0; border-right: 0; border-bottom: 1px solid #ffffff0c; }
+  .assembly-pin-placement>.assembly-pin-name { align-items: baseline; color: #bac4d2; }
+  .assembly-pin-placement>.terminal-location { display: grid; grid-template-columns: minmax(0,1fr) 64px; gap: 16px; }
+  .assembly-pin-placement .terminal-location dt { color: #a8b4c4; font-size: 12px; }
+  .assembly-pin-placement .terminal-location dd { color: #edf2fa; font-size: 16px; line-height: 24px; }
+  .assembly-part-value { display: grid; grid-template-columns: 72px minmax(0,1fr); align-items: baseline; gap: 12px; padding: 16px 0 4px; }
+  .assembly-part-value>span { font-size: 13px; color: #bac4d2; }
+  .assembly-part-value>strong { color: #edf2fa; font-size: 17px; line-height: 24px; }
+  .assembly-current-copy .assembly-board-context { display: grid; gap: 4px; margin-bottom: 4px; }
+  .assembly-board-context>span { font-size: 12px; color: #a8b4c4; }
+  .assembly-board-context>strong { font-size: 13px; line-height: 20px; }
+}
+@media(min-width:761px) {
+  .assembly-full-layout .assembly-current { position: relative; display: block; }
+  .assembly-full-layout .assembly-current-art { position: absolute; top: 26px; right: 0; width: 64px; min-height: 0; height: 72px; }
+  .assembly-full-layout .assembly-piece-thumbnail { width: 56px; height: 68px; }
+  .assembly-full-layout .assembly-current-copy h2 { padding-right: 72px; margin-bottom: 18px; }
+  .assembly-full-layout .assembly-guide { padding: 18px 20px; }
+  .assembly-full-layout .assembly-guide-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+  .assembly-full-layout .assembly-step-navigation { order: 0; width: 100%; justify-content: space-between; gap: 8px; }
+  .assembly-full-layout .assembly-step-completion { order: 1; display: grid; grid-template-columns: minmax(0,1fr); width: 100%; gap: 8px; margin: 0; }
+  .assembly-full-layout .assembly-step-completion>.btn.primary { width: 100%; min-height: 40px; }
+  .assembly-full-layout .assembly-step-completion>.btn:not(.primary) { justify-self: start; background: transparent; border-color: transparent; box-shadow: none; color: #b9c4d4; padding: 0 8px; height: 32px; }
+}
