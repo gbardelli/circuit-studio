@@ -1,35 +1,31 @@
-/* Shared by the boot document and React. The identity stays legible at every frame. */
+/* Shared by the boot document and React, without a font-download dependency. */
 .brand-screen {
-  position: fixed; inset: 0; z-index: var(--z-startup, 60);
-  display: grid; place-items: center; overflow: hidden;
-  background: #08090a; color: #eef0f2;
-  pointer-events: auto; isolation: isolate;
+  position: fixed; inset: 0; z-index: var(--z-startup,60);
+  display: grid; place-items: center; overflow: hidden; isolation: isolate;
+  color: #edf1f6; background: radial-gradient(ellipse at 50% 43%,#1a1e25 0%,#101318 42%,#090b0e 80%);
+  pointer-events: auto;
 }
 .brand-grain {
-  position: absolute;
-  inset: 0;
-  opacity: .018;
+  position: absolute; inset: 0; opacity: .018; pointer-events: none;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
   background-size: 180px 180px;
 }
-.brand-lockup { position: relative; display: flex; align-items: center; gap: 20px; padding: 24px; }
-.brand-signal { flex-shrink: 0; width: 76px; height: 48px; overflow: visible; }
-.brand-signal-base { opacity: .16; }
-.brand-signal-path { stroke-dasharray: 1; animation: brand-connect 440ms cubic-bezier(.16, 1, .3, 1) both; }
-.brand-signal-node { fill: #76dba3; animation: brand-contact 160ms 300ms cubic-bezier(.16, 1, .3, 1) both; }
-.brand-name { font: 300 36px/1 'Bricolage Grotesque', 'Geist', system-ui, sans-serif; letter-spacing: -.045em; }
-.brand-name b { font-weight: 800; }
-.brand-loading { position: absolute; top: calc(50% + 58px); font: 400 11px/1.5 'Geist', system-ui, sans-serif; color: #a2a6ad; }
-.brand-screen-leaving { pointer-events: none; animation: brand-out 140ms cubic-bezier(.4, 0, 1, 1) both; }
-@keyframes brand-connect { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
-@keyframes brand-contact { from { opacity: .2; } to { opacity: 1; } }
-@keyframes brand-out { to { opacity: 0; } }
-@media (max-width: 440px) {
-  .brand-lockup { gap: 14px; }
-  .brand-signal { width: 54px; height: 34px; }
-  .brand-name { font-size: 28px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .brand-screen, .brand-screen * { animation: none !important; }
+.brand-content { position: relative; display: grid; grid-template-rows: auto 40px; justify-items: center; gap: 32px; padding: 24px; animation: brand-arrive 280ms cubic-bezier(.23,1,.32,1) both; animation-delay: var(--brand-arrival-delay,0ms); }
+.brand-lockup { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.brand-signal { flex: none; width: 68px; height: 44px; color: #8edbb7; overflow: visible; }
+.brand-name { font: 450 clamp(40px,10vw,62px)/1.1 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: -.055em; white-space: nowrap; text-shadow: 0 1px 0 #ffffff0a,0 2px 8px #0002; }
+.brand-name b { font-weight: 650; }
+.brand-loading { display: grid; justify-items: center; align-content: start; gap: 11px; font: 400 14px/20px system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: .01em; color: #b1bbc9; }
+.brand-loading:not([data-loading]) { visibility: hidden; }
+.brand-indicator { display: block; position: relative; width: 92px; height: 2px; border-radius: 2px; background: #ffffff10; overflow: hidden; }
+.brand-loading[data-loading] .brand-indicator::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 32px; border-radius: inherit; background: #b3c4d6; animation: brand-wait 1100ms linear infinite; }
+.brand-screen-leaving { pointer-events: none; animation: brand-out 140ms cubic-bezier(.23,1,.32,1) both; }
+@keyframes brand-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes brand-wait { from { transform: translateX(-34px); } to { transform: translateX(94px); } }
+@keyframes brand-out { from { opacity: 1; } to { opacity: 0; } }
+@media(max-width:440px) { .brand-content { gap: 28px; padding: 20px; } .brand-lockup { gap: 20px; } .brand-signal { width: 60px; height: 40px; } }
+@media(prefers-reduced-motion:reduce) {
+  .brand-screen,.brand-screen *,.brand-screen *::after { animation: none !important; }
+  .brand-loading[data-loading] .brand-indicator::after { transform: translateX(30px); opacity: .65; }
   .brand-screen-leaving { opacity: 0; }
 }

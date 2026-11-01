@@ -17,7 +17,7 @@ A quiet editing workspace surrounding tangible electronic hardware. Depth belong
 
 ## Brand and startup
 
-The PWM signal stands freely beside the wordmark. A single 440ms connection trace reaches its green terminal; the wordmark stays legible from the first frame. The charcoal field has only a barely visible static grain. There are no slogans, blueprint scenery, glow fields, blur reveals or display punctuation.
+The PWM mark stands freely above a 62 px system-font wordmark (40 px on small screens), with measured medium/semibold contrast. A static charcoal radial field and faint grain supply depth. The composition enters once in 280 ms using only opacity and a 6 px transform; a 14 px loading caption and indeterminate 2 px track appear only while real tasks are pending. The boot document and React share the composition, and React offsets the entrance by document age to avoid replaying it. No animated SVG strokes, terminal flashes, blur or font-download dependency.
 
 The first-session introduction lasts 520ms, followed by a 140ms fade. Actual authentication and project loading run concurrently and determine when the loading screen can leave. Input skips the decorative introduction. Returning visitors and reduced-motion users get no decorative delay. The pre-JavaScript document shares the same composition, typography and mark geometry.
 
