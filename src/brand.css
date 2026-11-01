@@ -1,4 +1,5 @@
-/* Shared by the boot document and React, without a font-download dependency. */
+/* Shared by the boot document and React; the logo font is preloaded from this origin. */
+@font-face { font-family: 'Instrument Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/InstrumentSans-Latin-Variable.woff2') format('woff2'); }
 .brand-screen {
   position: fixed; inset: 0; z-index: var(--z-startup,60);
   display: grid; place-items: center; overflow: hidden; isolation: isolate;
@@ -13,8 +14,8 @@
 .brand-content { position: relative; display: grid; grid-template-rows: auto 40px; justify-items: center; gap: 32px; padding: 24px; animation: brand-arrive 280ms cubic-bezier(.23,1,.32,1) both; animation-delay: var(--brand-arrival-delay,0ms); }
 .brand-lockup { display: flex; flex-direction: column; align-items: center; gap: 24px; }
 .brand-signal { flex: none; width: 68px; height: 44px; color: #8edbb7; overflow: visible; }
-.brand-name { font: 450 clamp(40px,10vw,62px)/1.1 system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: -.055em; white-space: nowrap; text-shadow: 0 1px 0 #ffffff0a,0 2px 8px #0002; }
-.brand-name b { font-weight: 650; }
+.brand-name { font: 400 clamp(40px,10vw,62px)/1.1 'Instrument Sans',system-ui,sans-serif; letter-spacing: -.045em; white-space: nowrap; text-shadow: 0 1px 0 #ffffff0a,0 2px 8px #0002; }
+.brand-name b { font-weight: 700; }
 .brand-loading { display: grid; justify-items: center; align-content: start; gap: 11px; font: 400 14px/20px system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: .01em; color: #b1bbc9; }
 .brand-loading:not([data-loading]) { visibility: hidden; }
 .brand-indicator { display: block; position: relative; width: 92px; height: 2px; border-radius: 2px; background: #ffffff10; overflow: hidden; }

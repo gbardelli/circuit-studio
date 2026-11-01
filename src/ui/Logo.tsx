@@ -9,5 +9,5 @@ export function Logo({ size = 28 }: { size?: number }) {
 }
 
 export function Wordmark({ size = 17 }: { size?: number }) {
-  return <span style={{ fontFamily: 'var(--brand)', fontWeight: 300, fontSize: size, letterSpacing: '-0.045em', lineHeight: 1 }}>circuit<b style={{ fontWeight: 800 }}>studio</b></span>;
+  return <span style={{ fontFamily: 'var(--brand)', fontWeight: 400, fontSize: size, letterSpacing: '-0.045em', lineHeight: 1 }}>circuit<b style={{ fontWeight: 700 }}>studio</b></span>;
 }
