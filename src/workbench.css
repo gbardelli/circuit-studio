@@ -1405,8 +1405,8 @@
 .assembly-placement-summary strong{font-weight:550;color:#8fd4b5}
 .assembly-pinout{margin-top:6px;font-size:11px;color:#b8c3d1}
 .assembly-pinout>summary{cursor:pointer;color:#c4d4e5}
-.assembly-pinout dl{margin:8px 0;max-width:420px}
-.assembly-pinout dl>div{display:grid;grid-template-columns:60px 1fr;gap:12px;border-bottom:1px solid #ffffff08;padding:5px 0}
+.assembly-pinout>dl{margin:8px 0;max-width:420px}
+.assembly-pinout>dl>div{display:grid;grid-template-columns:60px 1fr;gap:12px;border-bottom:1px solid #ffffff08;padding:5px 0}
 .assembly-pinout dt{color:#d8e2ed}.assembly-pinout dd{margin:0}
 .assembly-cable-sample{display:flex;align-items:center;gap:0;width:64px;transform:rotate(-15deg)}
 .assembly-cable-sample>i{height:3px;flex:1;background:currentColor;box-shadow:0 1px 0 #0009;border-radius:2px}

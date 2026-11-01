@@ -13,13 +13,9 @@ import { PARTS } from "../parts";
 import { formatSI } from "../core/units";
 import type { PartData } from "../core/types";
 import { ConnectionEndpoint } from "./ConnectionEndpoint";
+import { TerminalLocation } from "./TerminalLocation";
 import { partBounds } from "./geometry";
-import {
-  ASSEMBLY_PHASES,
-  holeLabel,
-  orientationText,
-  partTitle,
-} from "./assembly-plan";
+import { ASSEMBLY_PHASES, orientationText, partTitle } from "./assembly-plan";
 import { useAssemblyGuide } from "./useAssemblyGuide";
 import { useUi } from "./store";
 
@@ -76,17 +72,25 @@ export function AssemblySteps() {
       </div>
     );
   return (
-    <div className="assembly-guide">
+    <div
+      className={`assembly-guide ${step && cursor !== null ? "has-current-step" : ""}`}
+    >
       <div className="assembly-guide-progress">
-        <progress
-          value={completed}
-          max={plan.steps.length}
-          aria-label={project.readOnly ? "Pasos vistos" : "Pasos confirmados"}
-        />
-        <span>
-          {completed} de {plan.steps.length} pasos{" "}
-          {project.readOnly ? "vistos" : "completados"}
-        </span>
+        {(!step || cursor === null) && (
+          <>
+            <progress
+              value={completed}
+              max={plan.steps.length}
+              aria-label={
+                project.readOnly ? "Pasos vistos" : "Pasos confirmados"
+              }
+            />
+            <span>
+              {completed} de {plan.steps.length} pasos{" "}
+              {project.readOnly ? "vistos" : "completados"}
+            </span>
+          </>
+        )}
         <PopoverPanel
           label="Pasos del montaje"
           className="ui-step-index"
@@ -264,25 +268,47 @@ export function AssemblySteps() {
               </h2>
               {step.kind === "part" ? (
                 <>
-                  <p>
-                    {step.owner
-                      ? `En ${partTitle(byId.get(step.owner)!)}, coloca la pieza como se indica en el lienzo.`
-                      : "Coloca la pieza en la posición señalada en el lienzo."}{" "}
-                    {orientationText(step.part)}
-                  </p>
+                  {step.owner && (
+                    <p className="assembly-board-context">
+                      <span>Protoboard</span>
+                      <strong>{partTitle(byId.get(step.owner)!)}</strong>
+                    </p>
+                  )}
+                  {(!step.owner ||
+                    /^(74hc|74ls|cd4|ne555|attiny|led|capacitor)/.test(
+                      step.part.type,
+                    )) && (
+                    <p className="assembly-orientation">
+                      {orientationText(step.part)}
+                    </p>
+                  )}
                   <div className="assembly-placement-summary">
                     {step.placements.slice(0, 2).map((p) => (
-                      <span key={`${p.pin}-${p.board}`}>
-                        <strong>{p.pin}</strong>
-                        <ArrowRight size={12} />
-                        {holeLabel(p.hole)}
-                      </span>
+                      <div
+                        className="assembly-pin-placement"
+                        key={`${p.pin}-${p.board}`}
+                      >
+                        <span className="assembly-pin-name">
+                          Patilla <strong>{p.pin}</strong>
+                        </span>
+                        <TerminalLocation pin={p.hole} breadboard />
+                      </div>
                     ))}
                     {typeof step.part.props.resistance === "number" && (
-                      <span>{formatSI(step.part.props.resistance, "Ω")}</span>
+                      <div className="assembly-part-value">
+                        <span>Valor</span>
+                        <strong>
+                          {formatSI(step.part.props.resistance, "Ω")}
+                        </strong>
+                      </div>
                     )}
                     {typeof step.part.props.capacitance === "number" && (
-                      <span>{formatSI(step.part.props.capacitance, "F")}</span>
+                      <div className="assembly-part-value">
+                        <span>Valor</span>
+                        <strong>
+                          {formatSI(step.part.props.capacitance, "F")}
+                        </strong>
+                      </div>
                     )}
                   </div>
                   {step.placements.length > 2 && (
@@ -290,19 +316,21 @@ export function AssemblySteps() {
                       <summary>
                         Ver las {step.placements.length} patillas
                       </summary>
-                      <dl>
+                      <div className="assembly-pinout-list">
                         {step.placements.map((p) => (
                           <div key={`${p.pin}-${p.board}`}>
-                            <dt>{p.pin}</dt>
-                            <dd>
-                              {p.board !== step.owner
-                                ? `${partTitle(byId.get(p.board)!)} · `
-                                : ""}
-                              {holeLabel(p.hole)}
-                            </dd>
+                            <span className="assembly-pin-name">
+                              Patilla <strong>{p.pin}</strong>
+                            </span>
+                            <TerminalLocation pin={p.hole} breadboard />
+                            {p.board !== step.owner && (
+                              <span className="endpoint-owner">
+                                {partTitle(byId.get(p.board)!)}
+                              </span>
+                            )}
                           </div>
                         ))}
-                      </dl>
+                      </div>
                     </details>
                   )}
                 </>

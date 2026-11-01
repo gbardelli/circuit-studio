@@ -1,6 +1,6 @@
 import type { PartData, WireEnd } from "../core/types";
 import { PARTS } from "../parts";
-import { holeLabel } from "./assembly-plan";
+import { TerminalLocation } from "./TerminalLocation";
 
 /** Physical terminal first; its owning board is supporting context. */
 export function ConnectionEndpoint({
@@ -20,17 +20,13 @@ export function ConnectionEndpoint({
           part.type,
       )
     : "Extremo libre";
-  const terminal = !end.pin
-    ? "Sin conectar"
-    : part?.type.startsWith("breadboard")
-      ? holeLabel(end.pin)
-      : `Pin ${end.pin}`;
   return (
     <div className="connection-endpoint">
       <span className="endpoint-label">{label}</span>
-      <strong className="endpoint-terminal" title={terminal}>
-        {terminal}
-      </strong>
+      <TerminalLocation
+        pin={end.pin}
+        breadboard={part?.type.startsWith("breadboard")}
+      />
       <span className="endpoint-owner" title={name}>
         {name}
       </span>

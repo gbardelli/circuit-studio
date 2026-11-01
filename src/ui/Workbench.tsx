@@ -97,7 +97,17 @@ export function WorkbenchPanel() {
     last: number;
     available: number;
   } | null>(null);
-  const minimum = panel === "assembly" ? 300 : 200;
+  const [availableWidth, setAvailableWidth] = useState(
+    typeof window === "undefined" ? 1280 : window.innerWidth,
+  );
+  const minimum =
+    panel === "assembly"
+      ? availableWidth <= 560
+        ? 440
+        : availableWidth <= 760
+          ? 360
+          : 300
+      : 200;
   const height = clampPanelHeight(
     dragHeight ?? (panel ? sizes[panel] : 280),
     available,
@@ -110,9 +120,10 @@ export function WorkbenchPanel() {
   useEffect(() => {
     const parent = node.current?.closest(".workspace");
     if (!parent) return;
-    const observer = new ResizeObserver((entries) =>
-      setAvailable(entries[0].contentRect.height),
-    );
+    const observer = new ResizeObserver((entries) => {
+      setAvailable(entries[0].contentRect.height);
+      setAvailableWidth(entries[0].contentRect.width);
+    });
     observer.observe(parent);
     return () => observer.disconnect();
   }, [panel]);

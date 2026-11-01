@@ -93,7 +93,7 @@ Participant rows keep names on one line and expose full names on hover. Status u
 
 ## Panel review contract
 
-Use `ConnectionEndpoint` for physical wire instructions and the assembly index. Label Origin and Destination, emphasize the terminal, and show the authored board name as secondary context. Do not flatten structured data into punctuation chains. Do not alter punctuation inside authored names.
+Use `ConnectionEndpoint` for physical wire instructions and the assembly index. Label Origin and Destination, emphasize the terminal, and show the authored board name as secondary context. Use `TerminalLocation` to render rail or row and column as distinct labelled values in wire instructions, part placements and pinouts. Labels use sentence case (Riel, Fila, Columna), and board position values use Superior/Inferior. Do not flatten structured data into punctuation chains. Do not alter punctuation inside authored names.
 
 Panel controls have 32 px targets with 16 px glyphs, increasing to 44 px for coarse pointers. Closing and expanding share one header. Static dots may not stand in for actual status. Icons must communicate an action or state; remove decorative duplicates. Use one primary action per task and expose undo beside the task it affects.
 
