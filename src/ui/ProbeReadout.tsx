@@ -2,6 +2,8 @@ import { Activity, ScanLine, X } from "lucide-react";
 import { useEditor, useDisplaySnapshot, useSimStatus } from "./context";
 import { useUi } from "./store";
 import { PARTS } from "../parts";
+import { HintButton } from "./Overlays";
+import { TerminalLocation } from "./TerminalLocation";
 export function ProbeReadout() {
   const { engine } = useEditor(),
     snapshot = useDisplaySnapshot(),
@@ -36,44 +38,76 @@ export function ProbeReadout() {
           ? "LOW"
           : "Indeterminado";
   return (
-    <div className="probe-readout">
-      <span className="signal-dot" />
-      <div>
-        <strong>
+    <section
+      className="probe-readout"
+      aria-label="Sonda fijada"
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <header className="probe-heading">
+        <strong
+          title={String(
+            part.props.label ||
+              PARTS[part.type].partNumber ||
+              PARTS[part.type].name,
+          )}
+        >
           {String(
             part.props.label ||
               PARTS[part.type].partNumber ||
               PARTS[part.type].name,
-          )}{" "}
-          · {pin}
+          )}
         </strong>
-        <span>
-          <b>{v === null ? "—" : `${v.toFixed(3)} V`}</b>
-          <small className={state === "HIGH" ? "high" : ""}>{state}</small>
-        </span>
+        <HintButton
+          className="icon-btn panel-control"
+          aria-label="Quitar sonda fijada"
+          onClick={() => useUi.getState().pinSignal(null)}
+        >
+          <X size={16} />
+        </HintButton>
+      </header>
+      <div className="probe-measurement">
+        <TerminalLocation
+          pin={pin}
+          breadboard={part.type.startsWith("breadboard")}
+        />
+        <div className="probe-voltage">
+          <span>Tensión</span>
+          <span
+            className={`probe-state ${status.running && v !== null ? (state === "HIGH" ? "is-high" : state === "LOW" ? "is-low" : "is-uncertain") : ""}`}
+          >
+            {state}
+          </span>
+          <strong>
+            {!status.running || v === null ? (
+              "—"
+            ) : (
+              <>
+                {v.toFixed(3)}
+                <small>V</small>
+              </>
+            )}
+          </strong>
+        </div>
       </div>
-      <button
-        className="icon-btn"
-        aria-label="Analizar esta señal"
-        title="Seguir las entradas"
-        onClick={() => useUi.getState().setLabPanel("diagnostics")}
-      >
-        <ScanLine size={14} />
-      </button>
-      <button
-        className="icon-btn"
-        aria-label="Ver esta señal en el analizador"
-        onClick={() => useUi.getState().setLabPanel("signals")}
-      >
-        <Activity size={14} />
-      </button>
-      <button
-        className="icon-btn"
-        aria-label="Quitar sonda fijada"
-        onClick={() => useUi.getState().pinSignal(null)}
-      >
-        <X size={13} />
-      </button>
-    </div>
+      <footer>
+        <HintButton
+          className="btn probe-action"
+          aria-label="Analizar esta señal"
+          title="Seguir las entradas"
+          onClick={() => useUi.getState().setLabPanel("diagnostics")}
+        >
+          <ScanLine size={16} />
+          Diagnóstico
+        </HintButton>
+        <HintButton
+          className="btn probe-action"
+          aria-label="Ver esta señal en el analizador"
+          onClick={() => useUi.getState().setLabPanel("signals")}
+        >
+          <Activity size={16} />
+          Señales
+        </HintButton>
+      </footer>
+    </section>
   );
 }

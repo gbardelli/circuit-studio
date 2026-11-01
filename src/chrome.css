@@ -581,6 +581,74 @@
   .assembly-board-context>span { font-size: 12px; color: #a8b4c4; }
   .assembly-board-context>strong { font-size: 13px; line-height: 20px; }
 }
+
+/* Comments are a working conversation, with a separate writing surface. */
+.notes-layout { display: flex; flex-wrap: wrap; flex: 1; min-height: 0; min-width: 0; overflow: auto; background: #1c1f25; }
+.notes-layout>.notes-feed { flex: 1 1 320px; min-width: 0; min-height: 130px; max-height: none; overflow: auto; }
+.notes-feed .lab-section-head { min-height: 42px; padding: 0 18px; background: transparent; border-bottom: 1px solid #ffffff09; box-shadow: none; justify-content: space-between; }
+.notes-count { color: #bdc6d3; font-size: 13px; }
+.notes-feed .lab-section-head .notes-count { margin-left: 0; }
+.notes-feed .lab-section-head label { display: flex; align-items: center; gap: 7px; min-height: 32px; font-size: 13px; color: #aeb9c9; }
+.notes-feed .lab-section-head input { width: 15px; height: 15px; accent-color: #6d9fe9; margin: 0; }
+.notes-empty { padding: 24px 18px; }
+.notes-empty>strong { font-size: 16px; font-weight: 550; color: #e0e6f0; }
+.notes-empty p { font-size: 14px; line-height: 1.5; color: #aeb9c9; margin: 8px 0 0; max-width: 44ch; }
+.note-compose { display: flex; flex: 1 1 300px; flex-direction: column; gap: 8px; max-width: 340px; min-width: 0; padding: 14px 18px; border-left: 1px solid #ffffff0a; background: linear-gradient(180deg,#272b32,#23272e); box-shadow: inset 0 1px 0 #ffffff0b; overflow: auto; }
+.note-compose-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 20px; }
+.note-compose-heading>strong { font-size: 14px; font-weight: 550; color: #e7edf6; }
+.note-compose-heading>.btn { min-height: 28px; font-size: 12px; padding: 0 6px; }
+.note-compose-target { color: #b4bfd0; font-size: 13px; line-height: 18px; overflow-wrap: anywhere; }
+.note-compose textarea { flex: 0 0 auto; width: 100%; min-height: 88px; height: 88px; max-height: 260px; resize: vertical; padding: 11px 12px; color: #edf1f7; font-size: 14px; line-height: 1.5; border-radius: 8px; border: 1px solid #ffffff17; background: #16191f; box-shadow: inset 0 2px 4px #0004,0 1px 0 #ffffff06; }
+.note-compose textarea::placeholder { color: #99a6b8; }
+.note-compose textarea:focus-visible { border-color: #80a8e2; outline: 2px solid #6a9ce82e; outline-offset: 1px; }
+.note-compose textarea:disabled { opacity: .65; }
+.note-compose-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.note-compose-actions>.btn { min-height: 34px; padding: 0 14px; font-size: 14px; }
+.note-limit { color: #b2bdce; font-size: 12px; font-variant-numeric: tabular-nums; }
+.note-readonly { align-content: start; gap: 8px; }
+.note-readonly>svg { color: #a9b7ca; margin-bottom: 2px; }
+.note-readonly>strong { color: #e1e8f2; font-size: 14px; font-weight: 550; }
+.note-readonly>p { color: #b0bdce; font-size: 14px; line-height: 1.5; margin: 0; max-width: 30ch; }
+.circuit-note { padding: 16px 18px; border-bottom: 1px solid #ffffff09; }
+.circuit-note header { display: flex; align-items: center; gap: 12px; justify-content: space-between; margin-bottom: 10px; }
+.note-anchor { display: inline-flex; align-items: center; gap: 7px; min-width: 0; min-height: 28px; max-width: 100%; padding: 0; border: 0; background: transparent; color: #adc8ee; font-size: 13px; text-align: left; }
+.note-anchor>svg { flex: none; }
+.note-anchor>span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-resolved { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #b9cfbf; white-space: nowrap; }
+.note-author { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; }
+.note-author>strong,.note-reply>strong { font-size: 13px; font-weight: 550; color: #e0e7f1; }
+.note-author time { color: #a7b2c3; font-size: 12px; }
+.circuit-note p { margin: 6px 0 10px; font-size: 14px; line-height: 1.6; color: #ccd5e1; white-space: pre-wrap; overflow-wrap: anywhere; }
+.circuit-note footer { display: flex; align-items: center; gap: 14px; }
+.circuit-note footer button { display: inline-flex; align-items: center; gap: 5px; padding: 0; min-height: 30px; border: 0; background: transparent; color: #b0bfd3; font-size: 13px; }
+.circuit-note footer button:hover:not(:disabled),.note-anchor:hover:not(:disabled) { color: #eef3fb; }
+.circuit-note button:disabled { opacity: .5; }
+.note-reply { margin: 12px 0; padding-left: 14px; border-left: 2px solid #ffffff13; }
+@media(max-width:650px) { .notes-layout { flex-direction: column; flex-wrap: nowrap; } .notes-layout>.notes-feed { flex: 1 0 150px; } .note-compose { flex: none; max-width: none; min-height: 0; border-left: 0; border-top: 1px solid #ffffff0a; } }
+
+/* A persistent probe has readable identity, measurements and named actions. */
+.probe-readout { position: absolute; left: auto; right: 16px; bottom: clamp(8px,calc(var(--connection-guide-height,0px) + 8px),calc(100% - 150px)); z-index: 5; width: min(360px,calc(100% - 32px)); max-width: calc(100% - 32px); padding: 0; border-radius: 12px; border: 1px solid #ffffff17; border-top-color: #ffffff36; background: linear-gradient(180deg,#30353e 0%,#272c34 30%,#22262d 100%); box-shadow: inset 0 1px 0 #ffffff0c,0 2px 4px #0005,0 12px 32px #0006,0 28px 56px -24px #0009; overflow: hidden; }
+.probe-heading { display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 1px 8px 0 14px; }
+.probe-heading>strong { flex: 1; min-width: 0; color: #e4ebf5; font-size: 13px; font-weight: 550; line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.probe-readout .panel-control { width: 32px; height: 32px; flex: none; color: #c0cada; border-radius: 7px; }
+.probe-readout .panel-control:hover { color: #fff; background: #ffffff0b; }
+.probe-readout button:focus-visible { outline: 2px solid #8bb6f4; outline-offset: -2px; }
+.probe-measurement { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: start; gap: 16px; padding: 0 14px 4px; }
+.probe-measurement .terminal-location { gap: 16px; }
+.probe-measurement .terminal-location dt { line-height: 16px; }
+.probe-measurement .terminal-location dd { font-size: 16px; line-height: 21px; }
+.probe-voltage { display: grid; grid-template-columns: auto auto; gap: 2px 10px; min-width: 80px; }
+.probe-voltage>span { color: #aebccd; font-size: 12px; line-height: 17px; }
+.probe-voltage>strong { grid-column: 1 / -1; color: #f0f4fa; font-size: 20px; line-height: 24px; font-weight: 550; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.probe-voltage small { margin-left: 5px; font-size: 13px; font-weight: 400; color: #b5c1d1; }
+.probe-state { padding: 0; color: #b3bfd0; font-size: 12px; line-height: 17px; white-space: nowrap; }
+.probe-state.is-high { color: #9bd7b9; }
+.probe-state.is-low { color: #a8c8ed; }
+.probe-state.is-uncertain { color: #e4ca91; }
+.probe-readout>footer { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-top: 1px solid #ffffff09; background: #0000000d; box-shadow: inset 0 1px 0 #ffffff03; }
+.probe-readout .probe-action { display: inline-flex; align-items: center; justify-content: center; flex: 1; gap: 7px; min-height: 32px; padding: 0 10px; font-size: 13px; color: #e2e9f4; background: linear-gradient(#ffffff0b,#ffffff04); border: 1px solid #ffffff10; border-top-color: #ffffff24; border-radius: 7px; box-shadow: inset 0 1px 0 #ffffff04,0 1px 2px #0003; }
+.probe-readout .probe-action:hover { background: linear-gradient(#ffffff12,#ffffff09); }
+.probe-readout .probe-action:active { background: #0002; box-shadow: inset 0 1px 2px #0003; }
 @media(min-width:761px) {
   .assembly-full-layout .assembly-current { position: relative; display: block; }
   .assembly-full-layout .assembly-current-art { position: absolute; top: 26px; right: 0; width: 64px; min-height: 0; height: 72px; }

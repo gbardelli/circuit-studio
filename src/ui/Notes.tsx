@@ -1,6 +1,6 @@
-import { HintButton } from './Overlays';
+import { HintButton } from "./Overlays";
 import { useState } from "react";
-import { Check, MessageSquare, Send } from "lucide-react";
+import { Check, Crosshair, LockKeyhole } from "lucide-react";
 import { useEditor, useSnapshot } from "./context";
 import { useUi } from "./store";
 import { PARTS } from "../parts";
@@ -53,51 +53,80 @@ export function Notes() {
     <div className="notes-layout">
       <div className="notes-feed">
         <div className="lab-section-head">
-          <MessageSquare size={15} />
-          <strong>Comentarios del circuito</strong>
+          <span className="notes-count">
+            {roots.length} {roots.length === 1 ? "comentario" : "comentarios"}
+          </span>
           <label>
             <input
               type="checkbox"
               checked={showResolved}
               onChange={(e) => setShowResolved(e.target.checked)}
             />{" "}
-            Mostrar resueltos
+            Resueltos
           </label>
         </div>
         {!roots.length ? (
-          <div className="lab-empty">
-            <strong>La revisión, donde ocurre.</strong>
+          <div className="notes-empty">
+            <strong>
+              {!showResolved && notes.some(note=>!note.parent) ? "Sin comentarios pendientes" : "Sin comentarios"}
+            </strong>
             <p>
-              Selecciona un componente y deja una observación. El comentario
-              queda anclado a esa pieza y se comparte con el equipo.
+              {project.readOnly
+                ? "Los comentarios del equipo aparecerán aquí."
+                : selected ? "Añade una observación para esta pieza." : "Selecciona una pieza del lienzo para comentar."}
             </p>
           </div>
         ) : (
           roots.map((note) => {
             const p = snapshot.parts.find((p) => p.id === note.part);
+            const created = Number.isFinite(note.created)
+              ? new Date(note.created)
+              : null;
             return (
               <article
                 className={`circuit-note ${note.resolved ? "resolved" : ""}`}
                 key={note.id}
               >
                 <header>
-                  <HintButton onClick={() => select([note.part])}>
-                    {p
-                      ? String(
-                          p.props.label ||
-                            PARTS[p.type].partNumber ||
-                            PARTS[p.type].name,
-                        )
-                      : "Componente eliminado"}
+                  <HintButton
+                    className="note-anchor"
+                    disabled={!p}
+                    onClick={() => select([note.part])}
+                  >
+                    <Crosshair size={14} aria-hidden="true" />
+                    <span>
+                      {p
+                        ? String(
+                            p.props.label ||
+                              PARTS[p.type].partNumber ||
+                              PARTS[p.type].name,
+                          )
+                        : "Componente eliminado"}
+                    </span>
                   </HintButton>
-                  <time>
-                    {new Date(note.created).toLocaleTimeString("es", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </time>
+                  {note.resolved && (
+                    <span className="note-resolved">
+                      <Check size={14} />
+                      Resuelto
+                    </span>
+                  )}
                 </header>
-                <strong>{note.author}</strong>
+                <div className="note-author">
+                  <strong>{note.author}</strong>
+                  {created && (
+                    <time
+                      dateTime={created.toISOString()}
+                      title={created.toLocaleString("es")}
+                    >
+                      {created.toLocaleString("es", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </time>
+                  )}
+                </div>
                 <p>{note.text}</p>
                 {notes
                   .filter((n) => n.parent === note.id)
@@ -110,7 +139,10 @@ export function Notes() {
                 <footer>
                   <HintButton
                     disabled={project.readOnly}
-                    onClick={() => setReply(note.id)}
+                    onClick={() => {
+                      setReply(note.id);
+                      setText("");
+                    }}
                   >
                     Responder
                   </HintButton>
@@ -132,36 +164,66 @@ export function Notes() {
           })
         )}
       </div>
-      <div className="note-compose">
-        <span>
-          {reply
-            ? "Responder al comentario"
-            : selected
-              ? `Comentario en ${selected.props.label || PARTS[selected.type].partNumber || PARTS[selected.type].name}`
-              : "Selecciona un componente del lienzo"}
-        </span>
-        <textarea
-          aria-label="Comentario"
-          placeholder="Qué revisar, qué cambiar, qué comprobar…"
-          maxLength={2000}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          disabled={project.readOnly || (!selected && !reply)}
-          onKeyDown={(e) => {
-            if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
-          }}
-        />
-        <div>
-          <small>Compartido con quienes acceden al circuito.</small>
-          <HintButton
-            className="btn sm"
-            disabled={!text.trim() || project.readOnly || (!selected && !reply)}
-            onClick={send}
-          >
-            <Send size={13} /> Publicar
-          </HintButton>
+      {project.readOnly ? (
+        <aside className="note-compose note-readonly">
+          <LockKeyhole size={18} aria-hidden="true" />
+          <strong>Solo lectura</strong>
+          <p>Necesitas acceso de edición para comentar.</p>
+        </aside>
+      ) : (
+        <div className="note-compose">
+          <div className="note-compose-heading">
+            <strong>{reply ? "Respuesta" : "Nuevo comentario"}</strong>
+            {reply && (
+              <HintButton
+                className="btn ghost"
+                onClick={() => {
+                  setReply(null);
+                  setText("");
+                }}
+              >
+                Cancelar
+              </HintButton>
+            )}
+          </div>
+          <span className="note-compose-target">
+            {reply
+              ? "En el hilo seleccionado"
+              : selected
+                ? String(
+                    selected.props.label ||
+                      PARTS[selected.type].partNumber ||
+                      PARTS[selected.type].name,
+                  )
+                : "Selecciona una pieza del lienzo"}
+          </span>
+          <textarea
+            aria-label="Comentario"
+            placeholder="Escribe un comentario…"
+            maxLength={2000}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            disabled={project.readOnly || (!selected && !reply)}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === "Enter") send();
+            }}
+          />
+          <div className="note-compose-actions">
+            <span className="note-limit">
+              {text.length > 1800 ? `${text.length} / 2000` : null}
+            </span>
+            <HintButton
+              className="btn primary"
+              disabled={
+                !text.trim() || project.readOnly || (!selected && !reply)
+              }
+              onClick={send}
+            >
+              {reply ? "Responder" : "Comentar"}
+            </HintButton>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

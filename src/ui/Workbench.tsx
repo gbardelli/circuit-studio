@@ -107,7 +107,9 @@ export function WorkbenchPanel() {
         : availableWidth <= 760
           ? 360
           : 300
-      : 200;
+      : panel === "notes"
+        ? 280
+        : 200;
   const height = clampPanelHeight(
     dragHeight ?? (panel ? sizes[panel] : 280),
     available,
