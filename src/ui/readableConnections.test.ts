@@ -7,6 +7,11 @@ import type { CircuitSnapshot, PartData } from '../core/types';
 
 const part=(id:string,type:string,x:number,y:number):PartData=>({id,type,x,y,rot:0,props:{...PARTS[type].defaults}});
 describe('readable physical connections',()=>{
+  it('preserves authored board names and does not invent application-specific names',()=>{
+    const board=part('one','breadboard-full',0,0),named={...part('two','breadboard-full',0,600),props:{cols:63,label:'Filtro de audio'}};
+    const result=readableConnections({parts:[board,named],wires:[]});
+    expect(result.parts[0].props.label).toBeUndefined();expect(result.parts[1].props.label).toBe('Filtro de audio');
+  });
   it('separates four stages into two columns while preserving all device connections',()=>{
     const before:CircuitSnapshot={parts:[...Array.from({length:4},(_,i)=>part(`b${i}`,'breadboard-full',0,i*250)),part('chip','74hc08',90,600)],wires:[{id:'bus',a:{part:'b0',pin:'a7',x:90,y:60},b:{part:'b2',pin:'b7',x:90,y:570},color:'#3e7bfa',points:[]}]};
     const after=readableConnections(before);

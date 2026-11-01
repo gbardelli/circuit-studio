@@ -442,3 +442,22 @@
 .signals-panel .lab-empty>.btn:nth-of-type(2) { grid-row: 2; }
 .diagnostics-layout .lab-empty>strong { font-size: 19px; }
 @media(max-width:760px) { .signals-panel .lab-empty { display: flex; gap: 10px; } }
+
+/* Participant names keep one line; identity comes from the account photo. */
+.people .participant-row { grid-template-columns: 28px minmax(0,1fr) auto; gap: 8px; padding: 7px 6px; min-height: 42px; }
+.people .participant-avatar { display: grid; place-items: center; width: 28px; height: 28px; overflow: hidden; background: #2d333c; color: #c3cedd; border: 1px solid #ffffff12; }
+.people .participant-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.participant-name { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; line-height: 1.4; }
+.participant-status { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 11px; line-height: 1; font-weight: 550; letter-spacing: .015em; color: #aeb9c9; }
+.participant-status svg { flex: none; }
+.participant-status.is-self { color: #c2d7c9; }
+/* Hover details overlay the measured legend instead of resizing the canvas beneath the pointer. */
+.connection-guide { min-height: 80px; }
+.connection-guide-idle[aria-hidden=true] { visibility: hidden; }
+.connection-guide-details { position: absolute; inset: 10px 14px; display: flex; flex-direction: column; justify-content: center; gap: 7px; overflow: hidden; }
+.connection-guide-details .connection-heading { min-height: 24px; flex: none; }
+.connection-guide-details .connection-ends { flex-wrap: nowrap; min-height: 20px; margin-top: 0; }
+.connection-guide-details .connection-ends>span:not([aria-hidden]) { flex: 0 1 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.connection-tones small { font-size: 10px; color: #b3c1d3; }
+.identity-label-input { width: 100%; min-width: 0; height: 36px; padding: 0 10px; margin-top: 7px; border: 1px solid #ffffff1a; border-radius: 6px; background: #13171c; color: #edf1f7; font-size: 14px; }
+.identity-field-hint { font-size: 12px; line-height: 1.5; color: #aeb9c9; margin: 8px 0 0; }

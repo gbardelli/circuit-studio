@@ -11,6 +11,8 @@ import { damageOf, type Damage } from '../sim/damage';
 import { WIRE_COLORS } from './geometry';
 import { Thumb } from './Library';
 import { useUi } from './store';
+import { ParticipantRow } from './Participants';
+import { configuredLegend, updateLegendLabel } from './wiring-legend';
 
 const METRICS: Record<string, { label: string; unit: string }> = {
   i: { label: 'Corriente', unit: 'A' },
@@ -108,21 +110,9 @@ function EmptyInspector() {
           <h2>En el circuito</h2>
         </div>
         <ul className="people">
-          <li>
-            <span className="avatar" style={{ background: project.user.color }}>
-              {project.user.name.slice(0, 2).toUpperCase()}
-            </span>
-            <span>{project.user.name}</span>
-            <span className="faint">tú</span>
-          </li>
+          <ParticipantRow user={project.user} status="self"/>
           {peers.map((p) => (
-            <li key={p.clientId}>
-              <span className="avatar" style={{ background: p.user.color }}>
-                {p.user.name.slice(0, 2).toUpperCase()}
-              </span>
-              <span>{p.user.name}</span>
-              <span className="faint">{p.drag ? 'moviendo' : p.selection?.length ? 'editando' : 'mirando'}</span>
-            </li>
+            <ParticipantRow key={p.clientId} user={p.user} status={p.drag ? 'moving' : p.selection?.length ? 'editing' : 'watching'}/>
           ))}
         </ul>
         {peers.length === 0 && <p className="insp-hint">Comparte el enlace para editar a la vez.</p>}
@@ -216,6 +206,7 @@ function WireInspector({ ids, color }: { ids: string[]; color: string }) {
           ))}
         </div>
       </div>
+      {ids.length===1&&<div className="insp-section"><label className="label" htmlFor="wire-legend-label">Etiqueta en la leyenda</label><input key={color} id="wire-legend-label" className="identity-label-input" maxLength={80} defaultValue={configuredLegend(project.meta.get('wiring.legend')).find(entry=>entry.colors.includes(color.toLowerCase()))?.label??''} placeholder="Automática según la red" onKeyDown={event=>{if(event.key==='Enter'){event.preventDefault();event.currentTarget.blur();}}} onBlur={event=>{const raw=project.meta.get('wiring.legend'),saved=configuredLegend(raw).find(entry=>entry.colors.includes(color.toLowerCase()))?.label??'';if(saved!==event.target.value.trim())project.setMeta('wiring.legend',updateLegendLabel(raw,color,event.target.value));}}/><p className="identity-field-hint">Se aplica a los cables del mismo color. Vacío usa el nombre de la red.</p></div>}
       <div className="insp-section">
         <p className="faint" style={{ margin: '0 0 10px', fontSize: 12 }}>
           Arrastra el cable para crear un codo. Doble clic en un codo lo elimina.
@@ -255,6 +246,7 @@ function PartInspector({ part }: { part: PartData }) {
           </div>
         </div>
         {simRunning && damageOf(part.id) && <DamageNote damage={damageOf(part.id)!} />}
+        {part.type.startsWith('breadboard')&&<div className="insp-section"><label className="label" htmlFor={`board-name-${part.id}`}>Nombre de la protoboard</label><input className="identity-label-input" id={`board-name-${part.id}`} value={String(part.props.label??'')} maxLength={80} placeholder={def.name} onChange={event=>project.setProp(part.id,'label',event.target.value)}/></div>}
         {peers.length > 0 && (
           <div className="insp-section" style={{ paddingTop: 8, paddingBottom: 8 }}>
             <span className="peer-note" style={{ margin: 0 }}>

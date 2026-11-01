@@ -87,3 +87,8 @@ Panel headers use one structural surface, with quieter controls and readable 14â
 Materials starts as a shopping checklist. Search matches component names and references; the pending filter excludes acquired quantities. Editors save purchase quantities as project metadata, while visitors keep a project-scoped session checklist. A quantity increase makes a previously completed row pending again. Prices are optional, and missing prices remain visibly absent from the subtotal. The list has explicit expand/reduce controls and retains its state during resizing.
 
 PDF exports load jsPDF and AutoTable only on demand. Local OFL-licensed Noto Sans fonts preserve electrical symbols and Spanish accents. Materials uses portrait A4; the complete assembly guide includes a landscape circuit overview, materials and numbered instructions. Tables repeat headers, avoid splitting ordinary rows and include page numbers. No CSV export is shown in Materials.
+
+Connection labels come from saved project metadata or actual net aliases and power pins, never a color-to-example mapping. Selecting or hovering a wire overlays details while the idle legend retains its layout space. Editors can name each wire color in Properties and rename individual breadboards; clearing a manual legend label restores automatic naming.
+
+Participant rows keep names on one line and expose full names on hover. Status uses an icon and uppercase text. Use the account profile photo when supplied; missing or failed photos use a neutral person icon.
+

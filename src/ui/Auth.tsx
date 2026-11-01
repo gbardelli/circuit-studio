@@ -65,7 +65,7 @@ function SessionGate({ children }: { children: ReactNode }) {
         ? {
             id: user.id,
             name: user.fullName || user.username || user.primaryEmailAddress?.emailAddress.split('@')[0] || 'Sin nombre',
-            image: user.imageUrl ?? null,
+            image: user.hasImage ? user.imageUrl ?? null : null,
           }
         : null,
     );
