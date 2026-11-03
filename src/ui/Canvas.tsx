@@ -10,6 +10,7 @@ import { CircuitOverlays } from './CircuitOverlays';
 import { magneticPosition,occupiedHoles } from './magnet';
 import { ProbeReadout } from './ProbeReadout';
 import { FrameMeter } from './FrameMeter';
+import { stackHost, withStacks } from '../parts/stack';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints, endPosition } from './geometry';
 import { ViewTabs } from './ViewTabs';
 import { useUi } from './store';
@@ -106,6 +107,8 @@ export function Canvas() {
   // En la protoboard, las conexiones dibujadas en el esquema no son cables físicos.
   const boardScene = useMemo(() => (snapshot.wires.some((w) => w.sch) ? { parts: snapshot.parts, wires: snapshot.wires.filter((w) => !w.sch) } : snapshot), [snapshot]);
   const scene = useMemo(() => (sch ? { parts: sch.parts, wires: [] as WireData[] } : boardScene), [sch, boardScene]);
+  /** Shields montadas con la pantalla hacia arriba: se dibujan por encima de los cables. */
+  const stackTop = useMemo(() => new Set(sch ? [] : scene.parts.filter((p) => !p.props.flip && stackHost(p, scene.parts)).map((p) => p.id)), [sch, scene]);
 
   const focusedWire = !sch ? snapshot.wires.find(w => w.id === (hoverWire ?? wireSelection[0])) : undefined;
   const focusedNet = focusedWire ? wireNet(focusedWire, netlist) : undefined;
@@ -438,7 +441,8 @@ export function Canvas() {
         ids = [partId];
         select(ids, []);
       }
-      if (ids.includes(partId)) setDrag({ kind: 'parts', ids, start: w, dx: 0, dy: 0, moved: false });
+      // Una placa arrastra sus shields montadas, que se ven moverse con ella.
+      if (ids.includes(partId)) setDrag({ kind: 'parts', ids: sch ? ids : withStacks(ids, scene.parts), start: w, dx: 0, dy: 0, moved: false });
       return;
     }
 
@@ -875,7 +879,7 @@ export function Canvas() {
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${z})`}>
           {sch && <SheetFrame sheet={sch.sheet} title={project.name} />}
           {sch && <NetLayer nets={sch.nets} selected={selectedNets} />}
-          {scene.parts.map((p) => (
+          {scene.parts.map((p) => !stackTop.has(p.id) && (
             <PartView key={p.id} part={p} offset={offsets.get(p.id)} onInput={onPartInput} live={simRunning} dragging={draggingIds.includes(p.id)} />
           ))}
 
@@ -918,6 +922,11 @@ export function Canvas() {
               </g>
             ))}
           </g>
+
+          {/* Una shield montada tapa su placa y los cables que llegan a ella por detrás, como en el banco. */}
+          {scene.parts.filter((p) => stackTop.has(p.id)).map((p) => (
+            <PartView key={p.id} part={p} offset={offsets.get(p.id)} onInput={onPartInput} live={simRunning} dragging={draggingIds.includes(p.id)} />
+          ))}
 
           {flowOn && (
             <g className="flow" pointerEvents="none">

@@ -1,5 +1,6 @@
-// Arduino GIGA Display Shield (ASX00039). Se acopla al GIGA R1 WiFi por detrás, sin cables: en
-// el lienzo basta con dejarla junto a la placa (se monta sobre el GIGA más cercano).
+// Arduino GIGA Display Shield (ASX00039). Se acopla al GIGA R1 WiFi por detrás (J6/J7), sin
+// cables: en el lienzo se suelta encima del GIGA, encaja centrada y desde entonces se mueven
+// juntos (parts/stack.ts). Montada tapa la placa; «voltear» (F) muestra el GIGA para cablearlo.
 import { memo, useId, useMemo, useRef, type PointerEvent } from 'react';
 import { GigaDisplay, SCREEN_H, SCREEN_W, SHIELD_IN, SHIELD_OUT, type ShieldOp } from '../sim/gigaDisplay';
 import type { PartDef, RenderProps } from './types';
@@ -11,6 +12,8 @@ const SX = 16;
 const SY = 14;
 const W = SCREEN_W * PX + SX * 2;
 const H = SCREEN_H * PX + SY * 2;
+/** Alto del GIGA R1 (53,3 mm): la shield lo cubre y sobresale por arriba y por abajo. */
+const GIGA_H = 210;
 
 function Op({ op }: { op: ShieldOp }) {
   switch (op.k) {
@@ -42,7 +45,27 @@ function Op({ op }: { op: ShieldOp }) {
   }
 }
 
-const GigaDisplayRender = memo(function GigaDisplayRender({ visual, onInput, preview }: RenderProps) {
+/** Vista desde el lado del GIGA: de la shield solo asoman los bordes que sobresalen de la placa. */
+function ShieldEdge() {
+  const inner = (H - GIGA_H) / 2;
+  return (
+    <g>
+      {/* Solo los bordes son de la shield: el hueco deja pasar los clics a los pines del GIGA. */}
+      <path
+        d={`M0 0H${W}V${H}H0Z M0 ${inner}V${H - inner}H${W}V${inner}Z`}
+        fillRule="evenodd"
+        fill="#262a31"
+        stroke="#4a515b"
+        strokeWidth={0.8}
+      />
+      <text x={W / 2} y={inner - 3} fontSize={5} fill="#aab2bc" fontFamily={FONT} textAnchor="middle" letterSpacing={0.4} pointerEvents="none">
+        GIGA DISPLAY SHIELD DEBAJO · F PARA VOLTEAR
+      </text>
+    </g>
+  );
+}
+
+const GigaDisplayRender = memo(function GigaDisplayRender({ part, visual, onInput, preview }: RenderProps) {
   const id = useId().replace(/:/g, '');
   const scene = String(visual?.scene ?? '[]');
   const ops = useMemo(() => JSON.parse(scene) as ShieldOp[], [scene]);
@@ -58,6 +81,7 @@ const GigaDisplayRender = memo(function GigaDisplayRender({ visual, onInput, pre
   };
   const send = (x: number, y: number, down: boolean) => onInput?.('touch', (down ? 1 << 20 : 0) | (x << 10) | y);
   const last = useRef({ x: 0, y: 0 });
+  if (part.props.flip && !preview) return <ShieldEdge />;
   return (
     <g>
       <defs>
@@ -151,7 +175,7 @@ const GigaDisplayRender = memo(function GigaDisplayRender({ visual, onInput, pre
         ARDUINO GIGA DISPLAY SHIELD · ASX00039
       </text>
       <text x={W - SX} y={H - 4} fontSize={4.6} fill="#6b737c" fontFamily={FONT} textAnchor="end">
-        {powered ? 'montada en el GIGA' : 'acércala a un GIGA R1 con firmware'}
+        {powered ? 'montada en el GIGA · F para ver la placa' : 'se encaja sobre un GIGA R1 · F para ver la placa'}
       </text>
     </g>
   );
@@ -160,13 +184,15 @@ const GigaDisplayRender = memo(function GigaDisplayRender({ visual, onInput, pre
 export const gigaDisplayShield: PartDef = {
   type: 'giga-display-shield',
   name: 'GIGA Display Shield',
-  partNumber: 'ASX00039',
+  sku: 'ASX00039',
+  stacksOn: 'arduino-giga',
   category: 'Salidas',
   family: 'Pantallas',
   description:
     'Pantalla táctil de 3,97″ (800 × 480) que se monta detrás del GIGA R1 WiFi, sin cables ni pines de los cabezales. Dibuja con Arduino_GigaDisplay_GFX, lee el táctil con Arduino_GigaDisplayTouch y enciende su LED RGB con GigaDisplayRGB. Modelo de las librerías; no emula LVGL, la IMU ni el micrófono.',
   keywords: ['pantalla', 'tactil', 'táctil', 'touch', 'display', 'giga', 'shield', 'asx00039', 'gfx', 'tft', 'hmi', 'rgb'],
-  defaults: {},
+  defaults: { flip: false },
+  fields: [{ key: 'flip', label: 'Ver el GIGA (voltear)', kind: 'boolean', hint: 'Muestra la placa de debajo para cablear sus pines; la pantalla sigue funcionando.' }],
   pins: () => [],
   bounds: () => ({ x: -2, y: -2, w: W + 4, h: H + 4 }),
   model: 'Comportamental',

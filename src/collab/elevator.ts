@@ -22,6 +22,7 @@
 import { Bench, WIRE, type Ref } from './bench';
 import { ELEVATOR_GIGA } from './elevatorSketch';
 import type { Template } from './templates';
+import { mountedPosition } from '../parts/stack';
 
 /** Pines del GIGA (columna impar del cabezal lateral: queda de cara a las placas). */
 export const GIGA_PINS = {
@@ -70,7 +71,10 @@ export function elevatorTemplate(): Template {
   r.board(B5, 0, 1200, '5 · Cuenta regresiva');
   r.board(B6, 0, 1500, '6 · Piso actual');
   r.loose('giga', 'arduino-giga', -520, 0, { label: 'Arduino GIGA R1 WiFi · innovación' });
-  r.loose('screen', 'giga-display-shield', -506, 300, { label: 'GIGA Display Shield · llamadas táctiles' });
+  // La shield va encajada sobre el GIGA, como en el banco: se mueven juntos.
+  const board = { id: '', type: 'arduino-giga', x: -520, y: 0, rot: 0 as const, props: {} };
+  const screen = mountedPosition({ id: '', type: 'giga-display-shield', x: 0, y: 0, rot: 0, props: {} }, board);
+  r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · llamadas táctiles' });
 
   const vcc = (ref: Ref) => r.rail(ref, true);
   const gnd = (ref: Ref) => r.rail(ref, false);

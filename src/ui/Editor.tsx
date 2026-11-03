@@ -2,6 +2,7 @@ import { HintProvider } from './Overlays';
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { CheckCircle2, Info, Component, SlidersHorizontal, X } from 'lucide-react';
 import { Project } from '../collab/project';
+import { withStacks } from '../parts/stack';
 import { PARTS } from '../parts';
 import { schematicPlacement, withFrozenPlacement } from './schematic';
 import { applyTemplate, findTemplate } from '../collab/applyTemplate';
@@ -176,9 +177,12 @@ export function EditorShell() {
           ui.select([], []);
         }
       } else if (key === 'f' && !mod && ui.selection.length) {
-        // Voltear: solo piezas que lo admiten (LED…), cada una sobre su propio eje.
-        for (const p of project.snapshot().parts)
-          if (ui.selection.includes(p.id) && PARTS[p.type]?.fields?.some((f) => f.key === 'flip')) project.setProp(p.id, 'flip', !p.props.flip);
+        // Voltear: solo piezas que lo admiten (LED…), cada una sobre su propio eje. Una placa con
+        // shield voltea la pila entera: pantalla arriba o placa arriba.
+        const parts = project.snapshot().parts;
+        const ids = new Set(withStacks(ui.selection, parts));
+        for (const p of parts)
+          if (ids.has(p.id) && PARTS[p.type]?.fields?.some((f) => f.key === 'flip')) project.setProp(p.id, 'flip', !p.props.flip);
       } else if (key === 'r' && !mod && ui.selection.length) {
         if (ui.view === 'schematic') project.rotateSchematic(ui.selection, schematicPlacement(project.snapshot().parts));
         else project.rotateParts(ui.selection);

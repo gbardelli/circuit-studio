@@ -184,12 +184,12 @@ const GigaRender = memo(function GigaRender({ visual }: RenderProps) {
 export const arduinoGiga: PartDef = {
   type: 'arduino-giga',
   name: 'Arduino GIGA R1 WiFi',
-  partNumber: 'ABX00063',
+  sku: 'ABX00063',
   category: 'Placas',
   description:
     'STM32H747XI de doble núcleo (Cortex-M7 a 480 MHz + M4), formato Mega, WiFi y Bluetooth. Sus pines trabajan a 3,3 V y no toleran 5 V. ' +
     'En el simulador el sketch corre en un núcleo AVR con el mismo mapa de pines; para la placa real compila con «arduino:mbed_giga:giga».',
-  keywords: ['arduino', 'giga', 'r1', 'wifi', 'stm32', 'stm32h747', 'cortex', 'm7', '3.3v', 'microcontrolador', 'mcu', 'placa'],
+  keywords: ['arduino', 'giga', 'abx00063', 'r1', 'wifi', 'stm32', 'stm32h747', 'cortex', 'm7', '3.3v', 'microcontrolador', 'mcu', 'placa'],
   defaults: {},
   mcu: GIGA_MCU,
   pins: () => GIGA_PINS,

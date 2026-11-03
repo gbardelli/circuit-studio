@@ -4,6 +4,7 @@
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { Capacitor, Circuit, type Element } from '../core/solver';
 import type { CircuitSnapshot, PartData, Props } from '../core/types';
+import { stackHost } from '../parts/stack';
 import { PARTS } from '../parts';
 import type { McuBridge, PartSim, Visual } from '../parts/types';
 import { AvrRunner, CLOCK_HZ, type BoardId } from './avr';
@@ -356,16 +357,14 @@ export class SimEngine {
     this.dirty = false;
   }
 
-  /** Cada shield va sobre la placa indicada en `host` o, si no, sobre la más cercana de su tipo. */
+  /** Cada shield funciona solo montada sobre su placa (ver parts/stack.ts), como en el banco. */
   private mountShields() {
     for (const rt of this.parts.values()) {
       const shield = rt.sim.shield;
       if (!shield) continue;
       const self = this.snapshot.parts.find((p) => p.id === rt.id);
-      const hosts = this.snapshot.parts.filter((p) => p.type === shield.host);
-      const chosen = hosts.find((p) => p.id === rt.props.host)
-        ?? hosts.sort((a, b) => Math.hypot(a.x - (self?.x ?? 0), a.y - (self?.y ?? 0)) - Math.hypot(b.x - (self?.x ?? 0), b.y - (self?.y ?? 0)))[0];
-      const runner = chosen && this.mcus.find((m) => m.partId === chosen.id)?.runner;
+      const host = self && stackHost(self, this.snapshot.parts);
+      const runner = host && this.mcus.find((m) => m.partId === host.id)?.runner;
       if (runner) runner.attachBus(shield.out, shield.input, shield);
       shield.power(Boolean(runner));
     }

@@ -55,8 +55,8 @@ export function materials(snapshot: CircuitSnapshot) {
     const identity=values.map(([key,v])=>`${key}=${v}`).join(' · ');
     const colors:Record<string,string>={red:'Rojo',green:'Verde',blue:'Azul',yellow:'Amarillo',white:'Blanco',orange:'Naranja',purple:'Violeta',pink:'Rosa'};
     const value = values.map(([key, v]) => key==='resistance' ? formatSI(Number(v),'Ω') : key==='capacitance' ? formatSI(Number(v),'F') : key==='cols' ? `${v} columnas` : key==='color' ? colors[String(v)]??String(v) : String(v)).join(' · ');
-    const reference=typeof p.props.partNumber==='string' ? p.props.partNumber : def.partNumber;
-    const key = `${p.type}|${reference!==def.partNumber?`${reference}|`:''}${identity}`;
+    const reference=typeof p.props.partNumber==='string' ? p.props.partNumber : def.partNumber ?? def.sku;
+    const key = `${p.type}|${reference!==(def.partNumber ?? def.sku)?`${reference}|`:''}${identity}`;
     const old = rows.get(key);
     if (old) old.quantity++;
     else

@@ -6,6 +6,7 @@ import { IndexeddbPersistence } from 'y-indexeddb';
 import * as awarenessProtocol from 'y-protocols/awareness';
 import type { CircuitSnapshot, PartData, Props, Rotation, Vec, WireData, WireEnd } from '../core/types';
 import { PARTS } from '../parts';
+import { mountedPosition, stackHost, stackedOn } from '../parts/stack';
 import { DEFAULT_SKETCH } from './sketch';
 import { DesignDoc } from './design';
 import { registerIcs } from '../logic/ic';
@@ -317,6 +318,12 @@ export class Project {
   setMeta(key:string,value:unknown) { this.tx(()=>this.meta.set(key,value)); }
 
   addPart(type: string, x: number, y: number, props: Props = {}, rot: Rotation = 0): string {
+    if (PARTS[type]?.stacksOn) {
+      // Soltada sobre su placa, la shield queda encajada desde el primer momento.
+      const draft = { id: '', type, x, y, rot, props };
+      const host = stackHost(draft, this.snapshot().parts);
+      if (host) ({ x, y } = mountedPosition(draft, host));
+    }
     const id = crypto.randomUUID();
     this.tx(() => {
       const m = new Y.Map<unknown>();
@@ -336,6 +343,7 @@ export class Project {
   }
 
   moveParts(moves: { id: string; x: number; y: number }[]) {
+    moves = this.stackMoves(moves);
     this.tx(() => {
       for (const mv of moves) {
         const m = this.parts.get(mv.id);
@@ -397,12 +405,49 @@ export class Project {
   }
 
   rotateParts(ids: string[]) {
+    const parts = this.snapshot().parts;
+    const shields = new Map(parts.flatMap((p) => (ids.includes(p.id) ? stackedOn(p, parts).map((s) => [s.id, p] as const) : [])));
     this.tx(() => {
       for (const id of ids) {
+        if (shields.has(id)) continue;
         const m = this.parts.get(id);
         if (m) m.set('rot', ((Number(m.get('rot')) || 0) + 90) % 360);
       }
+      // Una shield montada gira con su placa y sigue centrada sobre ella.
+      for (const [id, host] of shields) {
+        const m = this.parts.get(id);
+        if (!m) continue;
+        const rot = ((host.rot + 90) % 360) as Rotation;
+        const shield = parts.find((p) => p.id === id)!;
+        const at = mountedPosition({ ...shield, rot }, { ...host, rot });
+        m.set('rot', rot);
+        m.set('x', at.x);
+        m.set('y', at.y);
+      }
     });
+  }
+
+  /**
+   * Mover una placa arrastra sus shields; una shield que cae sobre una placa se encaja centrada,
+   * como al apilarla de verdad. Mover solo la shield la separa.
+   */
+  private stackMoves(moves: { id: string; x: number; y: number }[]) {
+    const parts = this.snapshot().parts;
+    const byId = new Map(parts.map((p) => [p.id, p]));
+    const out = new Map(moves.map((m) => [m.id, m]));
+    for (const mv of moves) {
+      const host = byId.get(mv.id);
+      if (!host) continue;
+      for (const s of stackedOn(host, parts))
+        if (!out.has(s.id)) out.set(s.id, { id: s.id, x: s.x + mv.x - host.x, y: s.y + mv.y - host.y });
+    }
+    const moved = parts.map((p) => (out.has(p.id) ? { ...p, ...out.get(p.id)! } : p));
+    for (const p of moved) {
+      if (!out.has(p.id) || !PARTS[p.type]?.stacksOn) continue;
+      const host = stackHost(p, moved);
+      if (host) out.set(p.id, { id: p.id, ...mountedPosition(p, host) });
+    }
+    return [...out.values()];
   }
 
   setProp(id: string, key: string, value: string | number | boolean) {

@@ -129,6 +129,10 @@ export interface PartDef {
   name: string;
   /** Referencia del fabricante (74HC00, NE555…): se muestra en la tarjeta y se busca. */
   partNumber?: string;
+  /** Placa sobre la que se apila como shield (tipo de pieza); ver parts/stack.ts. */
+  stacksOn?: string;
+  /** Código de pedido del fabricante (p. ej. ABX00063). No es un nombre: solo se lista en materiales. */
+  sku?: string;
   /** Subgrupo dentro de la categoría (Puertas lógicas, Contadores…). */
   family?: string;
   category: Category;

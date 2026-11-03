@@ -103,7 +103,8 @@ la carga asíncrona de U11 nunca lea un 000 al soltarse un sensor. La GIGA Displ
 muestra el hueco, el tiempo total del viaje (9, 6 o 3 s), las llamadas táctiles y el estado
 en su LED RGB. Sin el GIGA, todo lo obligatorio sigue funcionando con los integrados.
 
-La GIGA Display Shield se monta sobre el GIGA más cercano, sin cables. Los sketches usan las
+La GIGA Display Shield se suelta encima del GIGA, encaja centrada y desde entonces se mueve con
+él, sin cables. Montada tapa la placa; F voltea la pila para ver y cablear los pines del GIGA. Los sketches usan las
 librerías oficiales (`Arduino_GigaDisplay_GFX`, `Arduino_GigaDisplayTouch`,
 `Arduino_GigaDisplay`). Al compilar para el núcleo AVR del simulador se sustituyen por
 equivalentes de `src/sim/gigaDisplayShim.ts`; LVGL, la IMU y el micrófono no se emulan.
