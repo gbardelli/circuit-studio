@@ -47,7 +47,7 @@ export class DesignDoc {
         wires,
       });
     });
-    out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'main' ? -1 : 1));
+    out.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name, 'es', { numeric: true }) : a.kind === 'main' ? -1 : 1));
     this.cache = out;
     this.stale = false;
     return out;

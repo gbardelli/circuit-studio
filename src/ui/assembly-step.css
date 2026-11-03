@@ -1,0 +1,483 @@
+/* ── Paso del montaje ──────────────────────────────────────────────────────────
+   Una sola tarjeta para piezas y cables, en cualquier panel: cabecera con el avance, cuerpo
+   desplazable (qué es → dónde va) y acciones fijas abajo. El ancho del contenedor, no la
+   ventana, decide si el cuerpo va en una columna o en dos. */
+.step-view {
+  container: step / inline-size;
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: linear-gradient(180deg, #1b1d21, #16181b 70%);
+}
+
+/* Cabecera: fase y número, índice de pasos y una barra que marca lo confirmado y dónde estás. */
+.step-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 12px 16px 0;
+}
+.step-count {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.step-count b {
+  font-weight: 600;
+  color: var(--text-2);
+}
+.step-phase {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--accent-hi);
+}
+.step-meter {
+  position: relative;
+  grid-column: 1 / -1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.step-meter > i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: inherit;
+  background: var(--green);
+  transition: width 240ms var(--ease);
+}
+.step-meter > b {
+  position: absolute;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 50%;
+  background: var(--text);
+  box-shadow: 0 0 0 2px #1b1d21;
+  transition: left 240ms var(--ease);
+}
+
+.step-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--text-2);
+  font: 500 12.5px var(--font);
+  cursor: pointer;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+.step-icon-btn:hover:not(:disabled) {
+  background: var(--hover);
+  color: var(--text);
+}
+.step-icon-btn:active:not(:disabled) {
+  background: var(--press);
+}
+.step-icon-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.step-icon-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Cuerpo: se desplaza solo él, así las acciones nunca se pierden y nada queda cortado. */
+.step-body {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  padding: 14px 16px 16px;
+  overscroll-behavior: contain;
+  animation: step-in 200ms var(--ease) both;
+}
+@keyframes step-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+.step-hero {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 14px;
+}
+/* La pieza descansa en una bandeja iluminada desde arriba, como un objeto y no como un icono. */
+.step-art {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: 72px;
+  height: 72px;
+  padding: 8px;
+  border-radius: var(--r-lg);
+  background: radial-gradient(120% 90% at 50% 0%, #2c3037, #1a1c20 70%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 0 0 1px var(--line), 0 6px 14px -8px rgba(0, 0, 0, 0.7);
+}
+.step-art > svg {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+.step-art .assembly-piece-thumbnail {
+  overflow: visible;
+  filter: drop-shadow(0 3px 3px rgba(0, 0, 0, 0.45));
+}
+.step-cable {
+  overflow: visible;
+}
+.step-cable path {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.5));
+}
+/* Un borde claro bajo el aislante para que los cables oscuros también se lean sobre la bandeja. */
+.step-cable path.step-cable-edge {
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 7.5;
+  filter: none;
+}
+.step-cable rect {
+  fill: #8e96a0;
+}
+.step-done {
+  position: absolute;
+  left: 50%;
+  bottom: -9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 7px 2px 5px;
+  border-radius: 999px;
+  transform: translateX(-50%);
+  background: #1f3a29;
+  box-shadow: 0 0 0 1px rgba(48, 209, 88, 0.35);
+  color: #7ee2a0;
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.step-titles {
+  min-width: 0;
+}
+.step-titles h2 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  text-wrap: balance;
+}
+.step-sub {
+  margin: 4px 0 0;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--text-2);
+}
+.step-tip {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: var(--r-md);
+  background: rgba(255, 159, 10, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 159, 10, 0.18);
+  color: #ffd79a;
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.step-tip svg {
+  flex: none;
+  margin-top: 1px;
+  color: var(--amber);
+}
+
+/* Dónde va: lista agrupada con separadores finos; las coordenadas son lo más legible. */
+.step-where h3 {
+  margin: 0 0 6px 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text-3);
+}
+.step-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-radius: var(--r-lg);
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.step-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 14px;
+}
+.step-row + .step-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 0;
+  height: 1px;
+  background: var(--line);
+}
+.step-row-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+  min-width: 0;
+}
+.step-row-label {
+  font-size: 12.5px;
+  color: var(--text-3);
+}
+.step-row-head strong {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.step-row-owner {
+  flex-basis: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-2);
+}
+.step-row-head strong.step-row-owner {
+  font-size: 13px;
+  font-weight: 500;
+}
+.step-pin {
+  min-width: 1ch;
+}
+.step-signal {
+  padding: 1px 6px;
+  border-radius: var(--r-xs);
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-2);
+}
+.step-row .terminal-location {
+  gap: 16px;
+  justify-content: flex-end;
+}
+.step-row .terminal-location > div {
+  min-width: 52px;
+  text-align: right;
+}
+.step-row .terminal-location dt {
+  margin: 0;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--text-3);
+}
+.step-row .terminal-location dd {
+  font-size: 17px;
+  line-height: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+.step-empty {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-2);
+}
+
+/* Cable: los dos extremos unidos por su color, como en el dibujo. */
+.step-list.is-route .step-row {
+  padding-left: 34px;
+}
+.step-list.is-route .step-row + .step-row::before {
+  left: 34px;
+}
+.step-end-dot {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin-top: -5px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px #1b1d21, 0 0 0 3px rgba(255, 255, 255, 0.16);
+}
+.step-list.is-route .step-end:first-child::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  top: calc(50% + 7px);
+  height: calc(100% - 14px);
+  border-left: 2px dotted rgba(255, 255, 255, 0.22);
+  z-index: 1;
+}
+
+.step-value {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 0;
+}
+.step-value strong {
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+}
+.step-value small {
+  font-size: 12px;
+  color: var(--text-3);
+}
+.step-bands {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #d9c8a8;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+.step-bands > i {
+  width: 5px;
+  height: 14px;
+  border-radius: 1px;
+}
+.step-bands > i:last-of-type {
+  margin-left: 5px;
+}
+
+.step-more {
+  margin-top: 8px;
+}
+.step-more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 2px;
+  list-style: none;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent-hi);
+  cursor: pointer;
+}
+.step-more > summary::-webkit-details-marker {
+  display: none;
+}
+.step-more > summary svg {
+  transition: transform 160ms var(--ease);
+}
+.step-more[open] > summary svg {
+  transform: rotate(90deg);
+}
+.step-more > .step-list {
+  margin-top: 6px;
+}
+
+/* Acciones: navegación discreta a la izquierda; una sola acción principal, siempre a la derecha. */
+.step-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px 12px;
+  border-top: 1px solid var(--line);
+  background: rgba(14, 15, 17, 0.6);
+}
+.step-nav {
+  display: flex;
+  gap: 2px;
+  margin-right: auto;
+}
+.step-foot > .btn {
+  height: 36px;
+  white-space: nowrap;
+}
+.step-foot > .btn.primary {
+  min-width: 156px;
+  justify-content: center;
+}
+.step-view.is-done .step-foot > .btn.primary {
+  min-width: 120px;
+}
+
+/* Contenedor ancho (panel inferior): qué es a la izquierda y dónde va a la derecha. */
+@container step (min-width: 600px) {
+  .step-body {
+    grid-template-columns: minmax(220px, 0.85fr) minmax(300px, 1.15fr);
+    align-items: start;
+    gap: 16px 28px;
+    padding: 14px 20px 16px;
+  }
+  .step-head,
+  .step-foot {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+}
+/* Contenedor estrecho: la pieza grande arriba y el botón principal a todo el ancho. */
+@container step (max-width: 420px) {
+  .step-hero {
+    grid-template-columns: 1fr;
+    justify-items: start;
+  }
+  .step-art {
+    width: 100%;
+    height: 116px;
+    padding: 14px 20px;
+  }
+  .step-foot {
+    flex-wrap: wrap;
+  }
+  .step-foot > .btn.primary {
+    flex: 1 0 100%;
+    order: 3;
+    height: 40px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .step-body {
+    animation: none;
+  }
+  .step-meter > i,
+  .step-meter > b,
+  .step-more > summary svg {
+    transition: none;
+  }
+}

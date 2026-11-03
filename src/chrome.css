@@ -102,32 +102,16 @@
 .workbench-panel .btn.primary { background: linear-gradient(#f3f4f6,#dedfe3); color: #202226; box-shadow: 0 1px 0 #fff9 inset,0 1px 3px #0005; font-weight: 550; }
 .workbench-panel .btn:disabled,.workbench-panel .icon-btn:disabled { opacity: .4; }
 .workbench-panel :is(button,input,select):focus-visible { outline-color: #8eb8e9; }
-.workbench-panel :is(.lab-caption,.assembly-manual-note) { color: #a1a9b5; }
+
 .workbench-panel .lab-caption { font-size: 11px; }
 .workbench-panel .lab-empty strong { font-weight: 550; letter-spacing: -.02em; }
 .workbench-panel .lab-empty p { color: #a6aebb; max-width: 54ch; line-height: 1.6; }
 .assembly-guide { grid-template-rows: auto minmax(0,1fr) auto; padding: 14px 18px 12px; gap: 9px; background: linear-gradient(160deg,#1c1e22,#17191c 65%); }
 .assembly-guide-progress { color: #9fa8b5; }
 .assembly-guide-progress>progress { height: 2px; opacity: .8; }
-.assembly-current { grid-template-columns: 74px minmax(0,1fr); gap: 18px; }
-.assembly-current-copy { max-width: 1040px; }
-.assembly-current-meta { font-size: 11px; gap: 6px 14px; color: #aeb6c3; }
-.assembly-current-copy h2 { margin-top: 7px; margin-bottom: 10px; font-size: 18px; font-weight: 600; letter-spacing: -.02em; }
-.assembly-wire-endpoints { gap: 24px; }
-.assembly-wire-endpoints>div { flex: 0 1 420px; min-width: 0; }
-.assembly-wire-endpoints strong { font-size: 13px; font-weight: 500; line-height: 1.6; overflow-wrap: anywhere; }
-.assembly-wire-endpoints>div>span { font-size: 11px; color: #aeb7c4; }
-.assembly-guide-actions { padding-top: 10px; border-top-color: #ffffff07; gap: 10px; }
-.assembly-guide-actions>.btn.primary { min-width: 145px; }
-.assembly-back-start { color: #a7afbc; padding-left: 2px; }
-.assembly-pinout>summary { color: #b8c5d5; padding: 5px 0; }
-.assembly-pinout>dl { background: #101214; border-color: #ffffff09; }
+
 .assembly-full-layout .assembly-guide { padding: 20px; }
-.assembly-full-layout .assembly-current { gap: 20px; }
-.assembly-full-layout .assembly-wire-endpoints>div { flex: auto; }
-.assembly-full-layout .assembly-current-copy h2 { font-size: 20px; line-height: 1.3; }
-.assembly-full-layout .assembly-guide-actions>.btn.primary { height: 36px; }
-.assembly-full-layout .assembly-manual-note { color: #a7afbc; }
+
 .workbench-flexible.is-fullscreen { background: #141619; }
 .workbench-panel .diagnostics-panel,.workbench-panel .notes-panel { background: #141619; }
 .statusbar { border-top-color: #ffffff08; background: #0e1012; }
@@ -156,10 +140,7 @@
   .workbench-tools { gap: 2px; }
   .workbench-tools>button { padding: 0 7px; }
   .assembly-guide { padding: 10px 12px; gap: 8px; }
-  .assembly-current { grid-template-columns: 52px minmax(0,1fr); gap: 12px; }
-  .assembly-wire-endpoints { gap: 6px; }
-  .assembly-wire-endpoints>div { flex: auto; }
-  .assembly-current-copy h2 { font-size: 16px; margin: 5px 0 8px; }
+
   .workbench-panel .lab-controls { gap: 4px; }
 }
 @media(prefers-reduced-motion:reduce) {
@@ -194,27 +175,11 @@
 .assembly-reset-notice>.btn { margin-left: auto; }
 .assembly-guide-progress { font-size: 12px; line-height: 20px; gap: 12px; }
 .assembly-index-trigger { font-size: 13px; padding: 5px 8px; white-space: nowrap; }
-.assembly-current-copy h2 { font-size: 20px; margin: 7px 0 12px; line-height: 1.3; }
-.assembly-current-copy p { font-size: 14px; line-height: 1.55; }
-.assembly-current-meta { font-size: 12px; line-height: 1.5; }
-.assembly-placement-summary { font-size: 13px; line-height: 1.5; gap: 8px 18px; }
-.assembly-pinout { font-size: 13px; }
-.assembly-wire-endpoints { display: flex; align-items: center; gap: 20px; padding: 12px 16px; border-radius: 8px; background: linear-gradient(#24272c88,#1a1d2288); box-shadow: inset 0 1px 0 #ffffff0a,inset 0 0 0 1px #ffffff06; }
-.assembly-wire-endpoints>.assembly-connection-point { flex: 1; min-width: 0; max-width: none; }
-.assembly-guide-actions { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; padding-top: 12px; }
-.assembly-step-navigation,.assembly-step-completion { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.assembly-step-completion { margin-left: auto; gap: 10px; }
-.assembly-guide-actions .btn { font-size: 13px; height: 36px; padding: 0 12px; }
-.assembly-guide-actions .btn.primary { min-width: 160px; }
+
 .assembly-index-row { display: flex; align-items: center; gap: 3px; }
 .ui-step-list .assembly-index-row>button:first-child { flex: 1; min-width: 0; font-size: 12px; }
 .ui-step-list .assembly-index-row>.assembly-index-unmark { width: auto; flex: none; color: #b6c2d1; font-size: 11px; padding: 6px; }
-.assembly-full-layout .assembly-current-art { min-height: 76px; }
-.assembly-full-layout .assembly-wire-endpoints { padding: 14px; gap: 14px; }
-.assembly-full-layout .assembly-guide-actions { display: flex; flex-direction: column; align-items: stretch; }
-.assembly-full-layout .assembly-step-completion { order: -1; margin-left: 0; }
-.assembly-full-layout .assembly-step-completion>.btn { flex: 1; min-width: 0; }
-.assembly-full-layout .assembly-step-navigation { justify-content: space-between; }
+
 .materials-panel { display: flex; flex: 1; flex-direction: column; min-height: 0; background: linear-gradient(145deg,#1d2024,#17191d 60%); }
 .materials-summary { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 20px; padding: 16px 20px 10px; }
 .materials-summary h2 { font-size: 19px; font-weight: 600; letter-spacing: -.02em; line-height: 1.3; margin: 0 0 3px; }
@@ -251,13 +216,10 @@
   .materials-panel .material-settings { padding: 7px 14px 12px; flex-wrap: wrap; gap: 10px; }
   .materials-panel .material-settings>span { display: none; }
   .materials-panel .material-settings>.btn { margin-left: auto; }
-  .assembly-current-copy h2 { font-size: 18px; }
-  .assembly-wire-endpoints { flex-direction: column; align-items: stretch; gap: 12px; padding: 12px; }
+
   .assembly-guide-progress { flex-wrap: wrap; font-size: 11px; }
   .assembly-guide-progress>progress { width: 42px; }
-  .assembly-step-completion { width: 100%; justify-content: flex-end; }
-  .assembly-step-navigation { width: 100%; justify-content: space-between; }
-  .assembly-step-completion>.btn { flex: 1; min-width: 0; }
+
   .assembly-view-switcher>button { font-size: 13px; padding: 0 10px; }
 }
 
@@ -300,18 +262,9 @@
 .assembly-guide { padding: 18px 24px 16px; gap: 12px; background: linear-gradient(125deg,#25282e,#1d2025 75%); }
 .assembly-guide-progress { font-size: 13px; color: #bbc3cf; }
 .assembly-guide-progress>progress { height: 4px; }
-.assembly-current.is-wire,.assembly-full-layout .assembly-current.is-wire { grid-template-columns: minmax(0,1fr); }
-.assembly-current-copy h2 { font-size: 24px; letter-spacing: -.025em; line-height: 1.25; margin: 9px 0 16px; font-weight: 600; }
-.assembly-current-copy p { font-size: 15px; line-height: 1.55; color: #c0c8d3; }
-.assembly-current-meta { font-size: 13px; color: #b4bdcb; gap: 8px 16px; }
-.assembly-current-meta>span:nth-child(2) { color: #b4bdcb; }
-.assembly-wire-endpoints { padding: 16px 18px; border-radius: 9px; gap: 30px; background: linear-gradient(#ffffff04,#00000008); box-shadow: inset 0 1px 0 #ffffff0a,inset 0 0 0 1px #ffffff09; }
-.assembly-guide-actions { border-top: 1px solid #ffffff0e; padding-top: 14px; }
-.assembly-guide-actions .btn { height: 38px; font-size: 14px; padding: 0 14px; }
+
 .assembly-index-row .assembly-index-unmark { min-height: 32px; }
-.assembly-full-layout .assembly-current-art { min-height: 56px; }
-.assembly-full-layout .assembly-current-copy h2 { font-size: 23px; }
-.assembly-full-layout .assembly-wire-endpoints { gap: 20px; padding: 16px; }
+
 .assembly-full-layout .assembly-guide { gap: 18px; }
 .assembly-view-switcher>button { font-size: 14px; height: 30px; }
 .assembly-pdf-error { flex: none; padding: 12px 20px; background: #472d25; color: #ffded2; font-size: 14px; line-height: 1.5; }
@@ -400,8 +353,7 @@
 @media(hover:hover) and (pointer:fine) { .bom-scroll tbody tr:hover { background: #ffffff04; } .bom-filter button:not([aria-pressed=true]):hover { color: #fff; } }
 @media(max-width:760px) {
   .assembly-guide { padding: 14px; gap: 12px; }
-  .assembly-current-copy h2,.assembly-full-layout .assembly-current-copy h2 { font-size: 22px; }
-  .assembly-wire-endpoints { padding: 14px; gap: 18px; }
+
   .bom-heading { padding: 16px 14px 12px; flex-wrap: wrap; gap: 12px; }
   .bom-heading-actions { width: 100%; }
   .bom-heading-actions>.btn.primary { margin-left: auto; }
@@ -470,46 +422,20 @@
 .assembly-guide { padding: 14px 18px; gap: 12px; background: #202329; }
 .assembly-guide-progress { gap: 10px; font-size: 13px; }
 .assembly-guide-progress>progress { width: 64px; }
-.assembly-current-copy h2,.assembly-full-layout .assembly-current-copy h2 { font-size: 22px; margin: 6px 0 12px; }
-.assembly-current-meta { gap: 6px 16px; font-size: 13px; }
-.assembly-current-meta>span:first-child { color: #e2e7ef; font-weight: 550; }
-.assembly-current-meta>span:nth-child(2) { color: #aeb8c7; }
-.assembly-wire-endpoints { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; padding: 0; gap: 20px; background: none; border-radius: 0; box-shadow: none; }
-.assembly-wire-endpoints>div { max-width: none; }
+
 .connection-endpoint { display: grid; align-content: start; gap: 3px; min-width: 0; }
 .terminal-location { display: flex; align-items: start; gap: 20px; min-width: 0; margin: 0; }
 .terminal-location>div { min-width: 0; }
 .terminal-location dt { margin: 0 0 2px; color: #aeb8c7; font-size: 12px; line-height: 17px; font-weight: 400; }
 .terminal-location dd { margin: 0; color: #f0f3f8; font-size: 16px; line-height: 23px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.assembly-wire-endpoints .endpoint-label { font-size: 14px; font-weight: 550; color: #e1e7ef; margin-bottom: 5px; }
-.assembly-wire-endpoints .terminal-location dd { font-size: 18px; line-height: 25px; }
-.assembly-placement-summary { display: flex; align-items: start; flex-wrap: wrap; gap: 12px 24px; }
-.assembly-pin-placement { display: grid; align-items: start; gap: 6px; min-width: 0; padding-right: 20px; border-right: 1px solid #ffffff12; }
-.assembly-pin-name { display: flex; flex-direction: column; gap: 2px; color: #aeb8c7; font-size: 12px; line-height: 17px; }
-.assembly-pin-name>strong { font-size: 16px; line-height: 23px; color: #e9eef6; font-weight: 600; }
-.assembly-pin-placement>.assembly-pin-name { flex-direction: row; align-items: baseline; gap: 6px; font-size: 13px; }
-.assembly-pin-placement>.assembly-pin-name>strong { font-size: 14px; line-height: 20px; }
-.assembly-part-value { display: flex; flex-direction: column; gap: 2px; color: #aeb8c7; font-size: 12px; line-height: 17px; }
-.assembly-part-value>strong { color: #e9eef6; font-size: 16px; line-height: 23px; font-weight: 600; }
-.assembly-pinout-list { display: grid; gap: 10px; padding-top: 10px; }
-.assembly-pinout-list>div { display: grid; grid-template-columns: 76px minmax(0,1fr); align-items: start; gap: 4px 16px; padding: 8px 0; border-bottom: 1px solid #ffffff08; }
-.assembly-pinout-list .endpoint-owner { grid-column: 2; font-size: 13px; }
+
 .connection-endpoint .endpoint-label { font-size: 13px; font-weight: 400; line-height: 18px; color: #aeb8c7; margin: 0; }
 .connection-endpoint .endpoint-owner { display: block; margin: 0; font-size: 13px; line-height: 18px; color: #c0c8d4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.assembly-wire-endpoints .endpoint-owner { white-space: normal; overflow-wrap: anywhere; }
-.assembly-guide-actions { padding-top: 12px; }
-.assembly-guide.has-current-step { grid-template-rows: minmax(0,1fr) auto; }
-.has-current-step>.assembly-guide-progress { position: absolute; right: 18px; top: 14px; z-index: 2; }
-.has-current-step .assembly-current-meta { padding-right: 90px; min-height: 20px; }
-.assembly-current-copy .assembly-board-context { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 10px; font-size: 13px; line-height: 20px; margin-bottom: 8px; }
-.assembly-board-context>span { color: #aeb8c7; }
-.assembly-board-context>strong { color: #d5deea; font-weight: 500; }
-.assembly-current-copy .assembly-orientation { font-size: 14px; line-height: 20px; margin-bottom: 8px; }
+
 .assembly-step-number { width: 24px; flex: none; font-size: 12px; font-variant-numeric: tabular-nums; color: #aeb8c7; }
 .assembly-index-endpoints { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; min-width: 0; flex: 1; }
 .assembly-index-endpoints .endpoint-label,.assembly-index-endpoints .endpoint-owner { font-size: 12px; }
 .ui-step-list .assembly-index-row>button { padding: 10px 12px; align-items: center; min-width: 0; }
-.assembly-full-layout .assembly-wire-endpoints { display: grid; grid-template-columns: minmax(0,1fr); gap: 14px; padding: 0; }
 
 /* Both guide states occupy the same grid cell and contribute to its size.
    Selection never changes the canvas bounds underneath the pointer. */
@@ -545,7 +471,7 @@
   .connection-guide .connection-ends { grid-column: 1 / -1; grid-row: 2; gap: 14px; }
   .connection-guide-details>.panel-control { grid-column: 2; grid-row: 1; }
   .connection-guide .connection-legend { flex-wrap: wrap; overflow: visible; gap: 4px 12px; }
-  .assembly-wire-endpoints { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 14px; }
+
   .workbench-heading .panel-expand { padding: 0 8px; }
   .bom-heading { padding: 12px 14px; }
   .bom-tools { padding: 0 14px 12px; }
@@ -556,31 +482,11 @@
   .bom-check { width: 44px; height: 44px; }
 }
 @media(max-width:560px) {
-  .connection-guide .connection-ends,.assembly-wire-endpoints { grid-template-columns: minmax(0,1fr); }
+  .connection-guide .connection-ends { grid-template-columns: minmax(0,1fr); }
   .assembly-index-endpoints { grid-template-columns: minmax(0,1fr); gap: 10px; }
-}
-@media(min-width:561px) and (max-width:760px) {
-  .assembly-guide-actions { flex-wrap: nowrap; }
-  .assembly-step-navigation,.assembly-step-completion { width: auto; }
-  .assembly-step-completion>.btn { flex: none; }
 }
 
 /* Instructions adapt to their own column, including the fullscreen sidebar. */
-.assembly-current-copy { container-type: inline-size; container-name: assembly-instruction; }
-@container assembly-instruction (max-width:440px) {
-  .assembly-placement-summary { display: grid; grid-template-columns: minmax(0,1fr); gap: 0; margin-top: 16px; }
-  .assembly-pin-placement { display: grid; grid-template-columns: 72px minmax(0,1fr); align-items: center; gap: 12px; padding: 12px 0; border-right: 0; border-bottom: 1px solid #ffffff0c; }
-  .assembly-pin-placement>.assembly-pin-name { align-items: baseline; color: #bac4d2; }
-  .assembly-pin-placement>.terminal-location { display: grid; grid-template-columns: minmax(0,1fr) 64px; gap: 16px; }
-  .assembly-pin-placement .terminal-location dt { color: #a8b4c4; font-size: 12px; }
-  .assembly-pin-placement .terminal-location dd { color: #edf2fa; font-size: 16px; line-height: 24px; }
-  .assembly-part-value { display: grid; grid-template-columns: 72px minmax(0,1fr); align-items: baseline; gap: 12px; padding: 16px 0 4px; }
-  .assembly-part-value>span { font-size: 13px; color: #bac4d2; }
-  .assembly-part-value>strong { color: #edf2fa; font-size: 17px; line-height: 24px; }
-  .assembly-current-copy .assembly-board-context { display: grid; gap: 4px; margin-bottom: 4px; }
-  .assembly-board-context>span { font-size: 12px; color: #a8b4c4; }
-  .assembly-board-context>strong { font-size: 13px; line-height: 20px; }
-}
 
 /* Comments are a working conversation, with a separate writing surface. */
 .notes-layout { display: flex; flex-wrap: wrap; flex: 1; min-height: 0; min-width: 0; overflow: auto; background: #1c1f25; }
@@ -650,14 +556,9 @@
 .probe-readout .probe-action:hover { background: linear-gradient(#ffffff12,#ffffff09); }
 .probe-readout .probe-action:active { background: #0002; box-shadow: inset 0 1px 2px #0003; }
 @media(min-width:761px) {
-  .assembly-full-layout .assembly-current { position: relative; display: block; }
-  .assembly-full-layout .assembly-current-art { position: absolute; top: 26px; right: 0; width: 64px; min-height: 0; height: 72px; }
+
   .assembly-full-layout .assembly-piece-thumbnail { width: 56px; height: 68px; }
-  .assembly-full-layout .assembly-current-copy h2 { padding-right: 72px; margin-bottom: 18px; }
+
   .assembly-full-layout .assembly-guide { padding: 18px 20px; }
-  .assembly-full-layout .assembly-guide-actions { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
-  .assembly-full-layout .assembly-step-navigation { order: 0; width: 100%; justify-content: space-between; gap: 8px; }
-  .assembly-full-layout .assembly-step-completion { order: 1; display: grid; grid-template-columns: minmax(0,1fr); width: 100%; gap: 8px; margin: 0; }
-  .assembly-full-layout .assembly-step-completion>.btn.primary { width: 100%; min-height: 40px; }
-  .assembly-full-layout .assembly-step-completion>.btn:not(.primary) { justify-self: start; background: transparent; border-color: transparent; box-shadow: none; color: #b9c4d4; padding: 0 8px; height: 32px; }
+
 }

@@ -1,40 +1,11 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { HintButton, PopoverPanel } from "./Overlays";
-import {
-  ArrowRight,
-  Check,
-  CheckCheck,
-  ChevronLeft,
-  ChevronRight,
-  RotateCcw,
-  Undo2,
-} from "lucide-react";
-import { PARTS } from "../parts";
-import { formatSI } from "../core/units";
-import type { PartData } from "../core/types";
+import { Check, CheckCheck, ListOrdered, RotateCcw } from "lucide-react";
 import { ConnectionEndpoint } from "./ConnectionEndpoint";
-import { TerminalLocation } from "./TerminalLocation";
-import { partBounds } from "./geometry";
-import { ASSEMBLY_PHASES, orientationText, partTitle } from "./assembly-plan";
+import { ASSEMBLY_PHASES } from "./assembly-plan";
+import { StepCard } from "./AssemblyStepCard";
 import { useAssemblyGuide } from "./useAssemblyGuide";
 import { useUi } from "./store";
-
-function PieceThumbnail({ part }: { part: PartData }) {
-  const local = { ...part, id: `assembly-thumb-${part.id}`, x: 0, y: 0 },
-    b = partBounds(local),
-    def = PARTS[part.type];
-  return (
-    <svg
-      className="assembly-piece-thumbnail"
-      viewBox={`${b.x - 8} ${b.y - 8} ${b.w + 16} ${b.h + 16}`}
-      aria-hidden="true"
-    >
-      <g transform={`rotate(${part.rot})`}>
-        <def.Render part={local} visual={null} preview />
-      </g>
-    </svg>
-  );
-}
 
 export function AssemblySteps() {
   const {
@@ -53,7 +24,6 @@ export function AssemblySteps() {
   const [indexOpen, setIndexOpen] = useState(false);
   const step = frame.current,
     byId = new Map(snapshot.parts.map((p) => [p.id, p]));
-  const previous = plan.steps[frame.index - 1];
   const phase = step && ASSEMBLY_PHASES.find((p) => p.id === step.phase);
   const progress = plan.steps.length ? completed / plan.steps.length : 0;
   if (!plan.steps.length)
@@ -71,97 +41,111 @@ export function AssemblySteps() {
         </HintButton>
       </div>
     );
-  return (
-    <div
-      className={`assembly-guide ${step && cursor !== null ? "has-current-step" : ""}`}
+  const stepIndex = (className: string, label: ReactNode) => (
+    <PopoverPanel
+      label="Pasos del montaje"
+      className="ui-step-index"
+      open={indexOpen}
+      onOpenChange={setIndexOpen}
+      trigger={<button className={className}>{label}</button>}
     >
-      <div className="assembly-guide-progress">
-        {(!step || cursor === null) && (
-          <>
-            <progress
-              value={completed}
-              max={plan.steps.length}
-              aria-label={
-                project.readOnly ? "Pasos vistos" : "Pasos confirmados"
-              }
-            />
-            <span>
-              {completed} de {plan.steps.length} pasos{" "}
-              {project.readOnly ? "vistos" : "completados"}
-            </span>
-          </>
-        )}
-        <PopoverPanel
-          label="Pasos del montaje"
-          className="ui-step-index"
-          open={indexOpen}
-          onOpenChange={setIndexOpen}
-          trigger={
-            <button className="assembly-index-trigger">Ver pasos</button>
-          }
-        >
-          <div className="ui-menu-heading">
-            Pasos del montaje<span>{plan.steps.length} pasos</span>
-          </div>
-          <div className="ui-step-list">
-            {ASSEMBLY_PHASES.map((p) => (
-              <div key={p.id}>
-                <strong>{p.label}</strong>
-                {plan.steps
-                  .filter((s) => s.phase === p.id)
-                  .map((s) => (
-                    <div className="assembly-index-row" key={s.key}>
-                      <button
-                        aria-label={s.title}
-                        aria-current={s.key === cursor ? "step" : undefined}
-                        className={s.key === cursor ? "current" : ""}
-                        onClick={() => {
-                          navigate(plan.steps.indexOf(s));
-                          setIndexOpen(false);
-                        }}
+      <div className="ui-menu-heading">
+        Pasos del montaje<span>{plan.steps.length} pasos</span>
+      </div>
+      <div className="ui-step-list">
+        {ASSEMBLY_PHASES.map((p) => (
+          <div key={p.id}>
+            <strong>{p.label}</strong>
+            {plan.steps
+              .filter((s) => s.phase === p.id)
+              .map((s) => (
+                <div className="assembly-index-row" key={s.key}>
+                  <button
+                    aria-label={s.title}
+                    aria-current={s.key === cursor ? "step" : undefined}
+                    className={s.key === cursor ? "current" : ""}
+                    onClick={() => {
+                      navigate(plan.steps.indexOf(s));
+                      setIndexOpen(false);
+                    }}
+                  >
+                    {isDone(s) ? (
+                      <Check size={13} />
+                    ) : (
+                      <span
+                        className="assembly-step-number"
+                        aria-hidden="true"
                       >
-                        {isDone(s) ? (
-                          <Check size={13} />
-                        ) : (
-                          <span
-                            className="assembly-step-number"
-                            aria-hidden="true"
-                          >
-                            {plan.steps.indexOf(s) + 1}
-                          </span>
-                        )}
-                        {s.kind === "wire" ? (
-                          <span className="assembly-index-endpoints">
-                            <ConnectionEndpoint
-                              label="Origen"
-                              end={s.wire.a}
-                              part={byId.get(s.wire.a.part ?? "")}
-                            />
-                            <ConnectionEndpoint
-                              label="Destino"
-                              end={s.wire.b}
-                              part={byId.get(s.wire.b.part ?? "")}
-                            />
-                          </span>
-                        ) : (
-                          <span>{s.title}</span>
-                        )}
-                      </button>
-                      {isDone(s) && (
-                        <HintButton
-                          className="assembly-index-unmark"
-                          aria-label={`Desmarcar ${s.title}`}
-                          onClick={() => unconfirm(s)}
-                        >
-                          Desmarcar
-                        </HintButton>
-                      )}
-                    </div>
-                  ))}
-              </div>
-            ))}
+                        {plan.steps.indexOf(s) + 1}
+                      </span>
+                    )}
+                    {s.kind === "wire" ? (
+                      <span className="assembly-index-endpoints">
+                        <ConnectionEndpoint
+                          label="Origen"
+                          end={s.wire.a}
+                          part={byId.get(s.wire.a.part ?? "")}
+                        />
+                        <ConnectionEndpoint
+                          label="Destino"
+                          end={s.wire.b}
+                          part={byId.get(s.wire.b.part ?? "")}
+                        />
+                      </span>
+                    ) : (
+                      <span>{s.title}</span>
+                    )}
+                  </button>
+                  {isDone(s) && (
+                    <HintButton
+                      className="assembly-index-unmark"
+                      aria-label={`Desmarcar ${s.title}`}
+                      onClick={() => unconfirm(s)}
+                    >
+                      Desmarcar
+                    </HintButton>
+                  )}
+                </div>
+              ))}
           </div>
-        </PopoverPanel>
+        ))}
+      </div>
+    </PopoverPanel>
+  );
+  if (step && cursor !== null)
+    return (
+      <StepCard
+        key={step.key}
+        step={step}
+        index={frame.index}
+        total={plan.steps.length}
+        completed={completed}
+        phase={phase?.label}
+        done={isDone(step)}
+        readOnly={project.readOnly}
+        byId={byId}
+        menu={stepIndex("step-icon-btn step-index", <><ListOrdered size={15} /> Pasos</>)}
+        onPrevious={() => navigate(frame.index - 1)}
+        onNext={() => navigate(frame.index + 1)}
+        onConfirm={confirm}
+        onUnconfirm={() => unconfirm(step)}
+      />
+    );
+  return (
+    <div className="assembly-guide">
+      <div className="assembly-guide-progress">
+        <progress
+          value={completed}
+          max={plan.steps.length}
+          aria-label={
+            project.readOnly ? "Pasos vistos" : "Pasos confirmados"
+          }
+        />
+        <span>
+          {completed} de {plan.steps.length} pasos{" "}
+          {project.readOnly ? "vistos" : "completados"}
+        </span>
+        {stepIndex("assembly-index-trigger", "Ver pasos")}
       </div>
       {cursor === null ? (
         <div className="assembly-welcome">
@@ -195,7 +179,7 @@ export function AssemblySteps() {
             )}
           </div>
         </div>
-      ) : !step ? (
+      ) : (
         <div className="assembly-welcome">
           <div>
             <CheckCheck size={25} />
@@ -231,180 +215,6 @@ export function AssemblySteps() {
             </HintButton>
           </div>
         </div>
-      ) : (
-        <>
-          <div
-            className={`assembly-current ${step.kind === "wire" ? "is-wire" : ""}`}
-            key={step.key}
-          >
-            {step.kind === "part" && (
-              <div className="assembly-current-art">
-                <PieceThumbnail part={step.part} />
-              </div>
-            )}
-            <div
-              className="assembly-current-copy"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              <div className="assembly-current-meta">
-                <span>
-                  Paso {frame.index + 1} de {plan.steps.length}
-                </span>
-                <span>{phase?.label}</span>
-                {isDone(step) && (
-                  <span className="assembly-already-done">
-                    <Check size={14} />
-                    {project.readOnly
-                      ? "Visto"
-                      : step.kind === "wire"
-                        ? "Conectado"
-                        : "Colocado"}
-                  </span>
-                )}
-              </div>
-              <h2>
-                {step.kind === "part" ? step.title : "Conecta este cable"}
-              </h2>
-              {step.kind === "part" ? (
-                <>
-                  {step.owner && (
-                    <p className="assembly-board-context">
-                      <span>Protoboard</span>
-                      <strong>{partTitle(byId.get(step.owner)!)}</strong>
-                    </p>
-                  )}
-                  {(!step.owner ||
-                    /^(74hc|74ls|cd4|ne555|attiny|led|capacitor)/.test(
-                      step.part.type,
-                    )) && (
-                    <p className="assembly-orientation">
-                      {orientationText(step.part)}
-                    </p>
-                  )}
-                  <div className="assembly-placement-summary">
-                    {step.placements.slice(0, 2).map((p) => (
-                      <div
-                        className="assembly-pin-placement"
-                        key={`${p.pin}-${p.board}`}
-                      >
-                        <span className="assembly-pin-name">
-                          Patilla <strong>{p.pin}</strong>
-                        </span>
-                        <TerminalLocation pin={p.hole} breadboard />
-                      </div>
-                    ))}
-                    {typeof step.part.props.resistance === "number" && (
-                      <div className="assembly-part-value">
-                        <span>Valor</span>
-                        <strong>
-                          {formatSI(step.part.props.resistance, "Ω")}
-                        </strong>
-                      </div>
-                    )}
-                    {typeof step.part.props.capacitance === "number" && (
-                      <div className="assembly-part-value">
-                        <span>Valor</span>
-                        <strong>
-                          {formatSI(step.part.props.capacitance, "F")}
-                        </strong>
-                      </div>
-                    )}
-                  </div>
-                  {step.placements.length > 2 && (
-                    <details className="assembly-pinout">
-                      <summary>
-                        Ver las {step.placements.length} patillas
-                      </summary>
-                      <div className="assembly-pinout-list">
-                        {step.placements.map((p) => (
-                          <div key={`${p.pin}-${p.board}`}>
-                            <span className="assembly-pin-name">
-                              Patilla <strong>{p.pin}</strong>
-                            </span>
-                            <TerminalLocation pin={p.hole} breadboard />
-                            {p.board !== step.owner && (
-                              <span className="endpoint-owner">
-                                {partTitle(byId.get(p.board)!)}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </>
-              ) : (
-                <div className="assembly-wire-endpoints">
-                  <ConnectionEndpoint
-                    label="Origen"
-                    end={step.wire.a}
-                    part={byId.get(step.wire.a.part ?? "")}
-                  />
-                  <ConnectionEndpoint
-                    label="Destino"
-                    end={step.wire.b}
-                    part={byId.get(step.wire.b.part ?? "")}
-                  />
-                </div>
-              )}
-            </div>
-          </div>
-          <div className="assembly-guide-actions">
-            <div className="assembly-step-navigation">
-              <HintButton
-                className="btn ghost"
-                onClick={() => navigate(frame.index - 1)}
-                aria-label="Paso anterior"
-              >
-                <ChevronLeft size={16} />
-                Anterior
-              </HintButton>
-              <HintButton
-                className="btn ghost"
-                onClick={() => navigate(frame.index + 1)}
-                title="Avanza sin marcar este paso como completado"
-              >
-                Ver siguiente
-                <ChevronRight size={16} />
-              </HintButton>
-            </div>
-            <div className="assembly-step-completion">
-              {isDone(step) ? (
-                <HintButton className="btn" onClick={() => unconfirm(step)}>
-                  <Undo2 size={15} />
-                  Desmarcar {step.kind === "wire" ? "cable" : "pieza"}
-                </HintButton>
-              ) : (
-                previous &&
-                isDone(previous) && (
-                  <HintButton
-                    className="btn ghost"
-                    onClick={() => {
-                      unconfirm(previous);
-                      navigate(frame.index - 1);
-                    }}
-                  >
-                    <Undo2 size={15} />
-                    Desmarcar anterior
-                  </HintButton>
-                )
-              )}
-              <HintButton className="btn primary" onClick={confirm}>
-                {isDone(step)
-                  ? "Siguiente"
-                  : project.readOnly
-                    ? step.kind === "part"
-                      ? "Mostrar pieza"
-                      : "Mostrar cable"
-                    : step.kind === "part"
-                      ? "Pieza colocada"
-                      : "Cable conectado"}
-                {isDone(step) ? <ArrowRight size={16} /> : <Check size={16} />}
-              </HintButton>
-            </div>
-          </div>
-        </>
       )}
     </div>
   );

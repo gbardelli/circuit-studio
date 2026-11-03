@@ -50,13 +50,27 @@
   transition: r 90ms var(--ease);
 }
 
-/* Barras flotantes: vista arriba al centro, hojas arriba a la izquierda, simulación a la derecha. */
+/* Barras flotantes: vista arriba al centro y simulación a la derecha; las hojas, en su propia fila
+   debajo, para que nunca compitan con ellas por el ancho. */
 .d-sheets {
-  top: 12px;
+  top: 54px;
   left: 12px;
-  max-width: calc(50% - 190px);
+  max-width: calc(100% - 24px);
+}
+.d-sheet-list {
+  display: flex;
+  gap: 2px;
+  min-width: 0;
   overflow-x: auto;
+  scroll-behavior: smooth;
   scrollbar-width: none;
+}
+/* Las pestañas que no caben se desvanecen en el borde en lugar de cortarse en seco. */
+.d-sheet-list.more {
+  mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent);
+}
+.d-sheet-list::-webkit-scrollbar {
+  display: none;
 }
 .d-sheets button,
 .d-sim .d-live {
@@ -92,6 +106,9 @@
   color: var(--accent-hi);
 }
 .d-sheets .d-new {
+  margin-left: 2px;
+  box-shadow: -1px 0 0 var(--line);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   width: 28px;
   padding: 0;
   justify-content: center;
