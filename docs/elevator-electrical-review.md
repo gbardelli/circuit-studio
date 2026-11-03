@@ -1,0 +1,45 @@
+# Elevator electrical review
+
+The template is a **3.3 V simulation design**, not a released hardware schematic. The cloud project must retain a recoverable pre-change version. Do not silently substitute LS-family parts for HC-family parts.
+
+## Circuit organization
+
+Six boards carry inputs, state/memory, sensors/comparison, destination display, per-floor countdown, and current-floor display respectively. All three displays share the same column. Signal colors follow the function defined in `collab/bench.ts`, not the instantaneous logic level. The physical rail reference is 3.3 V and shared ground.
+
+Destination encoding has explicit priority 4 > 3 > 2 > 1. Equations for active-high requests P1–P4 are:
+
+* SEL2 = P4
+* SEL1 = (P2 OR P3) AND NOT P4
+* SEL0 = (P3 OR (P1 AND NOT P2)) AND NOT P4
+
+One additional 74HC08, U20, works with spare gates of U2/U3. This priority applies to concurrent calls before capture; it is not a queue. The sensor encoder assumes one physical floor sensor at a time. Conflicting floor sensors remain an invalid hardware condition.
+
+LS/LB series resistors are 1 kΩ to reduce loading on logic outputs. Each IC has a 100 nF ceramic bypass across its local supply rails. On a physical board, keep bypass leads short and close to VCC/GND. The two timing electrolytics retain their polarity and voltage rating. The GIGA Display Shield is mounted on the GIGA and is not an independently wired display.
+
+## What is measured
+
+Diagnostics shows DC pin-current magnitude, resistor dissipation V²/R, capacitor voltage/polarity, and reference conditions. Resistors warn at half their configured rating, capacitors at 80% of voltage rating. A 2 mA output load is a conservative **design target**, not a manufacturer's absolute maximum. LED current references are provisional until the physical part is identified. CMOS input margins are checked separately from the behavioral model's switching thresholds.
+
+Run `npx tsx scripts/audit-elevator.ts` to sample the logic-only circuit every 50 ms across all 15 nonempty button combinations, reset, all floor sensors and countdown transitions. It writes `work/elevator-electrical-audit.json` with observed extrema. This does not load GIGA firmware or measure board/shield consumption. The integration test separately runs the firmware and checks touch calls and complete trips.
+
+## Unresolved hardware requirements
+
+1. Identify the actual decoder by manufacturer and full marking. The existing `74hc48` model uses a behavioral pull-up approximation. It does not establish that a physical part named HC48 has the same characteristics. A 74LS48 needs its own documented supply and I/O design. Do not remove segment resistors or add arbitrary pull-ups to increase brightness without checking output current and package limits.
+2. Confirm both timers are TLC555 CMOS. A generic NE555 is not validated at 3.3 V. The simulation's label override does not change physical hardware.
+3. Verify guaranteed output voltage/current, total source/sink current per package, and all GIGA pin constraints against the exact parts. Do not connect 5 V logic directly to GIGA GPIO or assume 3.3 V always drives a 5 V HC input.
+4. Add and validate hardware input conditioning if the physical buttons bounce. The ideal button model does not prove antirrebounce behavior. Likewise, the diode sensor-load circuit needs propagation and setup/hold verification on real components; a passing functional simulation does not prove it hazard-free.
+5. Check real breadboard rail continuity, display pinout/common-cathode type, supply capacity, ground integrity and capacitor polarity before power-on.
+
+## Physical verification
+
+Use a current-limited bench supply for the logic board with the GIGA disconnected initially. Choose the current limit from the completed load budget and actual supply specifications, not from this simulation's omitted quiescent consumption. Verify resistance between rails unpowered, then rail voltages and supply current. Power and test one functional block at a time. Connect the GIGA only after checking all signal voltages and common ground. Measure voltage in parallel; measure current in series or infer it from voltage across a known series resistor. An ammeter placed across the supply shorts it.
+
+No thermal model, tolerance sweep, LED junction-temperature model, transient current peaks, GPIO clamp injection, supply sequencing, signal integrity or physical wiring faults are certified by these checks. The UI intentionally never reports “safe to build”.
+
+## Primary references
+
+* [Arduino GIGA R1 manual](https://docs.arduino.cc/tutorials/giga-r1-wifi/cheat-sheet)
+* [GIGA Display Shield](https://docs.arduino.cc/hardware/giga-display-shield/)
+* [TI SN74HC08](https://www.ti.com/lit/ds/symlink/sn74hc08.pdf)
+* [TI TLC555](https://www.ti.com/lit/ds/symlink/tlc555.pdf)
+* [TI 7448/74LS48 family](https://www.ti.com/lit/ds/symlink/sn54ls47.pdf)

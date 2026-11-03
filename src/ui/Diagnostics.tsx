@@ -11,6 +11,7 @@ import {
 import { useUi } from "./store";
 import { PARTS } from "../parts";
 import { pinKey } from "../core/netlist";
+import { ElectricalMeasurements } from './ElectricalMeasurements';
 function EvidenceNode({ node }: { node: Evidence }) {
   const pin = useUi((s) => s.pinSignal);
   return (
@@ -172,6 +173,7 @@ export function Diagnostics() {
           </div>
         )}
       </section>
+      <ElectricalMeasurements />
     </div>
   );
 }

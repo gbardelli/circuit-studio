@@ -137,6 +137,24 @@ export const capacitor: PartDef = {
   Render: CapacitorRender,
 };
 
+export const ceramicCapacitor: PartDef = {
+  type: 'capacitor-ceramic', name: 'Condensador cerámico', category: 'Básicos',
+  description: 'Condensador sin polaridad, paso de 2,54 mm. 100 nF para desacoplar la alimentación cerca de cada integrado.',
+  keywords: ['condensador', 'capacitor', 'ceramico', 'cerámico', 'desacoplo', '100nf', '104'],
+  defaults: { capacitance: 100e-9, voltage: 50 },
+  pins: () => [{ id: '1', x: 0, y: 0, kind: 'leg' }, { id: '2', x: 10, y: 0, kind: 'leg' }],
+  bounds: () => ({ x: -4, y: -25, w: 18, h: 27 }),
+  fields: [{ key: 'capacitance', label: 'Capacidad', kind: 'si', unit: 'F' }, { key: 'voltage', label: 'Tensión nominal', kind: 'si', unit: 'V' }],
+  model: 'Ideal',
+  sim(ctx) {
+    const a = ctx.net('1'), b = ctx.net('2');
+    return { elements: [new Capacitor(a, b, () => num(ctx.props.capacitance, 100e-9))], probe: v => ({ v: (a < 0 ? 0 : v[a]) - (b < 0 ? 0 : v[b]) }) };
+  },
+  Render: memo(function CeramicCapacitorRender() {
+    return <g><Leg x={0} y0={-15} y1={0} /><Leg x={10} y0={-15} y1={0} /><ellipse cx={5} cy={-16} rx={8} ry={7.5} fill="#b77337" stroke="#845329" strokeWidth={.7} /><path d="M0 -20 Q5 -24 10 -20" fill="none" stroke="#e7b178" strokeWidth={1} /><text x={5} y={-14} fontSize={4.5} textAnchor="middle" fill="#3f2b1d">104</text></g>;
+  }),
+};
+
 // ── Potenciómetro rotativo ────────────────────────────────────────────────────
 function PotRender({ part, onInput, preview }: RenderProps) {
   const pos = num(part.props.position, 0.5);

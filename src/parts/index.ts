@@ -4,7 +4,7 @@ import { arduinoUno } from './arduino';
 import { arduinoMega, arduinoNano } from './boards';
 import { arduinoGiga } from './giga';
 import { breadboardFull, breadboardHalf, breadboardMini } from './breadboard';
-import { capacitor, ldr, potentiometer, resistor } from './basic';
+import { capacitor, ceramicCapacitor, ldr, potentiometer, resistor } from './basic';
 import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
 import { diode, hcsr04, lcd1602, mosfet, relay, tmp36 } from './extra';
 import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './misc';
@@ -25,6 +25,7 @@ export const PART_LIST: PartDef[] = [
   breadboardMini,
   resistor,
   capacitor,
+  ceramicCapacitor,
   led,
   rgbLed,
   ledBar,

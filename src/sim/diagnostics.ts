@@ -1,6 +1,7 @@
 import { buildNetlist, pinKey } from "../core/netlist";
 import type { CircuitSnapshot, PartData } from "../core/types";
 import { PARTS } from "../parts";
+import { electricalReview } from './electricalReview';
 export interface Finding {
   id: string;
   part: string;
@@ -118,6 +119,8 @@ export function electricalChecks(
       logic = def?.logic;
     if (logic) {
       const { low, high } = thresholds(part, readings);
+      const g = readings[pinKey(part.id, logic.ground)];
+      const supply = logic.supply ? readings[pinKey(part.id, logic.supply)] : undefined;
       for (const pin of logic.inputs) {
         const key = pinKey(part.id, pin),
           net = netlist.netOf.get(key);
@@ -132,6 +135,8 @@ export function electricalChecks(
             [key],
           );
         const v = readings[key];
+        if (v !== undefined && g !== undefined && supply !== undefined && (v < g - .3 || v > supply + .3))
+          add(part.id, pin, 'error', 'Entrada fuera de los rieles de alimentación', `${pin}: ${v.toFixed(2)} V, alimentación ${g.toFixed(2)} a ${supply.toFixed(2)} V. Revisa la adaptación de niveles y la secuencia de encendido.`, [key]);
         if (v !== undefined && v > low && v < high)
           add(
             part.id,
@@ -154,6 +159,8 @@ export function electricalChecks(
             `Se miden ${(v - g).toFixed(2)} V entre ${logic.supply} y ${logic.ground}.`,
             [pinKey(part.id, logic.supply), pinKey(part.id, logic.ground)],
           );
+        if (/^74hc/.test(part.type) && v !== undefined && g !== undefined && v - g > 6)
+          add(part.id, logic.supply, 'error', 'Alimentación fuera del rango 74HC', `Se miden ${(v - g).toFixed(2)} V; confirma el rango del fabricante antes de alimentar.`, [pinKey(part.id, logic.supply)]);
       }
     }
     const io = def?.mcu?.vio;
@@ -195,6 +202,24 @@ export function electricalChecks(
           pinKey(sinking.part.id, sinking.pin),
         ],
       );
+  }
+  for (const row of electricalReview(snapshot, readings, currents).rows) {
+    if (row.state === 'measured') continue;
+    const unit = row.quantity === 'power' ? 'W' : row.quantity === 'voltage' ? 'V' : 'mA';
+    const scale = row.quantity === 'current' ? 1000 : 1;
+    add(row.part, row.pin, row.state, row.quantity === 'power' ? 'Revisar potencia de la resistencia' : row.quantity === 'voltage' ? 'Revisar tensión y polaridad' : 'Revisar corriente de salida', `${(row.value * scale).toFixed(3)} ${unit}. ${row.basis}`, [pinKey(row.part, row.pin ?? (row.quantity === 'power' ? '1' : '+'))]);
+  }
+  // The solver's switching threshold is not a guaranteed hardware input specification.
+  for (const part of snapshot.parts) {
+    const logic = PARTS[part.type]?.logic;
+    if (!logic?.supply || logic.fixedThresholds || !/^74hc/.test(part.type)) continue;
+    const ground = readings[pinKey(part.id, logic.ground)], supply = readings[pinKey(part.id, logic.supply)];
+    if (ground === undefined || supply === undefined || supply - ground < 2) continue;
+    for (const pin of logic.inputs) {
+      const value = readings[pinKey(part.id, pin)];
+      if (value !== undefined && value > ground + .3 * (supply - ground) && value < ground + .7 * (supply - ground))
+        add(part.id, pin, 'warning', 'Margen CMOS por verificar', `${pin}: ${value.toFixed(2)} V. Está entre el 30 % y el 70 % de VCC. Aunque el modelo conmute, verifica VIH/VIL del fabricante.`, [pinKey(part.id, pin)]);
+    }
   }
   return findings.sort(
     (a, b) => Number(b.severity === "error") - Number(a.severity === "error"),

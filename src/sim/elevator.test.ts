@@ -165,6 +165,18 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     h.tick();
     h.engine.stop();
   }, 60_000);
+
+  it('codifica las 15 combinaciones de llamadas con prioridad 4 > 3 > 2 > 1', () => {
+    for (let mask = 1; mask < 16; mask++) {
+      const h = fixture();
+      h.floor(1);
+      for (let f = 1; f <= 4; f++) h.engine.setInput(`pp${f}`, 'pressed', Boolean(mask & (1 << (f - 1))));
+      h.tick(.25);
+      const expected = Math.floor(Math.log2(mask)) + 1;
+      expect(h.value('u8'), `combinación ${mask.toString(2)}`).toBe(expected);
+      h.engine.stop();
+    }
+  }, 120_000);
 });
 
 describe.skipIf(!compilerAvailable())('ascensor con el GIGA y su Display Shield: pantalla táctil y motor de la cabina', () => {
@@ -185,6 +197,8 @@ describe.skipIf(!compilerAvailable())('ascensor con el GIGA y su Display Shield:
     const waitIdle = () => {
       for (let i = 0; i < 160 && (h.busy() || h.up() || h.down()); i++) h.tick(0.1);
       expect(h.busy()).toBe(false);
+      // Allow the firmware's 250 ms sensor settling window and the averaged display frame.
+      h.tick(.35);
     };
     const callButton = (f: number) => tap(236 + (f - 1) * 131 + 60, 404);
 

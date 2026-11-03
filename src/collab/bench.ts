@@ -337,6 +337,19 @@ export class Bench {
     });
   }
 
+  /** Condensador sin polaridad entre rieles adyacentes, sin compartir un agujero ocupado. */
+  bypass(key: string, board: string, near: number) {
+    const b = this.boards.get(board)!;
+    for (let d = 0; d < COLS; d++) for (const col of d ? [near + d, near - d] : [near]) {
+      if (!railHole(col) || this.used.has(`${board}:tp${col}`) || this.used.has(`${board}:tn${col}`)) continue;
+      this.claim(board, `tp${col}`);
+      this.claim(board, `tn${col}`);
+      this.loose(key, 'capacitor-ceramic', b.x + colX(col), b.y + RAIL_Y.tp, { capacitance: 100e-9, voltage: 50, label: `${key.toUpperCase()} · desacoplo de 100 nF` }, 90);
+      return;
+    }
+    throw new Error(`Plantilla: no hay espacio para desacoplo en ${board}`);
+  }
+
   template(meta: Omit<Template, 'parts' | 'wires'>): Template {
     return { ...meta, parts: this.parts, wires: this.wires };
   }
