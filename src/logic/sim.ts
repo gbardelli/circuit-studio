@@ -6,6 +6,8 @@ import { IC_PREFIX, X, type Bit, type LogicNode, type LogicSheet } from './types
 
 const MAX_DELTAS = 2000;
 const MAX_DEPTH = 12;
+/** Elementos que puede llegar a expandir una hoja con todos sus integrados anidados. */
+export const MAX_ELEMENTS = 20_000;
 
 interface Inst {
   node: LogicNode;
@@ -42,6 +44,7 @@ export class LogicSim {
     private readonly lookup: (id: string) => LogicSheet | undefined,
     private readonly depth = 0,
     private readonly stack: string[] = [sheet.id],
+    private readonly budget = { left: MAX_ELEMENTS },
   ) {
     const ctx: ElementCtx = {
       sheet: lookup,
@@ -76,6 +79,10 @@ export class LogicSim {
     };
 
     for (const node of sheet.nodes) {
+      if (--this.budget.left < 0) {
+        this.problem = { kind: 'recursion', message: 'El diseño es demasiado grande: sus integrados anidados superan los 20 000 elementos.' };
+        break;
+      }
       const def = elementDef(node.kind, lookup);
       if (!def) continue;
       const index = this.insts.length;
@@ -104,7 +111,9 @@ export class LogicSim {
       this.problem = { kind: 'recursion', message: 'Un integrado no puede contenerse a sí mismo.' };
       return null;
     }
-    const sim = new LogicSim(sheet, this.lookup, this.depth + 1, [...this.stack, id]);
+    if (this.budget.left <= 0) return null;
+    const sim = new LogicSim(sheet, this.lookup, this.depth + 1, [...this.stack, id], this.budget);
+    if (sim.problem?.kind === 'recursion') this.problem = sim.problem;
     const signals = icSignals(sheet);
     const ins = signals.filter((n) => n.kind === 'in');
     const outs = signals.filter((n) => n.kind === 'out');
@@ -261,6 +270,7 @@ export function truthTable(sheet: LogicSheet, lookup: (id: string) => LogicSheet
   const rows: { inputs: Bit[]; outputs: Bit[] }[] = [];
   for (let m = 0; m < 1 << ins.length; m++) {
     const sim = new LogicSim(sheet, lookup);
+    if (sim.problem?.kind === 'recursion') return null;
     const inputs = ins.map((_, i) => ((m >> (ins.length - 1 - i)) & 1) as Bit);
     ins.forEach((n, i) => sim.setSource(n.id, inputs[i], false));
     sim.settle();

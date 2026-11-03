@@ -15,7 +15,8 @@ export const DIP_SIZES = [8, 14, 16, 18, 20, 24, 28, 40];
 export function packageSize(sheet: LogicSheet) {
   const need = icSignals(sheet).length + 2;
   const fit = DIP_SIZES.find((n) => n >= need) ?? Math.ceil(need / 2) * 2;
-  return sheet.package >= fit && sheet.package % 2 === 0 ? sheet.package : fit;
+  // Solo tamaños del catálogo: el valor llega del documento compartido y fija cuántas patillas se crean.
+  return DIP_SIZES.includes(sheet.package) && sheet.package >= fit ? sheet.package : fit;
 }
 
 /** Nombre de cada patilla del encapsulado, de la 1 a la N. */

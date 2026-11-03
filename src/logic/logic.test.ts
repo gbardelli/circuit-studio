@@ -159,6 +159,18 @@ describe('simulador lógico del modo diseño', () => {
     expect(new LogicSim(loop, () => loop).problem?.kind).toBe('recursion');
   });
 
+  it('corta los integrados anidados que se expanden sin medida', () => {
+    // Seis niveles de diez copias del nivel siguiente: un millón de elementos sin límite.
+    const levels = Array.from({ length: 7 }, (_, d) =>
+      sheet(`l${d}`, 'ic', d === 6 ? [{ id: 'g', kind: 'not', props: {} }] : Array.from({ length: 10 }, (_, i) => ({ id: `u${i}`, kind: `${IC_PREFIX}l${d + 1}`, props: {} })), []),
+    );
+    const lookup = (id: string) => levels.find((l) => l.id === id);
+    const started = Date.now();
+    expect(new LogicSim(levels[0], lookup).problem?.kind).toBe('recursion');
+    expect(Date.now() - started).toBeLessThan(2000);
+    expect(packagePins({ ...halfAdder, package: 1e9 })).toHaveLength(8);
+  });
+
   it('genera la tabla de verdad', () => {
     const table = truthTable(halfAdder, () => undefined)!;
     expect(table.rows.map((r) => [...r.inputs, ...r.outputs])).toEqual([
