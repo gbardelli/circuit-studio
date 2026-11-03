@@ -175,6 +175,48 @@ function chipSim<S>(spec: ChipSpec<S>) {
       fall: (n) => !now[n] && !!prev[n],
     };
 
+    const sample = (v: Float64Array, dt: number) => {
+      t += dt;
+      const at = (n: number) => (n < 0 ? 0 : v[n]);
+      const ref = at(gnd);
+      const supply = spec.vcc ? at(vcc) - ref : 5;
+      const on = supply >= (spec.minSupply ?? 1.6);
+      if (!on) {
+        if (powered) {
+          powered = false;
+          state = spec.init();
+          levels = {};
+          lastIo = null;
+          dirty = true;
+        }
+        return;
+      }
+      const span = Math.max(supply, 2);
+      for (const n of inputs) {
+        const volts = at(net(n)) - ref;
+        prev[n] = now[n] ?? false;
+        now[n] = prev[n] ? volts > (spec.inputThresholds?.low ?? 0.35 * span) : volts > (spec.inputThresholds?.high ?? 0.55 * span);
+      }
+      if (!powered) for (const n of inputs) prev[n] = now[n]; // al encender no hay flancos
+      powered = true;
+      lastIo = io;
+      // Los interruptores analógicos dependen directamente de las entradas.
+      if (spec.extra && inputs.some((n) => now[n] !== prev[n])) {
+        dirty = true;
+        settle = t + 1e-6;
+      }
+      const next = spec.evaluate(io, state);
+      for (const o of spec.outputs) {
+        const lv = next[o] ?? null;
+        if (levels[o] !== lv) {
+          levels = { ...levels, ...next };
+          dirty = true;
+          settle = t + 1e-6;
+          break;
+        }
+      }
+      for (const n of inputs) prev[n] = now[n];
+    };
     return {
       elements,
       changed: () => {
@@ -183,49 +225,11 @@ function chipSim<S>(spec: ChipSpec<S>) {
         return d;
       },
       nextEvent: () => (settle > t ? settle : null),
+      // Reconcile newly solved inputs immediately. Otherwise each gate in a chain waits
+      // for another integration segment, missing short sensor pulses despite its 1 µs event.
+      afterSolve: (v: Float64Array) => sample(v, 0),
       tracker: {
-        sample(v: Float64Array, dt: number) {
-          t += dt;
-          const at = (n: number) => (n < 0 ? 0 : v[n]);
-          const ref = at(gnd);
-          const supply = spec.vcc ? at(vcc) - ref : 5;
-          const on = supply >= (spec.minSupply ?? 1.6);
-          if (!on) {
-            if (powered) {
-              powered = false;
-              state = spec.init();
-              levels = {};
-              lastIo = null;
-              dirty = true;
-            }
-            return;
-          }
-          const span = Math.max(supply, 2);
-          for (const n of inputs) {
-            const volts = at(net(n)) - ref;
-            prev[n] = now[n] ?? false;
-            now[n] = prev[n] ? volts > (spec.inputThresholds?.low ?? 0.35 * span) : volts > (spec.inputThresholds?.high ?? 0.55 * span);
-          }
-          if (!powered) for (const n of inputs) prev[n] = now[n]; // al encender no hay flancos
-          powered = true;
-          lastIo = io;
-          // Los interruptores analógicos dependen directamente de las entradas.
-          if (spec.extra && inputs.some((n) => now[n] !== prev[n])) {
-            dirty = true;
-            settle = t + 1e-6;
-          }
-          const next = spec.evaluate(io, state);
-          for (const o of spec.outputs) {
-            const lv = next[o] ?? null;
-            if (levels[o] !== lv) {
-              levels = { ...levels, ...next };
-              dirty = true;
-              settle = t + 1e-6;
-              break;
-            }
-          }
-          for (const n of inputs) prev[n] = now[n];
-        },
+        sample,
         read: () => ({ powered }),
       },
     };

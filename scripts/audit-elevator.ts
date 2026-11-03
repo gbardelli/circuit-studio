@@ -27,6 +27,10 @@ const sample = () => {
 const tick = (seconds = .3) => { for (let t = 0; t < seconds - 1e-9; t += .05) { engine.tick(.05); sample(); } };
 const floor = (n: number) => {
   const sp = scene.parts.find(p => p.id === 'sp')!;
+  sp.props = { ...sp.props, s1: false, s2: false, s3: false, s4: false };
+  engine.update({ ...scene, parts: [...scene.parts] });
+  engine.tick(.002);
+  sample();
   sp.props = { ...sp.props, ...Object.fromEntries([1, 2, 3, 4].map(f => [`s${f}`, f === n])) };
   engine.update({ ...scene, parts: [...scene.parts] }); tick();
 };

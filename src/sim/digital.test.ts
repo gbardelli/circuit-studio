@@ -11,6 +11,24 @@ function circuit(parts: PartData[], links: [string, string, string, string][]): 
 }
 
 describe('scheduled digital simulation', () => {
+  it('propagates a short input pulse through six gates within the scheduled events', () => {
+    const links: [string, string, string, string][] = [
+      ['source', '+', 'gates', 'VCC'], ['source', '-', 'gates', 'GND'],
+      ['button', '1a', 'gates', 'GND'], ['button', '2a', 'gates', '1A'],
+      ['pullup', '1', 'gates', 'VCC'], ['pullup', '2', 'gates', '1A'],
+    ];
+    for (let n = 1; n < 6; n++) links.push(['gates', `${n}Y`, 'gates', `${n + 1}A`]);
+    const snap = circuit([part('source', 'bench-supply', 1000), part('gates', '74hc04', 2000), part('button', 'pushbutton', 3000), part('pullup', 'resistor', 4000, { resistance: 10000 })], links);
+    const engine = new SimEngine();
+    engine.update(snap); engine.start({ manual: true }); engine.tick(.02);
+    for (let n = 0; n < 3; n++) {
+      engine.setInput('button', 'pressed', true); engine.tick(.002);
+      expect(engine.voltageAt('gates', '6Y')).toBeLessThan(.1);
+      engine.setInput('button', 'pressed', false); engine.tick(.002);
+      expect(engine.voltageAt('gates', '6Y')).toBeGreaterThan(4.5);
+    }
+    expect(engine.status.converged).toBe(true); engine.stop();
+  });
   it('preserves a 10 kHz clock after topology is rebuilt while simulation is running', () => {
     const snap = circuit([
       part('supply', 'bench-supply', 1000),

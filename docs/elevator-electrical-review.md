@@ -6,7 +6,11 @@ The template is a **3.3 V simulation design**, not a released hardware schematic
 
 The layout uses exactly four 830-point boards. Board 1 holds inputs, priority and the countdown oscillator; board 2 holds state/memory and direction LEDs; board 3 holds sensors/comparison; board 4 holds the countdown counter and all three display drivers/displays. The displays form one aligned horizontal row, ordered destination, current floor, seconds. Signal colors follow the function defined in `collab/bench.ts`, not the instantaneous logic level. The physical rail reference is 3.3 V and shared ground.
 
-The 21 external 220 Ω segment resistors have been removed from the simulation. Each `74hc48` output is already modeled with its own 2 kΩ pull-up, so per-segment current remains limited. The physical SN74LS48 datasheet also documents internal pull-ups, but that does not establish the identity or supply requirements of the lab parts. Do not copy the resistor-free arrangement to a different decoder. No common-cathode series resistor is used as a substitute. All eight physical buttons, three displays and the existing control functions are retained; no additional IC type is introduced.
+The 21 external 220 Ω segment resistors have been removed from the simulation. Each `74hc48` output is already modeled with its own 2 kΩ pull-up, so per-segment current remains limited. The physical SN74LS48 datasheet also documents internal pull-ups, but that does not establish the identity or supply requirements of the lab parts. Do not copy the resistor-free arrangement to a different decoder. No common-cathode series resistor is used as a substitute. All eight physical buttons, three displays and the existing control functions are retained.
+
+There are no discrete diodes. Four 1N4007 parts and their 10 kΩ pull-up were removed. SENSOR = SEN0 OR SEN1 OR SEN2 is generated using spare gates in U9 (74HC00), U10 (74HC04) and U13 (74HC08), all on the sensor board. U11 is a standard 74HC273 edge-triggered D register instead of a 74HC193 used as a transparent load register. Its three low bits store the floor, D3–D7 are grounded, and its active-low clear connects to RESET. A spare U6 AND gates SENSOR with the released reset line to generate CP. Arrival captures the floor; releasing the sensor does not load zero. Releasing RESET recaptures the current sensor. No additional IC package is required.
+
+Floor sensors are one-hot and break before make: there is an interval with all four inactive between different floors, as occurs while a cab travels. Directly replacing one active floor with another without an inactive interval is outside this capture protocol. Simulation fixtures explicitly exercise the inactive interval; integration tests exercise the firmware's actual travel and sensor activation. Do not claim this functional model proves setup/hold, input bounce or propagation margins on real hardware.
 
 Destination encoding has explicit priority 4 > 3 > 2 > 1. Equations for active-high requests P1–P4 are:
 
@@ -29,7 +33,7 @@ Run `npx tsx scripts/audit-elevator.ts` to sample the logic-only circuit every 5
 1. Identify the actual decoder by manufacturer and full marking. The existing `74hc48` model uses a behavioral pull-up approximation. It does not establish that a physical part named HC48 has the same characteristics. A 74LS48 needs its own documented supply and I/O design. Do not remove segment resistors or add arbitrary pull-ups to increase brightness without checking output current and package limits.
 2. Confirm both timers are TLC555 CMOS. A generic NE555 is not validated at 3.3 V. The simulation's label override does not change physical hardware.
 3. Verify guaranteed output voltage/current, total source/sink current per package, and all GIGA pin constraints against the exact parts. Do not connect 5 V logic directly to GIGA GPIO or assume 3.3 V always drives a 5 V HC input.
-4. Add and validate hardware input conditioning if the physical buttons bounce. The ideal button model does not prove antirrebounce behavior. Likewise, the diode sensor-load circuit needs propagation and setup/hold verification on real components; a passing functional simulation does not prove it hazard-free.
+4. Add and validate hardware input conditioning if the physical buttons or floor sensors bounce. The ideal button model does not prove antirrebounce behavior. Check setup/hold at U11 and verify the decoded data is stable before its capture clock. A passing functional simulation does not prove it hazard-free.
 5. Check real breadboard rail continuity, display pinout/common-cathode type, supply capacity, ground integrity and capacitor polarity before power-on.
 
 ## Physical verification
@@ -44,4 +48,5 @@ No thermal model, tolerance sweep, LED junction-temperature model, transient cur
 * [GIGA Display Shield](https://docs.arduino.cc/hardware/giga-display-shield/)
 * [TI SN74HC08](https://www.ti.com/lit/ds/symlink/sn74hc08.pdf)
 * [TI TLC555](https://www.ti.com/lit/ds/symlink/tlc555.pdf)
+* [TI SN74HC273](https://www.ti.com/lit/ds/symlink/sn74hc273.pdf)
 * [TI 7448/74LS48 family](https://www.ti.com/lit/ds/symlink/sn54ls47.pdf)

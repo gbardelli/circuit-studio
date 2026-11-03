@@ -40,6 +40,10 @@ function fixture(hex?: string) {
   /** DIP SP1–SP4: `n` activo (0 = ninguno). */
   const floor = (n: number) => {
     const sp = snapshot.parts.find((p) => p.id === 'sp')!;
+    // A cab crosses an interval with no active sensor between different floors.
+    sp.props = { ...sp.props, s1: false, s2: false, s3: false, s4: false };
+    engine.update({ ...snapshot, parts: [...snapshot.parts] });
+    tick(.002);
     sp.props = { ...sp.props, s1: n === 1, s2: n === 2, s3: n === 3, s4: n === 4 };
     engine.update({ ...snapshot, parts: [...snapshot.parts] });
     tick();
@@ -57,7 +61,8 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
   it('cabe en cuatro protoboards y limita cada segmento en su driver, sin resistencias externas', () => {
     const scene = templateSnapshot(elevatorTemplate());
     expect(scene.parts.filter(p => p.type === 'breadboard-full')).toHaveLength(4);
-    expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(20);
+    expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(19);
+    expect(scene.parts.some(p => p.type === 'diode' || p.type === '74hc148')).toBe(false);
     expect(scene.parts.filter(p => p.type === 'seven-segment')).toHaveLength(3);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => p.y)).size).toBe(1);
@@ -176,6 +181,21 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     expect(h.digit()).toBe(null);
     h.engine.setInput('reset', 'pressed', false);
     h.tick();
+    expect(h.value('u11')).toBe(1);
+    expect(h.digit('seg3')).toBe(1);
+    h.engine.stop();
+  }, 60_000);
+
+  it('recuerda el piso al soltar cada sensor y captura una nueva llegada sin diodos', () => {
+    const h = fixture();
+    for (const floor of [4, 1, 3, 2, 4]) {
+      h.floor(floor);
+      expect(h.value('u11')).toBe(floor);
+      h.floor(0);
+      h.tick(.25);
+      expect(h.value('u11')).toBe(floor);
+      expect(h.digit('seg3')).toBe(floor);
+    }
     h.engine.stop();
   }, 60_000);
 
