@@ -54,6 +54,15 @@ function fixture(hex?: string) {
 }
 
 describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)', () => {
+  it('cabe en cuatro protoboards y limita cada segmento en su driver, sin resistencias externas', () => {
+    const scene = templateSnapshot(elevatorTemplate());
+    expect(scene.parts.filter(p => p.type === 'breadboard-full')).toHaveLength(4);
+    expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(20);
+    expect(scene.parts.filter(p => p.type === 'seven-segment')).toHaveLength(3);
+    const displays = scene.parts.filter(p => p.type === 'seven-segment');
+    expect(new Set(displays.map(p => p.y)).size).toBe(1);
+    expect(scene.parts.filter(p => p.type === '74hc48')).toHaveLength(3);
+  });
   it('arranca con el display apagado y los dos LEDs de marcha apagados', () => {
     const h = fixture();
     h.floor(1);
@@ -88,6 +97,8 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     expect(h.busy()).toBe(true);
     expect(h.up()).toBe(true);
     expect(h.down()).toBe(false);
+    expect(Number(h.engine.getVisual('ls')?.i)).toBeGreaterThan(.0002);
+    expect(Number(h.engine.getVisual('ls')?.i)).toBeLessThan(.002);
     h.press('pp2'); // bloqueado durante el viaje
     expect(h.value('u8')).toBe(4);
     h.floor(0); // entre plantas: el piso actual se mantiene
@@ -104,6 +115,8 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     expect(h.value('u8')).toBe(1);
     expect(h.down()).toBe(true);
     expect(h.up()).toBe(false);
+    expect(Number(h.engine.getVisual('lb')?.i)).toBeGreaterThan(.0002);
+    expect(Number(h.engine.getVisual('lb')?.i)).toBeLessThan(.002);
     h.floor(1);
     expect(h.busy()).toBe(false);
     expect(h.down()).toBe(false);

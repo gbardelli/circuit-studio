@@ -10,6 +10,7 @@ engine.update(scene);
 engine.start({ manual: true });
 const peaks = new Map<string, ElectricalMeasurement>();
 const errors: string[] = [];
+const warnings = new Set<string>();
 let samples = 0;
 const sample = () => {
   if (!engine.status.converged) throw new Error('El circuito no converge');
@@ -19,6 +20,7 @@ const sample = () => {
     const previous = peaks.get(key);
     if (!previous || Math.abs(row.value) > Math.abs(previous.value)) peaks.set(key, row);
     if (row.state === 'error') errors.push(`${key}: ${row.value} ${row.quantity}`);
+    if (row.state === 'warning') warnings.add(`${key}: ${row.basis}`);
   }
   samples++;
 };
@@ -47,14 +49,15 @@ const report = {
   scope: 'DC points sampled every 50 ms. Logic-only circuit; GIGA firmware not loaded. No thermal model, tolerance sweep or internal board/shield consumption. Not a hardware safety certificate.',
   pending: electricalReview(scene, {}, new Map()).pending,
   errors: [...new Set(errors)],
+  warnings: [...warnings],
   peaks: [...peaks.values()],
 };
 engine.stop();
 mkdirSync('work', { recursive: true });
 writeFileSync('work/elevator-electrical-audit.json', JSON.stringify(report, null, 2));
-console.log(JSON.stringify({ samples, parts: report.parts, wires: report.wires, errors: report.errors,
+console.log(JSON.stringify({ samples, parts: report.parts, wires: report.wires, errors: report.errors, warnings: report.warnings,
   maxResistorWatts: Math.max(...report.peaks.filter(r => r.quantity === 'power').map(r => r.value)),
   maxLogicOutputAmps: Math.max(...report.peaks.filter(r => r.pin && r.part.startsWith('u')).map(r => r.value)),
   pending: report.pending,
 }, null, 2));
-if (errors.length) process.exitCode = 1;
+if (errors.length || warnings.size) process.exitCode = 1;

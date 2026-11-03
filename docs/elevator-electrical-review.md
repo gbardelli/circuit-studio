@@ -4,7 +4,9 @@ The template is a **3.3 V simulation design**, not a released hardware schematic
 
 ## Circuit organization
 
-Six boards carry inputs, state/memory, sensors/comparison, destination display, per-floor countdown, and current-floor display respectively. All three displays share the same column. Signal colors follow the function defined in `collab/bench.ts`, not the instantaneous logic level. The physical rail reference is 3.3 V and shared ground.
+The layout uses exactly four 830-point boards. Board 1 holds inputs, priority and the countdown oscillator; board 2 holds state/memory and direction LEDs; board 3 holds sensors/comparison; board 4 holds the countdown counter and all three display drivers/displays. The displays form one aligned horizontal row, ordered destination, current floor, seconds. Signal colors follow the function defined in `collab/bench.ts`, not the instantaneous logic level. The physical rail reference is 3.3 V and shared ground.
+
+The 21 external 220 Ω segment resistors have been removed from the simulation. Each `74hc48` output is already modeled with its own 2 kΩ pull-up, so per-segment current remains limited. The physical SN74LS48 datasheet also documents internal pull-ups, but that does not establish the identity or supply requirements of the lab parts. Do not copy the resistor-free arrangement to a different decoder. No common-cathode series resistor is used as a substitute. All eight physical buttons, three displays and the existing control functions are retained; no additional IC type is introduced.
 
 Destination encoding has explicit priority 4 > 3 > 2 > 1. Equations for active-high requests P1–P4 are:
 
