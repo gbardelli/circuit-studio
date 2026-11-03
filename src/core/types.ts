@@ -53,6 +53,8 @@ export interface WireData {
 export interface CircuitSnapshot {
   parts: PartData[];
   wires: WireData[];
+  /** Integrados propios del modo diseño que usan las piezas `ic:…`. */
+  ics?: import('../logic/types').LogicSheet[];
 }
 
 /** 'leg' = patilla que se inserta; 'socket' = orificio que la recibe (protoboard, cabezales). */

@@ -14,7 +14,7 @@ export interface Toast {
 export type LabPanel = 'signals'|'diagnostics'|'assembly'|'notes';
 export type AssemblyTab = 'steps'|'materials'|'photo';
 export type Tool = 'select' | 'hand';
-export type View = 'board' | 'schematic';
+export type View = 'board' | 'schematic' | 'design';
 
 /** Pieza que se arrastra desde la biblioteca: posición del puntero en pantalla. */
 export interface LibDrag {

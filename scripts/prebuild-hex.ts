@@ -5,10 +5,12 @@ import { createHash } from 'node:crypto';
 import { writeFileSync } from 'node:fs';
 import { compileSketch } from '../server/compile';
 import { TEMPLATES } from '../src/collab/templates';
+import { elevatorTemplate } from '../src/collab/elevator';
 import { PARTS } from '../src/parts';
 
 const out: Record<string, string> = {};
-for (const t of TEMPLATES) {
+// El ascensor del curso no está en la galería, pero sus proyectos también arrancan sin servidor.
+for (const t of [...TEMPLATES, elevatorTemplate()]) {
   if (!t.sketch) continue;
   const mcu = t.parts.find((p) => PARTS[p.type].mcu);
   if (!mcu) continue;

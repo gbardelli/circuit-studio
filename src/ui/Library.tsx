@@ -1,6 +1,7 @@
-import { memo, useMemo, useRef, useState } from 'react';
+import { memo, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { type LucideIcon, ArrowLeft, Binary, BatteryMedium, ChevronRight, Component, Cpu, Lightbulb, Search, Star, ToggleLeft, X } from 'lucide-react';
-import { PARTS, PART_LIST } from '../parts';
+import { PARTS, PART_LIST, getPartsVersion, subscribeParts } from '../parts';
+import { DesignPalette } from './design/DesignPalette';
 import type { PartDef } from '../parts/types';
 import { scorePart } from '../parts/search';
 import { useUi } from './store';
@@ -29,6 +30,13 @@ function writeList(key: string, list: string[]) {
 }
 
 export function Library() {
+  const view = useUi((s) => s.view);
+  return view === 'design' ? <DesignPalette /> : <PartLibrary />;
+}
+
+function PartLibrary() {
+  // Los integrados propios entran y salen del catálogo con el proyecto.
+  const partsVersion = useSyncExternalStore(subscribeParts, getPartsVersion);
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<CatalogSection | null>(null);
   const [family, setFamily] = useState('');
@@ -39,9 +47,9 @@ export function Library() {
   const placing = useUi((s) => s.placing);
   const searching = Boolean(query.trim());
   const selected = CATALOG_SECTIONS.find((item) => item.id === section);
-  const families = useMemo(() => section ? catalogGroups(section) : [], [section]);
+  const families = useMemo(() => section ? catalogGroups(section) : [], [section, partsVersion]);
   const results = useMemo(() => PART_LIST.map((d) => ({ d, score: scorePart(d, query) }))
-    .filter(({ score }) => score > 0).sort((a, b) => b.score - a.score).map(({ d }) => d), [query]);
+    .filter(({ score }) => score > 0).sort((a, b) => b.score - a.score).map(({ d }) => d), [query, partsVersion]);
   const byIds = (ids: string[]) => [...new Set(ids)].flatMap((id) => PARTS[id] ? [PARTS[id]] : []);
   const groups = searching
     ? [{ title: `Resultados · ${results.length}`, items: results }]

@@ -7,6 +7,8 @@ import * as awarenessProtocol from 'y-protocols/awareness';
 import type { CircuitSnapshot, PartData, Props, Rotation, Vec, WireData, WireEnd } from '../core/types';
 import { PARTS } from '../parts';
 import { DEFAULT_SKETCH } from './sketch';
+import { DesignDoc } from './design';
+import { registerIcs } from '../logic/ic';
 import { CLOUD, colorFor, sessionToken, sessionUser, type Role } from '../cloud';
 
 export const LOCAL_ORIGIN = { local: true };
@@ -24,7 +26,7 @@ export interface Presence {
   user: UserInfo;
   cursor: Vec | null;
   selection: string[];
-  view?: 'board' | 'schematic';
+  view?: 'board' | 'schematic' | 'design';
   drag: { ids: string[]; dx: number; dy: number } | null;
 }
 
@@ -72,6 +74,8 @@ export class Project {
   readonly wires = this.doc.getMap<Y.Map<unknown>>('wires');
   readonly code = this.doc.getMap<Y.Text>('code');
   readonly meta = this.doc.getMap<unknown>('meta');
+  /** Hojas del modo diseño (circuitos lógicos e integrados propios). */
+  readonly design = new DesignDoc(this.doc.getMap<Y.Map<unknown>>('logic'), (fn) => this.tx(fn));
   readonly provider: WebsocketProvider | null;
   readonly awareness: awarenessProtocol.Awareness;
   readonly persistence: IndexeddbPersistence;
@@ -128,7 +132,7 @@ export class Project {
     this.setPresence({ user: this.user, cursor: null, selection: [], drag: null });
     // El código entra en el ámbito para deshacer una restauración entera; lo que se teclea en el
     // editor de código llega con el origen de su enlace y conserva su propio deshacer.
-    this.undo = new Y.UndoManager([this.parts, this.wires, this.code], { trackedOrigins: new Set([LOCAL_ORIGIN]), captureTimeout: 400 });
+    this.undo = new Y.UndoManager([this.parts, this.wires, this.code, this.design.map], { trackedOrigins: new Set([LOCAL_ORIGIN]), captureTimeout: 400 });
     this.doc.on('afterTransaction', () => {
       this.stale = true;
       this.emit();
@@ -162,6 +166,9 @@ export class Project {
   // ── Lectura ──────────────────────────────────────────────────────────────────
   snapshot(): CircuitSnapshot {
     if (!this.stale) return this.snap;
+    // Los integrados propios se registran antes: sus piezas `ic:…` deben existir en PARTS.
+    const ics = this.design.ics();
+    registerIcs(ics);
     const parts: PartData[] = [];
     const seen = new Set<string>();
     this.parts.forEach((ymap, id) => {
@@ -209,7 +216,7 @@ export class Project {
     // Protoboards debajo, placas encima, el resto en orden de creación.
     const layer = (p: PartData) => (PARTS[p.type].category === 'Protoboards' ? 0 : PARTS[p.type].category === 'Placas' ? 1 : 2);
     parts.sort((a, b) => layer(a) - layer(b) || Number(this.parts.get(a.id)?.get('z') ?? 0) - Number(this.parts.get(b.id)?.get('z') ?? 0));
-    this.snap = { parts, wires };
+    this.snap = ics.length ? { parts, wires, ics } : { parts, wires };
     this.stale = false;
     return this.snap;
   }
@@ -249,9 +256,11 @@ export class Project {
       for (const k of [...this.parts.keys()]) this.parts.delete(k);
       for (const k of [...this.wires.keys()]) this.wires.delete(k);
       for (const k of [...this.code.keys()]) this.code.delete(k);
+      for (const k of [...this.design.map.keys()]) this.design.map.delete(k);
       old.getMap<Y.Map<unknown>>('parts').forEach((m, k) => this.parts.set(k, copy(m) as YPart));
       old.getMap<Y.Map<unknown>>('wires').forEach((m, k) => this.wires.set(k, copy(m)));
       old.getMap<Y.Text>('code').forEach((t, k) => this.code.set(k, new Y.Text(t.toString())));
+      old.getMap<Y.Map<unknown>>('logic').forEach((m, k) => this.design.map.set(k, deepCopy(m)));
     });
     this.undo.stopCapturing();
     old.destroy();
@@ -483,4 +492,11 @@ export class Project {
     });
     return [...map.values()];
   }
+}
+
+/** Copia de un Y.Map con sus mapas anidados (las hojas del modo diseño tienen dos niveles). */
+function deepCopy(src: Y.Map<unknown>): Y.Map<unknown> {
+  const m = new Y.Map<unknown>();
+  src.forEach((v, k) => m.set(k, v instanceof Y.Map ? deepCopy(v) : v));
+  return m;
 }

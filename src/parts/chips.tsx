@@ -7,9 +7,9 @@ import { Diode, Resistor, type Element } from '../core/solver';
 import type { PinDef, Props } from '../core/types';
 import type { PartDef, RenderProps, SimContext } from './types';
 
-type Level = boolean | null; // null = alta impedancia
+export type Level = boolean | null; // null = alta impedancia
 
-interface IO {
+export interface IO {
   /** Nivel lógico de una entrada (con histéresis). */
   v(name: string): boolean;
   rise(name: string): boolean;
@@ -33,6 +33,8 @@ export interface ChipSpec<S = Record<string, number>> {
   minSupply?: number;
   /** Salidas de colector abierto: solo tiran a tierra. */
   openDrain?: boolean;
+  /** Salidas con resistencia interna a VCC (Ω) en lugar de transistor de subida, como el 7448. */
+  pullUp?: number;
   /** Alimentación de la que salen los niveles altos (si no es vcc). */
   rail?: string;
   init(): S;
@@ -55,7 +57,7 @@ const COMMON: Record<string, string> = {
 };
 
 /** Ids únicos: los nombres repetidos (GND en el L293D) se numeran como en las placas: GND.1, GND.2… */
-function pinIds(names: string[]) {
+export function pinIds(names: string[]) {
   const total = new Map<string, number>();
   for (const n of names) total.set(n, (total.get(n) ?? 0) + 1);
   const seen = new Map<string, number>();
@@ -162,7 +164,7 @@ function chipSim<S>(spec: ChipSpec<S>) {
     for (const name of inputs) elements.push(new Resistor(net(name), gnd, () => 10_000_000));
     for (const o of spec.outputs) {
       const n = net(o);
-      if (!spec.openDrain) elements.push(new Resistor(n, rail, () => (levels[o] === true ? R_ON : R_OFF)));
+      if (!spec.openDrain) elements.push(new Resistor(n, rail, () => (levels[o] === true ? (spec.pullUp ?? R_ON) : R_OFF)));
       elements.push(new Resistor(n, gnd, () => (levels[o] === false ? (spec.openDrain ? 8 : R_ON) : R_OFF)));
     }
     if (spec.extra) elements.push(...spec.extra(net, () => levels, () => lastIo));
@@ -230,7 +232,7 @@ function chipSim<S>(spec: ChipSpec<S>) {
   };
 }
 
-function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
+export function chipDef<S>(spec: ChipSpec<S>, maker = 'TI', Body?: PartDef['Render']): PartDef {
   const pins = dipPins(spec);
   const half = spec.pins.length / 2;
   const groups = new Map<string, string[]>();
@@ -241,14 +243,15 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
   const Render = memo(function ChipRender(_: RenderProps) {
     return <DipBody count={spec.pins.length} part={spec.part} maker={maker} />;
   });
+  const virtual = spec.type.startsWith('ic:');
   return {
     type: spec.type,
-    logic: /^(74|cd4)/i.test(spec.type)&&spec.type!=='74hc4066'?{ inputs: pinIds(spec.pins).filter(p=>{const base=p.replace(/\.\d+$/,'');return !spec.outputs.includes(p)&&base!==spec.vcc&&base!==spec.gnd&&base!==spec.rail&&!base.startsWith('NC');}),
+    logic: (virtual || /^(74|cd4)/i.test(spec.type))&&spec.type!=='74hc4066'?{ inputs: pinIds(spec.pins).filter(p=>{const base=p.replace(/\.\d+$/,'');return !spec.outputs.includes(p)&&base!==spec.vcc&&base!==spec.gnd&&base!==spec.rail&&!base.startsWith('NC');}),
       outputs:spec.outputs, supply:spec.vcc,ground:spec.gnd,low:spec.inputThresholds?.low??1.75,high:spec.inputThresholds?.high??2.75,fixedThresholds:Boolean(spec.inputThresholds),minSupply:spec.minSupply??1.6,openDrain:spec.openDrain??false }:undefined,
     name: spec.name,
     partNumber: spec.part,
     family: spec.family,
-    category: spec.family === 'Controladores y temporizadores' ? 'Integrados' : 'Lógica',
+    category: spec.family === 'Controladores y temporizadores' || virtual ? 'Integrados' : 'Lógica',
     description: spec.description,
     keywords: [...spec.keywords, spec.part.toLowerCase(), ...aliases(spec.part), spec.family.toLowerCase(), 'chip', 'integrado', 'ic', 'dip'],
     defaults: {},
@@ -265,8 +268,9 @@ function chipDef<S>(spec: ChipSpec<S>, maker = 'TI'): PartDef {
     },
     model: 'Comportamental',
     sim: chipSim(spec),
-    Render,
+    Render: Body ?? Render,
     thumbScale: 1.1,
+    chip: spec as ChipSpec<unknown>,
   };
 }
 
@@ -868,6 +872,37 @@ const bcd4511: ChipSpec<{ latch: number }> = {
   },
 };
 
+// 74HC48: patillaje del 7448. Las salidas suben por una resistencia interna de unos 2 kΩ, que ya
+// limita la corriente de cada segmento. Sin latch: muestra lo que haya en A–D.
+const bcd48: ChipSpec<Record<string, never>> = {
+  type: '74hc48',
+  part: '74HC48',
+  name: 'Decodificador BCD a 7 segmentos (cátodo común)',
+  family: COMB,
+  description: 'Convierte un número BCD (0–9) en los siete segmentos de un display de cátodo común. Salidas con resistencia interna a VCC.',
+  keywords: ['bcd', '7 segmentos', 'siete segmentos', 'display', 'decodificador', 'catodo comun', '7448', '74ls48'],
+  pins: ['B', 'C', 'LT', 'BIRBO', 'RBI', 'D', 'A', 'GND', 'SE', 'SD', 'SC', 'SB', 'SA', 'SG', 'SF', 'VCC'],
+  desc: {
+    A: 'BCD, bit 0 (vale 1)',
+    B: 'BCD, bit 1 (vale 2)',
+    C: 'BCD, bit 2 (vale 4)',
+    D: 'BCD, bit 3 (vale 8)',
+    LT: 'Prueba de lámpara: enciende todos los segmentos (activo bajo). Normalmente a VCC',
+    BIRBO: 'Apaga el display (activo bajo). Normalmente a VCC',
+    RBI: 'A 0 apaga el dígito cuando vale 0 (ceros a la izquierda). Normalmente a VCC',
+    ...Object.fromEntries(SEG.map((s) => [s, `Segmento ${s[1].toLowerCase()} del display (cátodo común). Sube por ≈2 kΩ internos`])),
+  },
+  ...TTL,
+  pullUp: 2000,
+  outputs: SEG,
+  init: () => ({}),
+  evaluate(io) {
+    const n = bits(io, ['A', 'B', 'C', 'D']);
+    const pattern = !io.v('BIRBO') ? 0 : !io.v('LT') ? 0x7f : n === 0 && !io.v('RBI') ? 0 : (SEGMENTS[n] ?? 0);
+    return outBits(SEG, pattern);
+  },
+};
+
 const bcd47: ChipSpec<Record<string, never>> = {
   type: '74ls47',
   part: '74LS47',
@@ -1194,6 +1229,7 @@ export const CHIPS: PartDef[] = [
   chipDef(mux151),
   chipDef(mux157),
   chipDef(bcd4511),
+  chipDef(bcd48),
   chipDef(bcd47),
   chipDef(adder283),
   chipDef(comp85),

@@ -5,6 +5,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { simLibraryFiles } from '../src/sim/gigaDisplayShim';
 
 const root = resolve(import.meta.dirname, '..');
 const bin = join(root, 'tools', process.platform === 'win32' ? 'arduino-cli.exe' : 'arduino-cli');
@@ -45,11 +46,18 @@ export async function compileSketch(source: string, board = 'arduino:avr:uno'): 
   const out = join(work, 'out');
   mkdirSync(sketchDir);
   writeFileSync(join(sketchDir, 'sketch.ino'), source);
+  // En el núcleo AVR, las librerías de la GIGA Display Shield se sustituyen por las del simulador.
+  const libs = simLibraryFiles(source, board);
+  for (const lib of libs) {
+    mkdirSync(join(work, 'libraries', lib.path, '..'), { recursive: true });
+    writeFileSync(join(work, 'libraries', lib.path), lib.content);
+  }
+  const extra = libs.length ? ['--libraries', join(work, 'libraries')] : [];
   try {
     const result = await new Promise<CompileResult>((done) => {
       execFile(
         bin,
-        ['--config-file', config, 'compile', '--fqbn', board, '--output-dir', out, sketchDir],
+        ['--config-file', config, 'compile', '--fqbn', board, '--output-dir', out, ...extra, sketchDir],
         { timeout: TIMEOUT_MS, maxBuffer: 4 * 1024 * 1024, windowsHide: true },
         (err, stdout, stderr) => {
           const hexFile = join(out, 'sketch.ino.hex');

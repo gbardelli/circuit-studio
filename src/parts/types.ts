@@ -43,6 +43,8 @@ export interface PartSim {
   elements: Element[];
   i2c?: I2cSlave;
   uart?: UartDevice;
+  /** Accesorio montado sobre una placa programable, sin cables (la GIGA Display Shield). */
+  shield?: ShieldDevice;
   onInput?(key: string, value: number | boolean): void;
   /** Reconcile a device's own output changes before detecting new external input edges. */
   afterSolve?(v: Float64Array): void;
@@ -61,6 +63,17 @@ export interface PartSim {
   mcuNodes?: number[];
   /** Nodo de cada entrada analógica (A0, A1…), para el ADC. */
   analogNodes?: number[];
+}
+
+/** Shield que la placa ve en dos registros: `host` es el tipo de placa sobre la que va. */
+export interface ShieldDevice {
+  host: string;
+  out: number;
+  input: number;
+  write(value: number): void;
+  read(): number;
+  /** Con placa anfitriona y firmware: la shield recibe 3,3 V del cabezal. */
+  power(on: boolean): void;
 }
 
 /** Byte-level UART peripheral. Frames are routed over connected TX/RX nets. */
@@ -109,6 +122,8 @@ export interface McuSpec {
 
 export interface PartDef {
   type: string;
+  /** Función lógica de un integrado DIP: la usa también el modo diseño. */
+  chip?: import('./chips').ChipSpec<unknown>;
   logic?: { inputs:string[]; outputs:string[]; supply:string|null; ground:string; low:number; high:number; fixedThresholds:boolean; minSupply:number; openDrain:boolean };
   mcu?: McuSpec;
   name: string;

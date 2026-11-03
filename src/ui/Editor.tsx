@@ -12,6 +12,7 @@ import { Inspector } from './Inspector';
 import { Library, LibDragFloat } from './Library';
 import { StatusBar, TopBar } from './TopBar';
 import { useUi } from './store';
+import { DesignCanvas } from './design/DesignCanvas';
 import { rememberProject } from './Home';
 import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
@@ -109,6 +110,7 @@ export function EditorShell() {
   const toast = useUi((s) => s.toast);
   const compactPanel = useUi((s) => s.compactPanel);
   const guiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
+  const view = useUi((s) => s.view);
   const labFullscreen=useUi(s=>s.labFullscreen);
   const collapsed = useUi((s) => s.collapsed);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
@@ -143,6 +145,8 @@ export function EditorShell() {
       const key = e.key.toLowerCase();
       if(mod && key==='k'){e.preventDefault();e.stopPropagation();ui.setCommandOpen(!ui.commandOpen);return;}
       if (isTyping(e) || (e.target as Element)?.closest?.('.workbench-panel,[data-menu-popup]')) return;
+      // El lienzo del modo diseño atiende sus propios atajos.
+      if (ui.view === 'design' && !(mod && (e.key === '[' || e.key === ']' || key === 'z' || key === 'y'))) return;
       if(ui.labFullscreen || (ui.labPanel==='assembly'&&ui.assemblyTab==='steps')) return;
       if (mod && (e.key === '[' || e.key === ']')) {
         e.preventDefault();
@@ -216,7 +220,7 @@ export function EditorShell() {
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />
-        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}><Canvas/></div>
+        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}</div>
         {guiding&&!labFullscreen&&<AssemblyStage/>}
         <WorkbenchPanel />
         <Suspense fallback={null}>

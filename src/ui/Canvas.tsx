@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircuitBoard, Route, Loader2, Zap, Code2, Copy, Workflow, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
+import { Route, Loader2, Zap, Code2, Copy, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
@@ -11,6 +11,7 @@ import { magneticPosition,occupiedHoles } from './magnet';
 import { ProbeReadout } from './ProbeReadout';
 import { FrameMeter } from './FrameMeter';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints, endPosition } from './geometry';
+import { ViewTabs } from './ViewTabs';
 import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
@@ -1115,14 +1116,7 @@ export function Canvas() {
         )}
       </div>
 
-      <div className="float view-float" role="tablist" aria-label="Vista">
-        <button role="tab" aria-selected={view === 'board'} className={view === 'board' ? 'on' : ''} onClick={() => setView('board')}>
-          <CircuitBoard size={14} /> Protoboard
-        </button>
-        <button role="tab" aria-selected={view === 'schematic'} className={view === 'schematic' ? 'on' : ''} onClick={() => setView('schematic')}>
-          <Workflow size={14} /> Esquema
-        </button>
-      </div>
+      <ViewTabs />
 
       <div className="float zoom-float" role="toolbar" aria-label="Zoom">
         <button className="icon-btn" onClick={() => zoomBy(1 / 1.25)} aria-label="Alejar">

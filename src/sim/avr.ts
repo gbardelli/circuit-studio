@@ -233,6 +233,15 @@ export class AvrRunner {
     return this.cpu.cycles / CLOCK_HZ;
   }
 
+  /** Periférico sin pines en dos registros del espacio de datos (la GIGA Display Shield). */
+  attachBus(out: number, input: number, device: { write(value: number): void; read(): number }) {
+    this.cpu.writeHooks[out] = (value) => {
+      device.write(value);
+      return true;
+    };
+    this.cpu.readHooks[input] = () => device.read();
+  }
+
   pinMode(index: number): McuPinMode {
     const loc = this.board.pins[index];
     if (!loc) return 'input';

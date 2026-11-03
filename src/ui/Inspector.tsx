@@ -10,6 +10,7 @@ import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { damageOf, type Damage } from '../sim/damage';
 import { WIRE_COLORS } from './geometry';
 import { Thumb } from './Library';
+import { DesignInspector } from './design/DesignInspector';
 import { useUi } from './store';
 import { ParticipantRow } from './Participants';
 import { configuredLegend, updateLegendLabel } from './wiring-legend';
@@ -34,6 +35,11 @@ const SWATCHES: Record<string, Record<string, string>> = {
 };
 
 export function Inspector() {
+  const view = useUi((s) => s.view);
+  return view === 'design' ? <DesignInspector /> : <CircuitInspector />;
+}
+
+function CircuitInspector() {
   const { project } = useEditor();
   const snapshot = useSnapshot();
   const selection = useUi((s) => s.selection);

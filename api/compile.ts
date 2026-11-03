@@ -7,6 +7,7 @@ import { createHash } from 'node:crypto';
 import { Sandbox } from '@vercel/sandbox';
 import { json, requireUser } from './_lib/auth.js';
 import { redis } from './_lib/redis.js';
+import { simLibraryFiles } from '../src/sim/gigaDisplayShim.js';
 
 export const maxDuration = 300;
 
@@ -84,8 +85,11 @@ export async function compileInSandbox(code: string, fqbn = 'arduino:avr:uno') {
   await ensureBase();
   const box = await Sandbox.fork({ sourceSandbox: BASE, persistent: false, timeout: 3 * 60_000 });
   try {
-    await box.writeFiles([{ path: `${HOME}/sketch/sketch.ino`, content: code }]);
-    const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn ${fqbn} --output-dir ${HOME}/out ${HOME}/sketch`]);
+    // En el núcleo AVR, las librerías de la GIGA Display Shield se sustituyen por las del simulador.
+    const libs = simLibraryFiles(code, fqbn).map((lib) => ({ path: `${HOME}/simlibs/${lib.path}`, content: lib.content }));
+    await box.writeFiles([{ path: `${HOME}/sketch/sketch.ino`, content: code }, ...libs]);
+    const extra = libs.length ? `--libraries ${HOME}/simlibs ` : '';
+    const run = await box.runCommand('bash', ['-lc', `cd ${HOME}; ${ENV} ./arduino-cli compile --fqbn ${fqbn} --output-dir ${HOME}/out ${extra}${HOME}/sketch`]);
     const stdout = await run.stdout();
     const stderr = (await run.stderr()).split(`${HOME}/sketch/`).join('');
     if (run.exitCode !== 0) return { ok: false, stdout, stderr };

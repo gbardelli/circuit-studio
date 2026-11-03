@@ -13,6 +13,7 @@ import { oscilloscope } from './scope';
 import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
 import { lcdI2c, pcf8574, pcf8574a } from './i2c';
 import { nextion } from './nextion';
+import { gigaDisplayShield } from './gigaDisplay';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -31,6 +32,7 @@ export const PART_LIST: PartDef[] = [
   lcd1602,
   lcdI2c,
   nextion,
+  gigaDisplayShield,
   relay,
   buzzer,
   servo,
@@ -64,3 +66,33 @@ export const PARTS: Record<string, PartDef> = Object.fromEntries(PART_LIST.map((
 for (const d of PART_LIST) if (d.category !== 'Protoboards') PARTS[SCH_PREFIX + d.type] = schematicDef(d);
 
 export const CATEGORIES: Category[] = ['Placas', 'Protoboards', 'Básicos', 'Entradas', 'Salidas', 'Semiconductores', 'Lógica', 'Integrados', 'Energía', 'Instrumentos'];
+
+// ── Integrados propios del modo diseño ────────────────────────────────────────────
+// Cambian con el proyecto: se registran aquí (y en el worker de simulación) al cargarlo.
+const CUSTOM = 'ic:';
+let customKey = '';
+let partsVersion = 0;
+const partListeners = new Set<() => void>();
+
+/** Sustituye los integrados propios registrados. `key` evita trabajo si no cambiaron. */
+export function setCustomParts(defs: PartDef[], key: string) {
+  if (key === customKey) return false;
+  customKey = key;
+  for (let i = PART_LIST.length - 1; i >= 0; i--) if (PART_LIST[i].type.startsWith(CUSTOM)) PART_LIST.splice(i, 1);
+  for (const type of Object.keys(PARTS)) if (type.startsWith(CUSTOM) || type.startsWith(SCH_PREFIX + CUSTOM)) delete PARTS[type];
+  for (const d of defs) {
+    PART_LIST.push(d);
+    PARTS[d.type] = d;
+    PARTS[SCH_PREFIX + d.type] = schematicDef(d);
+  }
+  partsVersion++;
+  partListeners.forEach((l) => l());
+  return true;
+}
+
+export function subscribeParts(fn: () => void) {
+  partListeners.add(fn);
+  return () => partListeners.delete(fn);
+}
+
+export const getPartsVersion = () => partsVersion;

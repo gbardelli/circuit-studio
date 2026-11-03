@@ -43,6 +43,21 @@ restringidos y los de edición no permiten acceso anónimo.
 
 Las decisiones visuales y referencias están en `DESIGN.md`.
 
+## Modo diseño e integrados propios
+
+La pestaña Diseño es un lienzo de lógica ideal, al estilo de Logisim o CircuitVerse: entradas,
+pulsadores, relojes, puertas de 2 a 8 entradas, triestados, biestables D, JK, T y SR,
+multiplexor, display hexadecimal y todos los 74HC y CD4000 lógicos del catálogo como bloques.
+Se une arrastrando de una patilla a otra; un clic en una entrada la cambia. Los cables muestran
+su valor (1, 0, X y conflicto en rojo) y el simulador avisa de oscilaciones.
+
+Cada hoja de integrado define un CI propio: sus Entradas y Salidas son las patillas. El panel
+fija nombre, referencia, encapsulado DIP (VCC en la última patilla, GND en la mitad), el orden
+de patillas y la tabla de verdad. Un integrado se usa dentro de otras hojas y, como integrado
+virtual con contorno violeta, en la protoboard y el esquema, donde se simula como un 74HC.
+«Crear integrado con la selección» convierte una parte de la hoja principal en un CI. Las
+hojas viven en el documento compartido (`src/collab/design.ts`); la lógica, en `src/logic/`.
+
 ## Producción
 
 El despliegue existente en Vercel usa Clerk para cuentas, Neon para proyectos y roles,
@@ -81,11 +96,17 @@ Los proyectos se guardan en `data/<sala>.ydoc` (escritura atómica + `.bak`).
 - ESP32, OLED e instrumentos de análisis avanzado siguen pendientes.
 - Un solo Arduino por proyecto está probado; varios funcionan pero comparten la misma ventana de tiempo.
 
-En el ascensor, el display de tiempo y la Nextion muestran los segundos restantes del
-viaje completo: 9 de 1 a 4, 6 para dos tramos y 3 para uno. U16 conserva la temporización
-por piso; el GIGA entrega el BCD total a U17 y muestra 0 al llegar. RESET vuelve a apagar
-el indicador. La variante `elevatorTemplate(false)` conserva el indicador por tramo
-para comprobar la lógica de los integrados sin firmware.
+El ascensor tiene tres displays de 7 segmentos con 74HC48: piso actual (U19, oscuro hasta
+el primer sensor), destino (U14) y segundos al siguiente piso (U17, directo de U16). Los
+codificadores son de compuertas (no hay 74HC148) y /SENSOR sale de un OR de diodos, para que
+la carga asíncrona de U11 nunca lea un 000 al soltarse un sensor. La GIGA Display Shield
+muestra el hueco, el tiempo total del viaje (9, 6 o 3 s), las llamadas táctiles y el estado
+en su LED RGB. Sin el GIGA, todo lo obligatorio sigue funcionando con los integrados.
+
+La GIGA Display Shield se monta sobre el GIGA más cercano, sin cables. Los sketches usan las
+librerías oficiales (`Arduino_GigaDisplay_GFX`, `Arduino_GigaDisplayTouch`,
+`Arduino_GigaDisplay`). Al compilar para el núcleo AVR del simulador se sustituyen por
+equivalentes de `src/sim/gigaDisplayShim.ts`; LVGL, la IMU y el micrófono no se emulan.
 
 ## Guía de montaje
 

@@ -8,6 +8,7 @@ import { PARTS } from '../parts';
 import type { McuBridge, PartSim, Visual } from '../parts/types';
 import { AvrRunner, CLOCK_HZ, type BoardId } from './avr';
 import { I2cBus } from './i2c';
+import { registerIcs } from '../logic/ic';
 
 const MAX_SEGMENT = 0.001;
 /** Paso máximo de integración de los condensadores cuando nada más cambia. */
@@ -49,7 +50,7 @@ type Listener = () => void;
 function topologyKey(snap: CircuitSnapshot) {
   const parts = snap.parts.map((p) => `${p.id}|${p.type}|${p.x}|${p.y}|${p.rot}|${p.props.cols ?? ''}|${p.props.flip ?? false}`).sort();
   const wires = snap.wires.map((w) => `${w.a.part}:${w.a.pin}-${w.b.part}:${w.b.pin}`).sort();
-  return parts.join(';') + '#' + wires.join(';');
+  return parts.join(';') + '#' + wires.join(';') + '#' + (snap.ics ? JSON.stringify(snap.ics) : '');
 }
 
 export class SimEngine {
@@ -78,6 +79,7 @@ export class SimEngine {
 
   // ── API pública ────────────────────────────────────────────────────────────
   update(snap: CircuitSnapshot) {
+    registerIcs(snap.ics);
     this.snapshot = snap;
     if (!this.running) return;
     const key = topologyKey(snap);
@@ -348,9 +350,25 @@ export class SimEngine {
         });
       }, () => this.circuit!.v);
     }
+    this.mountShields();
     this.status = { ...this.status, running: true, nodes: count, converged: r.converged, message: r.converged ? null : 'El circuito no converge en el punto de operación.' };
     this.syncMcuInputs();
     this.dirty = false;
+  }
+
+  /** Cada shield va sobre la placa indicada en `host` o, si no, sobre la más cercana de su tipo. */
+  private mountShields() {
+    for (const rt of this.parts.values()) {
+      const shield = rt.sim.shield;
+      if (!shield) continue;
+      const self = this.snapshot.parts.find((p) => p.id === rt.id);
+      const hosts = this.snapshot.parts.filter((p) => p.type === shield.host);
+      const chosen = hosts.find((p) => p.id === rt.props.host)
+        ?? hosts.sort((a, b) => Math.hypot(a.x - (self?.x ?? 0), a.y - (self?.y ?? 0)) - Math.hypot(b.x - (self?.x ?? 0), b.y - (self?.y ?? 0)))[0];
+      const runner = chosen && this.mcus.find((m) => m.partId === chosen.id)?.runner;
+      if (runner) runner.attachBus(shield.out, shield.input, shield);
+      shield.power(Boolean(runner));
+    }
   }
 
   private createRunner(partId: string, hex: string, board: BoardId) {
