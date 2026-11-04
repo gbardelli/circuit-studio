@@ -49,6 +49,34 @@ export function DesignPalette() {
         </div>
       </div>
       <div className="lib-body">
+        {!project.readOnly && !q && sheet === MAIN_SHEET && (
+          <section className="lib-section">
+            <h3>Ejemplos</h3>
+            <div className="d-cards">
+              {DESIGN_EXAMPLES.map((ex) => (
+                <button
+                  key={ex.id}
+                  className="d-card"
+                  title={ex.description}
+                  onClick={() => {
+                    const ids = ex.insert(project.design, sheet);
+                    const ui = useDesignUi.getState();
+                    ui.select(ids);
+                    ui.requestFit();
+                  }}
+                >
+                  <span className="d-thumb">
+                    <LayoutTemplate size={18} />
+                  </span>
+                  <span className="d-meta">
+                    <strong>{ex.name}</strong>
+                    <small>{ex.description}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         {LOGIC_GROUPS.map((group) => {
           const items = all.filter((d) => d.group === group && match(d));
           const isChips = group === 'Integrados 74HC y CD4000';
@@ -97,34 +125,6 @@ export function DesignPalette() {
             </section>
           );
         })}
-        {!project.readOnly && !q && sheet === MAIN_SHEET && (
-          <section className="lib-section">
-            <h3>Ejemplos</h3>
-            <div className="d-cards">
-              {DESIGN_EXAMPLES.map((ex) => (
-                <button
-                  key={ex.id}
-                  className="d-card"
-                  title={ex.description}
-                  onClick={() => {
-                    const ids = ex.insert(project.design, sheet);
-                    const ui = useDesignUi.getState();
-                    ui.select(ids);
-                    ui.requestFit();
-                  }}
-                >
-                  <span className="d-thumb">
-                    <LayoutTemplate size={18} />
-                  </span>
-                  <span className="d-meta">
-                    <strong>{ex.name}</strong>
-                    <small>{ex.description}</small>
-                  </span>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
         {q && !all.some(match) && (
           <div className="empty">
             <Search size={18} />
