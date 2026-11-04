@@ -1,14 +1,8 @@
-// Banco de montaje para plantillas grandes sobre protoboards de 830 puntos apiladas en vertical.
-// Clava cada pieza en sus agujeros y tiende los cables como se haría a mano:
-// · Alimentación: un puente vertical corto hasta el riel de la misma mitad.
-// · Señales en la misma mitad de una placa: por el pasillo entre el riel y la fila a (o j).
-// · Hacia otra placa: cada mitad sale por su pasillo exterior; entre placas contiguas el cable
-//   corre por el pasillo que comparten y, si no son contiguas, baja por el canal lateral derecho.
-// · Hacia el GIGA (a la izquierda): por el canal lateral izquierdo.
-// Se reservan carriles separados para que los recorridos se puedan seguir visualmente.
+// Mount components on real breadboard holes, then connect their networks with short jumpers.
+// Physical routing runs after placement, so displays and chip bodies remain clear.
 import { toWorld, type Props, type Rotation, type Vec } from '../core/types';
 import { PARTS } from '../parts';
-import { separateWireRoutes, sharedTrackLength } from '../core/wireRouting';
+import { routePhysicalWiring, shortenPhysicalWiring } from './physicalWiring';
 import type { Template, TemplatePart, TemplateWire } from './templates';
 
 export type Ref = [string, string];
@@ -41,18 +35,16 @@ export const WIRE = {
   uart: '#5ab0ff', // UART de la pantalla
   monitor: '#8a96a3', // líneas que solo lee el GIGA
 };
+export const SEGMENT_COLORS: Record<string, string> = {
+  a: '#db873e', b: '#d0ad48', c: '#78a85b', d: '#43a99d',
+  e: '#619bd1', f: '#a488cb', g: '#d77da0',
+};
 
 interface Hole {
   board: string;
   row: string;
   col: number;
 }
-
-interface Band {
-  lanes: number[];
-  used: [number, number][][];
-}
-
 interface Socket {
   ref: Ref;
   half: 'top' | 'bottom';
@@ -65,21 +57,10 @@ export class Bench {
   private boards = new Map<string, Vec>();
   private holes = new Map<string, Hole>();
   private used = new Set<string>();
-  private bands = new Map<string, Band>();
-  private order: string[] = [];
-  private risers = new Map<'left' | 'right', [number, number][][]>();
-  private crossings = new Map<string, number>();
-  private pendingRoutes: (() => void)[] = [];
 
   board(key: string, x: number, y: number, label?: string) {
     this.parts.push({ key, type: 'breadboard-full', x, y, props: label ? { label } : {} });
     this.boards.set(key, { x, y });
-    this.band(`${key}:top`, steps(y + 36, y + 56));
-    this.band(`${key}:bottom`, steps(y + 176, y + 196));
-  }
-
-  private band(name: string, lanes: number[]) {
-    this.bands.set(name, { lanes, used: lanes.map(() => []) });
   }
 
   loose(key: string, type: string, x: number, y: number, props: Props = {}, rot: Rotation = 0) {
@@ -165,144 +146,10 @@ export class Bench {
     return toWorld({ x: p.x, y: p.y, rot: p.rot ?? 0 }, pin);
   }
 
-  // ── Pasillos y canales ────────────────────────────────────────────────────
-  private ensureBands() {
-    if (this.order.length) return;
-    this.order = [...this.boards.entries()].sort((p, q) => p[1].y - q[1].y).map(([k]) => k);
-    this.order.forEach((k, i) => {
-      const y = this.boards.get(k)!.y;
-      if (i === 0) this.band('out:0:above', steps(y - 12, y - 64));
-      const next = this.order[i + 1];
-      if (next) {
-        const lanes = steps(y + BOARD_H + 6, this.boards.get(next)!.y - 6);
-        const shared: Band = { lanes, used: lanes.map(() => []) };
-        this.bands.set(`out:${i}:below`, shared);
-        this.bands.set(`out:${i + 1}:above`, shared);
-      } else this.band(`out:${i}:below`, steps(y + BOARD_H + 6, y + BOARD_H + 64));
-    });
-    for (const side of ['left', 'right'] as const) this.risers.set(side, Array.from({ length: 28 }, () => []));
-  }
-
-  /** Carril en la mitad de una placa: el pasillo interior o, si está lleno, el exterior. */
-  private halfLane(board: string, half: 'top' | 'bottom', x1: number, x2: number) {
-    return this.tryLane(`${board}:${half}`, x1, x2) ?? this.lane(`out:${this.order.indexOf(board)}:${half === 'top' ? 'above' : 'below'}`, x1, x2);
-  }
-
-  private tryLane(band: string, x1: number, x2: number) {
-    try {
-      return this.lane(band, x1, x2);
-    } catch {
-      return null;
-    }
-  }
-
-  /** Reserva un carril libre en el tramo [x1, x2] de una banda. */
-  private lane(band: string, x1: number, x2: number) {
-    const b = this.bands.get(band)!;
-    const lo = Math.min(x1, x2) - 4;
-    const hi = Math.max(x1, x2) + 4;
-    for (let i = 0; i < b.lanes.length; i++) {
-      if (b.used[i].every(([a, c]) => hi < a || lo > c)) {
-        b.used[i].push([lo, hi]);
-        return b.lanes[i];
-      }
-    }
-    throw new Error(`Plantilla: el pasillo ${band} está lleno entre x=${x1} y x=${x2}`);
-  }
-
-  private riser(side: 'left' | 'right', y1: number, y2: number) {
-    const lo = Math.min(y1, y2) - 4;
-    const hi = Math.max(y1, y2) + 4;
-    const slots = this.risers.get(side)!;
-    for (let i = 0; i < slots.length; i++) {
-      if (slots[i].every(([a, b]) => hi < a || lo > b)) {
-        slots[i].push([lo, hi]);
-        return side === 'right' ? BOARD_W + 14 + i * 8 : -14 - i * 8;
-      }
-    }
-    throw new Error('Plantilla: no quedan canales laterales');
-  }
-
-  /** Columna sin integrados para cruzar el canal central, lo más cerca de x. */
-  private gapColumn(board: string, x: number) {
-    const b = this.boards.get(board)!;
-    const want = Math.round((x - b.x - COL0) / 10) + 1;
-    for (let d = 0; d < COLS; d++) {
-      for (const c of d === 0 ? [want] : [want + d, want - d]) {
-        if (c >= 5 && c <= COLS && !this.used.has(`${board}:e${c}`) && !this.used.has(`${board}:f${c}`) && !this.crossings.has(`${board}:${c}`)) {
-          const n = this.crossings.get(`${board}:${c}`) ?? 0;
-          this.crossings.set(`${board}:${c}`, n + 1);
-          return b.x + colX(c);
-        }
-      }
-    }
-    const side = x < b.x + BOARD_W / 2 ? 'left' : 'right';
-    const key = `${board}:outside:${side}`, index = this.crossings.get(key) ?? 0;
-    this.crossings.set(key, index + 1);
-    return b.x + (side === 'left' ? -8 - index * 8 : BOARD_W + 8 + index * 8);
-  }
-
-  /** Tramo desde un agujero hasta el borde de su pasillo exterior en la dirección `dir`. */
-  private exit(s: Socket, dir: 'up' | 'down', towardX: number) {
-    const k = this.order.indexOf(s.board);
-    const p = this.at(s.ref);
-    const band = `out:${k}:${dir === 'up' ? 'above' : 'below'}`;
-    if ((s.half === 'top') === (dir === 'up')) return { pts: [] as Vec[], x: p.x, band };
-    const gx = this.gapColumn(s.board, (p.x + towardX) / 2);
-    const yi = this.halfLane(s.board, s.half, p.x, gx);
-    return { pts: [{ x: p.x, y: yi }, { x: gx, y: yi }], x: gx, band };
-  }
-
-  /** Cable entre dos puntos, tendido por pasillos. `direct` lo deja recto (piezas sueltas vecinas). */
-  wire(a: Ref, b: Ref, color: string, direct = false) {
-    this.ensureBands();
-    const sa = this.socket(a);
-    const sb = this.socket(b);
-    const ea = sa?.ref ?? a;
-    const eb = sb?.ref ?? b;
-    if (direct) return void this.wires.push({ a: ea, b: eb, color });
-    const pa = this.at(ea);
-    const pb = this.at(eb);
-    const wire: TemplateWire = { a: ea, b: eb, color };
-    this.wires.push(wire);
-    // Reserve terminals now, but choose corridors only once every component is mounted.
-    this.pendingRoutes.push(() => {
-    let pts: Vec[] = [];
-    if (sa && sb && sa.board === sb.board) {
-      if (sa.half === sb.half) {
-        const y = this.halfLane(sa.board, sa.half, pa.x, pb.x);
-        pts = [{ x: pa.x, y }, { x: pb.x, y }];
-      } else {
-        const gx = this.gapColumn(sa.board, (pa.x + pb.x) / 2);
-        const ya = this.halfLane(sa.board, sa.half, pa.x, gx);
-        const yb = this.halfLane(sb.board, sb.half, gx, pb.x);
-        pts = [{ x: pa.x, y: ya }, { x: gx, y: ya }, { x: gx, y: yb }, { x: pb.x, y: yb }];
-      }
-    } else if (sa && sb) {
-      const down = this.order.indexOf(sa.board) < this.order.indexOf(sb.board);
-      const xa = this.exit(sa, down ? 'down' : 'up', pb.x);
-      const xb = this.exit(sb, down ? 'up' : 'down', pa.x);
-      if (this.bands.get(xa.band) === this.bands.get(xb.band)) {
-        const y = this.lane(xa.band, xa.x, xb.x);
-        pts = [...xa.pts, { x: xa.x, y }, { x: xb.x, y }, ...xb.pts.slice().reverse()];
-      } else {
-        const rx = this.riser('right', this.bands.get(xa.band)!.lanes[0], this.bands.get(xb.band)!.lanes[0]);
-        const ya = this.lane(xa.band, xa.x, rx);
-        const yb = this.lane(xb.band, xb.x, rx);
-        pts = [...xa.pts, { x: xa.x, y: ya }, { x: rx, y: ya }, { x: rx, y: yb }, { x: xb.x, y: yb }, ...xb.pts.slice().reverse()];
-      }
-    } else if (sa || sb) {
-      // Una punta en una placa y la otra en el GIGA, a la izquierda: canal izquierdo.
-      const s = (sa ?? sb)!;
-      const free = sa ? pb : pa;
-      const xo = this.exit(s, s.half === 'top' ? 'up' : 'down', -100);
-      const rx = this.riser('left', free.y, this.bands.get(xo.band)!.lanes[0]);
-      const y = this.lane(xo.band, rx, xo.x);
-      const fromBoard = [...xo.pts, { x: xo.x, y }, { x: rx, y }, { x: rx, y: free.y }];
-      pts = sa ? fromBoard : fromBoard.slice().reverse();
-    }
-    wire.points = pts.length ? pts : undefined;
-    });
+  /** Reserve distinct physical holes; the final pass lays out the complete network. */
+  wire(a: Ref, b: Ref, color: string, _direct = false) {
+    const sa = this.socket(a), sb = this.socket(b);
+    this.wires.push({ a: sa?.ref ?? a, b: sb?.ref ?? b, color });
   }
 
   /** Cable con un recorrido dado a mano (entre piezas sueltas). */
@@ -361,31 +208,11 @@ export class Bench {
   }
 
   template(meta: Omit<Template, 'parts' | 'wires'>): Template {
-    for (const route of this.pendingRoutes.splice(0)) route();
-    const obstacles = this.parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
-      const def = PARTS[p.type], props = { ...def.defaults, ...p.props };
-      let b = def.bounds(props);
-      if (/^(74|cd4|ne555)/.test(p.type)) b = { x: b.x + 2, y: b.y + 9, w: b.w - 4, h: b.h - 18 };
-      else if (p.type === 'resistor') b = { x: 9, y: -6, w: 22, h: 12 };
-      else if (p.type === 'pushbutton') b = { x: 0, y: 4, w: 20, h: 22 };
-      else if (p.type === 'led' || p.type === 'capacitor') b = { ...b, h: b.h - 10 };
-      const corners = [{ x: b.x, y: b.y }, { x: b.x + b.w, y: b.y }, { x: b.x, y: b.y + b.h }, { x: b.x + b.w, y: b.y + b.h }].map(at => toWorld({ ...p, rot: p.rot ?? 0 }, at));
-      const x = Math.min(...corners.map(c => c.x)), y = Math.min(...corners.map(c => c.y));
-      return { x, y, w: Math.max(...corners.map(c => c.x)) - x, h: Math.max(...corners.map(c => c.y)) - y };
-    });
-    let routes = separateWireRoutes(this.wires.map(w => [this.at(w.a), ...(w.points ?? []), this.at(w.b)]), obstacles);
-    for (let pass = 0; pass < 3; pass++) {
-      const candidate = separateWireRoutes([...routes].reverse(), obstacles).reverse();
-      if (sharedTrackLength(candidate) >= sharedTrackLength(routes)) break;
-      routes = candidate;
-    }
-    return { ...meta, parts: this.parts, wires: this.wires.map((wire, index) => ({ ...wire, points: routes[index].slice(1, -1) })) };
+    const scene = {
+      parts: this.parts.map(p => ({ id: p.key, type: p.type, x: p.x, y: p.y, rot: p.rot ?? 0, props: { ...PARTS[p.type].defaults, ...p.props } })),
+      wires: this.wires.map((w, i) => ({ id: `w${i}`, color: w.color, points: w.points ?? [], a: { part: w.a[0], pin: w.a[1], ...this.at(w.a) }, b: { part: w.b[0], pin: w.b[1], ...this.at(w.b) } })),
+    };
+    const result = routePhysicalWiring(shortenPhysicalWiring(scene));
+    return { ...meta, parts: this.parts, wires: result.wires.map(w => ({ a: [w.a.part!, w.a.pin!], b: [w.b.part!, w.b.pin!], points: w.points, color: w.color })) };
   }
-}
-
-function steps(from: number, to: number) {
-  const out: number[] = [];
-  const d = from < to ? 6 : -6;
-  for (let y = from; d > 0 ? y <= to : y >= to; y += d) out.push(y);
-  return out;
 }
