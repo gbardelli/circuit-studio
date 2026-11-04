@@ -1,7 +1,7 @@
 // Dibujo de los elementos del modo diseño (símbolos de forma distintiva IEEE 91) en coordenadas
 // locales, antes de girar. Colores de valor: 1 verde claro, 0 verde oscuro, X azul, error rojo.
 import { memo } from 'react';
-import { SEGMENT_PINS } from '../../logic/elements';
+import { NOTE_LINE, noteLines, SEGMENT_PINS } from '../../logic/elements';
 import type { Bit } from '../../logic/types';
 import type { Placed } from './geometry';
 
@@ -210,8 +210,12 @@ export const LogicSymbol = memo(function LogicSymbol({ placed, st }: { placed: P
     return (
       <g>
         <rect x={0} y={0} width={w} height={h} rx={4} fill="var(--d-note)" />
-        <text x={8} y={13.5} fontFamily={FONT} fontSize={9.5} fill={INK}>
-          {String(node.props.text ?? '')}
+        <text fontFamily={FONT} fontSize={9.5} fill={INK} style={{ whiteSpace: 'pre' }}>
+          {noteLines(node.props).map((line, i) => (
+            <tspan key={i} x={8} y={13.5 + i * NOTE_LINE}>
+              {line}
+            </tspan>
+          ))}
         </text>
       </g>
     );

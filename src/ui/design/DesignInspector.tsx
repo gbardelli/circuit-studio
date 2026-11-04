@@ -1,7 +1,7 @@
 // Panel de propiedades del modo diseño: el elemento seleccionado o, sin selección, la hoja. En
 // un integrado propio: nombre, referencia, encapsulado, orden de patillas y tabla de verdad.
 import { ArrowDown, ArrowUp, CircuitBoard, Cpu, PackagePlus, RotateCw, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { elementDef, icSignals, pinName } from '../../logic/elements';
 import { DIP_SIZES, icIssues, packagePins, packageSize } from '../../logic/ic';
 import { truthTable } from '../../logic/sim';
@@ -84,7 +84,16 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
               {f.unit && <span>{f.unit}</span>}
             </div>
           ) : (
-            <input className="input" id={`d-${f.key}`} value={String(node.props[f.key] ?? '')} maxLength={40} placeholder={f.key === 'label' && sheet.kind === 'ic' ? 'Nombre de la patilla' : undefined} onChange={(e) => project.design.setProp(sheet.id, id, f.key, e.target.value)} />
+            <DraftText
+              className="input"
+              id={`d-${f.key}`}
+              multiline={f.kind === 'longtext'}
+              rows={3}
+              value={String(node.props[f.key] ?? '')}
+              maxLength={f.kind === 'longtext' ? 400 : 40}
+              placeholder={f.key === 'label' && sheet.kind === 'ic' ? 'Nombre de la patilla' : undefined}
+              onCommit={(v) => project.design.setProp(sheet.id, id, f.key, v)}
+            />
           )}
         </div>
       ))}
@@ -229,14 +238,14 @@ function IcInspector({ sheet }: { sheet: LogicSheet }) {
         <label className="label" htmlFor="ic-name">
           Nombre
         </label>
-        <input className="input" id="ic-name" value={sheet.name} maxLength={60} onChange={(e) => set({ name: e.target.value })} placeholder="Codificador de pisos" />
+        <DraftText className="input" id="ic-name" value={sheet.name} maxLength={60} onCommit={(name) => set({ name })} placeholder="Codificador de pisos" />
       </div>
       <div className="insp-section d-row">
         <div>
           <label className="label" htmlFor="ic-part">
             Referencia
           </label>
-          <input className="input" id="ic-part" value={sheet.part} maxLength={16} onChange={(e) => set({ part: e.target.value.toUpperCase() })} placeholder="CS-001" />
+          <DraftText className="input" id="ic-part" value={sheet.part} maxLength={16} transform={(v) => v.toUpperCase()} onCommit={(part) => set({ part })} placeholder="CS-001" />
         </div>
         <div>
           <label className="label" htmlFor="ic-pkg">
@@ -256,7 +265,7 @@ function IcInspector({ sheet }: { sheet: LogicSheet }) {
         <label className="label" htmlFor="ic-desc">
           Descripción
         </label>
-        <textarea className="input" id="ic-desc" rows={2} value={sheet.description} maxLength={240} onChange={(e) => set({ description: e.target.value })} placeholder="Qué hace y cómo se usa" />
+        <DraftText multiline className="input" id="ic-desc" rows={2} value={sheet.description} maxLength={240} onCommit={(description) => set({ description })} placeholder="Qué hace y cómo se usa" />
       </div>
 
       <div className="insp-section">
@@ -404,4 +413,31 @@ function DipPreview({ part, pins }: { part: string; pins: { name: string; kind: 
       })}
     </svg>
   );
+}
+
+type DraftProps = {
+  value: string;
+  onCommit(value: string): void;
+  transform?(value: string): string;
+  multiline?: boolean;
+} & Omit<InputHTMLAttributes<HTMLInputElement> & TextareaHTMLAttributes<HTMLTextAreaElement>, 'value' | 'onChange'>;
+
+/**
+ * Campo de texto sobre el documento compartido. Mientras tiene el foco muestra su propio borrador:
+ * el valor del documento vuelve en otro ciclo y, si el campo lo leyera, el cursor saltaría al final.
+ */
+function DraftText({ value, onCommit, transform = (v) => v, multiline, ...rest }: DraftProps) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const props = {
+    ...rest,
+    value: draft ?? value,
+    onFocus: () => setDraft(value),
+    onBlur: () => setDraft(null),
+    onChange: (e: { target: { value: string } }) => {
+      const v = transform(e.target.value);
+      setDraft(v);
+      onCommit(v);
+    },
+  };
+  return multiline ? <textarea {...props} /> : <input {...props} />;
 }

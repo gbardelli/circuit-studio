@@ -41,7 +41,7 @@ export interface Env {
 export interface LogicField {
   key: string;
   label: string;
-  kind: 'number' | 'select' | 'text' | 'toggle';
+  kind: 'number' | 'select' | 'text' | 'longtext' | 'toggle';
   min?: number;
   max?: number;
   step?: number;
@@ -122,6 +122,9 @@ function unary(kind: string, name: string, invert: boolean, key: string, descrip
 // ── Entradas y salidas ──────────────────────────────────────────────────────────
 /** Entradas del display de 7 segmentos, de arriba abajo. */
 export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+/** Líneas de una nota (el texto admite saltos de línea). */
+export const noteLines = (p: Props) => String(p.text ?? '').split(/\r?\n/);
+export const NOTE_LINE = 13;
 export const LED_COLORS = ['green', 'red', 'yellow', 'blue'] as const;
 const LED_COLOR_NAMES: Record<(typeof LED_COLORS)[number], string> = { green: 'Verde', red: 'Rojo', yellow: 'Amarillo', blue: 'Azul' };
 const SOURCE_PIN: LogicPinDef[] = [{ id: 'Y', x: 40, y: 10, dir: 'out' }];
@@ -350,8 +353,11 @@ const ELEMENTS: ElementDef[] = [
     description: 'Texto para explicar una parte del circuito.',
     keywords: ['nota', 'texto', 'comentario', 'etiqueta', 'anotacion'],
     defaults: { text: 'Nota' },
-    fields: [{ key: 'text', label: 'Texto', kind: 'text' }],
-    size: (p) => ({ w: Math.max(40, Math.ceil((String(p.text ?? '').length * 7 + 16) / 10) * 10), h: 20 }),
+    fields: [{ key: 'text', label: 'Texto', kind: 'longtext' }],
+    size: (p) => {
+      const lines = noteLines(p);
+      return { w: Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 + 16) / 10) * 10), h: Math.ceil((lines.length * NOTE_LINE + 7) / 10) * 10 };
+    },
     pins: () => [],
     behavior: () => ({ step: () => [] }),
   },
