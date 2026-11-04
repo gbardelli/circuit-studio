@@ -24,10 +24,11 @@ describe('physical elevator wiring', () => {
     const groups = new Map<number, string[]>();
     for (const p of scene.parts.filter(p => !p.type.startsWith('breadboard'))) for (const pin of PARTS[p.type].pins(p.props)) {
       const original = `${p.id}:${pin.id}`, k = normalized(original), n = logical.netOf.get(original)!;
-      if (changed.has(k) || !oldKeys.has(k)) continue;
+      // U16 (de 74HC193 a secuenciador 74LS173) y U18 (su lógica de recarga) se rehicieron a propósito.
+      if (changed.has(k) || /^u1[68]:/.test(k) || !oldKeys.has(k)) continue;
       if (!groups.has(n)) groups.set(n, []); groups.get(n)!.push(k);
     }
-    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract.map(g => g.filter(k => !changed.has(k) && present.has(k))).filter(g => g.length).sort((a, b) => a[0].localeCompare(b[0])));
+    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract.map(g => g.filter(k => !changed.has(k) && !/^u1[68]:/.test(k) && present.has(k))).filter(g => g.length).sort((a, b) => a[0].localeCompare(b[0])));
     ['A', 'B', 'C', 'D'].forEach((pin, bit) => expect(logical.netOf.get(`u17:${pin}`)).toBe(logical.netOf.get(`giga:D${6 + bit}`)));
     expect(nets.netOf.get('u17:BIRBO')).toBe(nets.netOf.get('u5:2Q'));
   });

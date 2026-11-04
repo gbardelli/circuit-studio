@@ -1227,6 +1227,11 @@ export const CHIPS: PartDef[] = [
   ...gateChips.map((spec) => chipDef(spec)),
   ...gateChips.filter(spec => ['74hc00','74hc08','74hc32','74hc04'].includes(spec.type)).map(spec => chipDef(asLS(spec))),
   chipDef(register173),
+  // Mismo registro en CMOS HC: umbrales CMOS y alimentación de 2 a 6 V.
+  chipDef({ ...register173, type: '74hc173', part: '74HC173', inputThresholds: undefined, minSupply: undefined,
+    description: 'Registro D de cuatro bits. Captura por flanco ascendente con G1 y G2 bajos; M y N bajos habilitan las salidas. Borrado asíncrono activo alto.',
+    keywords: ['74hc173', 'registro', 'memoria', '4 bits', 'triestado'],
+    desc: { ...register173.desc, VCC: 'Alimentación: 2–6 V (5 V en este circuito)' } }),
   chipDef(asLS(ff74)),
   chipDef(asLS(comp85)),
   chipDef(asLS(bcd48)),

@@ -29,7 +29,7 @@ GigaDisplayRGB rgb;
 
 const int CALL[4]   = {23, 25, 27, 29};  // llamada de piso 1-4
 const int SENSOR[4] = {31, 33, 35, 37};  // sensor de planta 1-4
-const int COUNT[2] = {39, 41};           // cuenta regresiva de U16 (Q0, Q1): 3, 2, 1, 0
+const int COUNT[2] = {39, 41};           // fase de U16 (Q0, Q1): 00 parado; en marcha 01, 11, 10
 const int TRIP_BCD[4] = {6, 7, 8, 9}; // total remaining seconds into U17: 0–9
 const int BUSY = 43, VALID = 45;
 const int DEST[3] = {47, 49, 51};        // destino guardado en U8 (Q0-Q2)
@@ -58,8 +58,8 @@ int floorNow = 1;        // planta de la cabina
 int dir = 0;             // +1 sube, -1 baja, 0 parada
 unsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};
 bool wasBusy = false, wasTouching = false;
-int lastCount = 3;
-int tripSeconds = 0, tripTotal = 0, previousTripCount = 3;
+int lastCount = 0;
+int tripSeconds = 0, tripTotal = 0, previousTripCount = 0;
 
 // Lo último que se dibujó: solo se redibuja lo que cambia
 int shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -1, shownTime = -1, shownCalls = -1, shownMode = -1;
@@ -96,7 +96,7 @@ int readDest() {
 }
 
 int readCount() {
-  static int candidate = 3, stable = 3;
+  static int candidate = 0, stable = 0;
   static unsigned long since = 0;
   int raw = digitalRead(COUNT[0]) | (digitalRead(COUNT[1]) << 1);
   unsigned long now = millis();
@@ -120,7 +120,7 @@ int wanted(bool busy, bool valid, int dest) {
 }
 
 void motor(unsigned long now, bool busy, bool valid, int dest, int count) {
-  bool reached = count == 0 && lastCount != 0;  // la cuenta de U16 acaba de llegar a 0
+  bool reached = count == 2 && lastCount != 2;  // U16 acaba de entrar en 10: 3 s, un piso
   if (count != lastCount) lastCount = count;
   if (!autoMode) { int s = readSensors(); if (s) floorNow = s; dir = 0; return; }
   if (dir != 0) {
@@ -300,7 +300,7 @@ void loop() {
     tripTotal = tripSeconds = constrain(abs(dest - floorNow) * 3, 0, 9);
     previousTripCount = count;
   }
-  if (busy && count < previousTripCount) tripSeconds = max(0, tripSeconds - (previousTripCount - count));
+  if (busy && count != previousTripCount) tripSeconds = max(0, tripSeconds - 1);  // cada fase es 1 s
   previousTripCount = count;
   if (!busy) tripSeconds = 0;
   writeTripSeconds(tripSeconds);

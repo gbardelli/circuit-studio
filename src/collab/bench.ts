@@ -88,6 +88,8 @@ export class Bench {
   fromRail(key: string, board: string, col: number, rail: 'tp' | 'tn' | 'bp' | 'bn', ohms: number) {
     const b = this.boards.get(board)!;
     const top = rail.startsWith('t');
+    // Los rieles no tienen agujero cada sexta columna (6, 12, 18…).
+    if ((col - 1) % 6 === 5) throw new Error(`Plantilla: la columna ${col} no tiene agujero de riel`);
     this.claim(board, `${rail}${col}`);
     this.mount(key, 'resistor', board, b.x + colX(col), b.y + RAIL_Y[rail], { resistance: ohms }, top ? 90 : 270, true);
   }
