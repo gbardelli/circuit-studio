@@ -20,7 +20,7 @@ Destination encoding has explicit priority 4 > 3 > 2 > 1. Equations for active-h
 
 One additional 74HC08, U20, works with spare gates of U2/U3. This priority applies to concurrent calls before capture; it is not a queue. The sensor encoder assumes one physical floor sensor at a time. Conflicting floor sensors remain an invalid hardware condition.
 
-LS/LB series resistors are 1 kΩ to reduce loading on logic outputs. Each IC has a 100 nF ceramic bypass across its local supply rails. On a physical board, keep bypass leads short and close to VCC/GND. The two timing electrolytics retain their polarity and voltage rating. The GIGA Display Shield is mounted on the GIGA and is not an independently wired display.
+LS/LB series resistors are 1 kΩ to reduce loading on logic outputs. At the user's request, the classroom simulation omits the twenty 100 nF ceramic bypass capacitors marked 104. This is an educational simplification, not a finding that bypass capacitors are unnecessary. Supply impedance, switching spikes and noise are not modeled, so this version does not validate reliable hardware operation without decoupling. The two timing electrolytics retain their polarity and voltage rating. The GIGA Display Shield is mounted on the GIGA and is not an independently wired display.
 
 ## What is measured
 
@@ -35,6 +35,7 @@ Run `npx tsx scripts/audit-elevator.ts` to sample the logic-only circuit every 5
 3. Verify guaranteed output voltage/current, total source/sink current per package, and all GIGA pin constraints against the exact parts. Do not connect 5 V logic directly to GIGA GPIO or assume 3.3 V always drives a 5 V HC input.
 4. Add and validate hardware input conditioning if the physical buttons or floor sensors bounce. The ideal button model does not prove antirrebounce behavior. Check setup/hold at U11 and verify the decoded data is stable before its capture clock. A passing functional simulation does not prove it hazard-free.
 5. Check real breadboard rail continuity, display pinout/common-cathode type, supply capacity, ground integrity and capacitor polarity before power-on.
+6. Review supply decoupling against each manufacturer's recommendations before physical implementation. The classroom drawing intentionally omits it and cannot certify that omission.
 
 ## Physical verification
 

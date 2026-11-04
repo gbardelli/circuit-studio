@@ -63,6 +63,8 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     expect(scene.parts.filter(p => p.type === 'breadboard-full')).toHaveLength(4);
     expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(19);
     expect(scene.parts.some(p => p.type === 'diode' || p.type === '74hc148')).toBe(false);
+    expect(scene.parts.some(p => p.type === 'capacitor-ceramic')).toBe(false);
+    expect(scene.parts.filter(p => p.type === 'capacitor')).toHaveLength(2);
     expect(scene.parts.filter(p => p.type === 'seven-segment')).toHaveLength(3);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => p.y)).size).toBe(1);

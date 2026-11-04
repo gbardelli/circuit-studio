@@ -379,9 +379,8 @@ export function elevatorTemplate(): Template {
   r.wire(['giga', GIGA_PINS.valid], ['u5', '2Q'], WIRE.monitor);
   GIGA_PINS.dest.forEach((pin, bit) => r.wire(['giga', pin], ['u8', `Q${bit}`], WIRE.monitor));
 
-  // Un desacoplo por CI; en el laboratorio acercarlo a VCC/GND con patillas cortas.
-  for (const [board, refs] of [[B1, [1, 37, 46, 56]], [B2, [10, 18, 27, 36, 45, 56]], [B3, [14, 24, 32, 43, 53]], [B4, [2, 10, 19, 34, 49]]] as const)
-    refs.forEach((col, index) => r.bypass(`cdec-${board}-${index + 1}`, board, col));
+  // La versión de clase omite el desacoplo cerámico por petición del usuario.
+  // El modelo ideal no verifica ruido de alimentación: no certifica su omisión en hardware.
 
   /** El modelo 48 limita cada segmento con sus 2 kΩ internos; no se añaden resistencias externas. */
   function compactDisplay(decoder: string, display: string, col: number, label: string) {

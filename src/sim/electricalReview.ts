@@ -17,6 +17,8 @@ export interface ElectricalMeasurement {
 export function electricalReview(snapshot: CircuitSnapshot, volts: Record<string, number>, currents: Map<string, number>) {
   const rows: ElectricalMeasurement[] = [];
   const pending = new Set<string>();
+  if (snapshot.parts.some(part => PARTS[part.type]?.logic) && !snapshot.parts.some(part => part.type === 'capacitor-ceramic'))
+    pending.add('No se detecta desacoplo cerámico. El modelo no verifica ruido ni transitorios de alimentación; revisa el desacoplo recomendado por los fabricantes para el montaje real.');
   const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n);
   for (const part of snapshot.parts) {
     const def = PARTS[part.type];
