@@ -140,7 +140,7 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     h.engine.stop();
   }, 60_000);
 
-  it('cuenta regresiva: 3-2-1 cada segundo por piso, fija en 3 y apagada en reposo', () => {
+  it('el secuenciador interno mantiene el ritmo de tres segundos por piso', () => {
     const h = fixture();
     h.floor(1);
     h.tick(0.5);
@@ -155,7 +155,6 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
       if (!changes.length || changes[changes.length - 1][1] !== c) changes.push([Math.round(t * 10) / 10, c]);
     }
     expect(changes.map(([, c]) => c).slice(0, 8)).toEqual([3, 2, 1, 0, 3, 2, 1, 0]);
-    expect(h.seconds()).not.toBe(null); // en marcha, U17 muestra la cuenta de U16
     // Un piso cada 3 s: de un 0 al siguiente.
     const zeros = changes.filter(([, c]) => c === 0).map(([t]) => t);
     expect(zeros[1] - zeros[0]).toBeGreaterThan(2.7);
@@ -167,7 +166,6 @@ describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)
     h.tick(0.6);
     expect(h.busy()).toBe(false);
     expect(h.count()).toBe(3);
-    expect(h.seconds()).toBe(null);
     h.engine.stop();
   }, 60_000);
 
@@ -237,11 +235,40 @@ describe.skipIf(!compilerAvailable())('ascensor con el GIGA y su Display Shield:
     };
     const callButton = (f: number) => tap(236 + (f - 1) * 131 + 60, 404);
 
+    // Longest journey: the physical display must visit every digit once, including zero.
+    h.press('pp4');
+    h.tick(.15);
+    expect(h.seconds()).toBe(9);
+    expect(scene()).toContain('9 s');
+    // Read the electrical BCD bus during transitions. Segment brightness is averaged per
+    // simulation frame and briefly combines the outgoing and incoming digit.
+    const tripBCD = () => ['A','B','C','D'].reduce((v, pin, bit) => v | (h.bit('u17', pin) ? 1 << bit : 0), 0);
+    const countdown = [tripBCD()];
+    for (let i = 0; i < 140 && h.busy(); i++) {
+      h.tick(.1);
+      const value = tripBCD();
+      if (value !== countdown.at(-1)) countdown.push(value);
+    }
+    h.tick(.35);
+    if (tripBCD() !== countdown.at(-1)) countdown.push(tripBCD());
+    expect(countdown).toEqual([9,8,7,6,5,4,3,2,1,0]);
+    expect(h.value('u11')).toBe(4);
+    expect(h.seconds()).toBe(0);
+    // Return over the same three floors; loading nine must work on subsequent requests too.
+    h.tick(1.6);
+    callButton(1);
+    expect(h.seconds()).toBe(9);
+    waitIdle();
+    expect(h.value('u11')).toBe(1);
+    expect(h.seconds()).toBe(0);
+    h.tick(1.6);
+
     // 1 → 3 con el pulsador de cabina; la cabina sube sola.
     h.press('pp3');
     expect(h.up()).toBe(true);
     h.tick(0.2);
     expect(scene()).toContain('6 s'); // tiempo total del viaje: dos tramos de 3 s
+    expect(h.seconds()).toBe(6);
     waitIdle();
     expect(h.value('u11')).toBe(3);
     expect(h.digit()).toBe(3);
@@ -266,6 +293,14 @@ describe.skipIf(!compilerAvailable())('ascensor con el GIGA y su Display Shield:
     expect(scene()).toContain('PISO 2');
     expect(h.digit('seg3')).toBe(2);
     expect(String(h.engine.getVisual('screen')?.led)).toMatch(/^rgb/);
+    h.tick(1.6);
+    callButton(3);
+    expect(tripBCD()).toBe(3);
+    expect(h.seconds()).toBe(3);
+    waitIdle();
+    expect(h.value('u11')).toBe(3);
+    expect(tripBCD()).toBe(0);
+    expect(h.seconds()).toBe(0);
     h.engine.stop();
   }, 240_000);
 });

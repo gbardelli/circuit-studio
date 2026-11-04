@@ -14,12 +14,17 @@ describe('physical elevator wiring', () => {
   const scene = templateSnapshot(elevatorTemplate());
   const nets = buildNetlist(scene, PARTS);
   it('preserves the original electrical partition of every device pin after relocating and rewiring', () => {
+    // Only the total-time display interface intentionally changes: four BCD GPIOs and blanking.
+    const changed = new Set(['u17:A', 'u17:B', 'u17:C', 'u17:D', 'u17:BIRBO', 'giga:D6', 'giga:D7', 'giga:D8', 'giga:D9']);
     const groups = new Map<number, string[]>();
     for (const p of scene.parts.filter(p => !p.type.startsWith('breadboard'))) for (const pin of PARTS[p.type].pins(p.props)) {
       const k = `${p.id}:${pin.id}`, n = nets.netOf.get(k)!;
+      if (changed.has(k)) continue;
       if (!groups.has(n)) groups.set(n, []); groups.get(n)!.push(k);
     }
-    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract);
+    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract.map(g => g.filter(k => !changed.has(k))).filter(g => g.length).sort((a, b) => a[0].localeCompare(b[0])));
+    ['A', 'B', 'C', 'D'].forEach((pin, bit) => expect(nets.netOf.get(`u17:${pin}`)).toBe(nets.netOf.get(`giga:D${6 + bit}`)));
+    expect(nets.netOf.get('u17:BIRBO')).toBe(nets.netOf.get('u5:2Q'));
   });
   it('uses distinct free sockets and keeps every mounted leg inserted', () => {
     const occupied = new Set(nets.inserted.values()), terminals = new Set<string>();
@@ -56,8 +61,8 @@ describe('physical elevator wiring', () => {
       expect(ps[n].x === ps[n-1].x || ps[n].y === ps[n-1].y).toBe(true);
       length += Math.abs(ps[n].x - ps[n-1].x) + Math.abs(ps[n].y - ps[n-1].y);
     }
-    // Uniform component gaps take priority over the shortest possible packing.
-    expect(length).toBeLessThan(83_040 * .70);
+    // Uniform gaps and four total-time BCD leads take priority over the tightest packing.
+    expect(length).toBeLessThan(83_040 * .72);
     expect(scene.wires.length).toBeLessThan(263);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => toWorld(p, { x: 0, y: 0 }).y)).size).toBe(1);

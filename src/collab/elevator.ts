@@ -28,6 +28,7 @@ import { ELEVATOR_SIGNAL_COLORS } from './elevatorPalette';
 
 /** Pines del GIGA (columna impar del cabezal lateral: queda de cara a las placas). */
 export const GIGA_PINS = {
+  trip: ['D6', 'D7', 'D8', 'D9'], // total remaining seconds, BCD into U17
   call: ['D23', 'D25', 'D27', 'D29'],
   sensor: ['D31', 'D33', 'D35', 'D37'],
   count: ['D39', 'D41'], // cuenta regresiva (U16 Q0, Q1): la cabina llega cuando vale 0
@@ -347,16 +348,16 @@ export function elevatorTemplate(): Template {
   gnd(['u16', 'MR']);
   r.wire(['u16', 'TCD'], ['u18', '2A'], WIRE.control);
   r.wire(['u18', '3Y'], ['u16', 'PL'], WIRE.control);
-  // U17 74HC48 y su display: los segundos que faltan para el siguiente piso, directo de U16.
-  // BI = OCUPADO: apagado en reposo. El tiempo total del viaje lo muestra la pantalla del GIGA.
+  // U16 remains the floor sequencer. The GIGA accumulates its ticks into total trip seconds
+  // and drives U17 through four BCD GPIOs. VALID keeps the final zero visible after arrival.
   r.dip('u17', '74hc48', B4, 50, 'U17 · 74HC48 · segundos', true);
   vcc(['u17', 'VCC']);
   gnd(['u17', 'GND']);
   vcc(['u17', 'LT']);
   vcc(['u17', 'RBI']);
-  r.wire(['u18', '2B'], ['u17', 'BIRBO'], WIRE.control);
-  ['A', 'B', 'C', 'D'].forEach((pin, bit) => r.wire(['u16', `Q${bit}`], ['u17', pin], WIRE.current));
-  compactDisplay('u17', 'seg2', 59, 'Display · segundos al siguiente piso');
+  r.wire(['u5', '2Q'], ['u17', 'BIRBO'], WIRE.control);
+  ['A', 'B', 'C', 'D'].forEach((pin, bit) => r.wire(['giga', GIGA_PINS.trip[bit]], ['u17', pin], WIRE.current));
+  compactDisplay('u17', 'seg2', 59, 'Display · segundos restantes del viaje');
 
   // ── Piso actual: driver y display al centro de la placa 4 ───────────────────
   // U19 lee U11. RBI a 0 apaga el cero: el display queda oscuro hasta que un sensor fija el piso.
@@ -394,6 +395,7 @@ export function elevatorTemplate(): Template {
 
   // Nombres de las señales para el esquema: las etiquetas de red se leen como en el plano.
   for (const p of r.parts) {
+    if (p.key === 'giga') p.props = { ...p.props, nets: GIGA_PINS.trip.map((pin, bit) => `${pin}=TIEMPO${bit}`).join(';') };
     if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
     if (p.key==='u4' || p.key==='u15') p.props = {...p.props, partNumber:'TLC555'};
   }

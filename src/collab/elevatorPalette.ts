@@ -9,6 +9,7 @@ export const ELEVATOR_SIGNAL_COLORS: Record<string, string> = {
   DEST0: '#e2b35c', DEST1: '#68b3d1', DEST2: '#a68bd4',
   PISO0: '#62b48c', PISO1: '#759fd5', PISO2: '#c38bac',
   CNT0: '#d2aa68', CNT1: '#72afd0', CNT2: '#a493cb', CNT3: '#c98ca4',
+  TIEMPO0: '#d6ad5e', TIEMPO1: '#67b2c9', TIEMPO2: '#a68ed0', TIEMPO3: '#ca89a2',
   OCUPADO: '#e0a24f', '/OCUPADO': '#d9bf7a',
   ACEPTAR: '#59b5ce', '/ACEPTAR': '#799acf',
   MANTENER: '#b08fc7', OCUPADO_SIG: '#df927a',
@@ -30,7 +31,7 @@ export const ELEVATOR_COLOR_GROUPS = [
   { label: 'Piso actual', names: ['PISO0', 'PISO1', 'PISO2'] },
   { label: 'Sensores', names: ['SP1', 'SP2', 'SP3', 'SP4', 'SEN0', 'SEN1', 'SEN2', 'SEN01', '/SEN0', '/SEN1', '/SEN2', '/SEN01', 'SENSOR', '/SENSOR', 'CAPTURA_PISO'] },
   { label: 'Control', names: ['OCUPADO', '/OCUPADO', 'ACEPTAR', '/ACEPTAR', 'MANTENER', 'OCUPADO_SIG', 'VÁLIDO', 'VÁLIDO_SIG', 'SOLICITUD', 'LLEGÓ', '/LLEGÓ', 'SUBIR', 'BAJAR'] },
-  { label: 'Cuenta', names: ['CNT0', 'CNT1', 'CNT2', 'CNT3', 'CARGA', '/CARGA', '/PRÉSTAMO'] },
+  { label: 'Cuenta', names: ['CNT0', 'CNT1', 'CNT2', 'CNT3', 'TIEMPO0', 'TIEMPO1', 'TIEMPO2', 'TIEMPO3', 'CARGA', '/CARGA', '/PRÉSTAMO'] },
   { label: 'Relojes', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ'] },
   { label: 'Reinicio', names: ['RESET', '/RESET'] },
 ].map(g => ({ label: g.label, color: ELEVATOR_SIGNAL_COLORS[g.names[0]], colors: g.names.map(n => ELEVATOR_SIGNAL_COLORS[n]) }));

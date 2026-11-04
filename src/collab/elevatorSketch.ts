@@ -5,7 +5,8 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 //
 // La lógica obligatoria la hacen los integrados: memoria del destino (U8), bloqueo (U5-U7),
 // piso actual (U11), comparación (U12), LEDs LS/LB, los displays del piso actual (U19) y del
-// destino (U14) y la cuenta de 3 s por tramo (U15, U16, U17). El GIGA no decide nada:
+// destino (U14) y el ritmo de 3 s por tramo (U15, U16). El GIGA presenta el tiempo total
+// también en el display U17, sin gobernar la lógica obligatoria de movimiento:
 //  1. Llamadas desde la pantalla táctil: pulsa la línea del piso como un botón más.
 //  2. Motor de la cabina: el ritmo lo marca la cuenta regresiva de los CI (U16, 3 s por
 //     piso). Cuando llega a 0, la cabina alcanza el siguiente piso y el GIGA activa su
@@ -28,6 +29,7 @@ GigaDisplayRGB rgb;
 const int CALL[4]   = {23, 25, 27, 29};  // llamada de piso 1-4
 const int SENSOR[4] = {31, 33, 35, 37};  // sensor de planta 1-4
 const int COUNT[2] = {39, 41};           // cuenta regresiva de U16 (Q0, Q1): 3, 2, 1, 0
+const int TRIP_BCD[4] = {6, 7, 8, 9}; // total remaining seconds into U17: 0–9
 const int BUSY = 43, VALID = 45;
 const int DEST[3] = {47, 49, 51};        // destino guardado en U8 (Q0-Q2)
 
@@ -100,6 +102,14 @@ int readCount() {
   if (raw != candidate) { candidate = raw; since = now; }
   if ((unsigned long)(now - since) >= 4) stable = candidate;
   return stable;
+}
+
+void writeTripSeconds(int seconds) {
+  static int previous = -1;
+  int bcd = constrain(seconds, 0, 9);
+  if (bcd == previous) return;
+  for (int bit = 0; bit < 4; bit++) digitalWrite(TRIP_BCD[bit], (bcd >> bit) & 1);
+  previous = bcd;
 }
 
 // Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.
@@ -268,6 +278,7 @@ void setup() {
   for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }
   pinMode(COUNT[0], INPUT); pinMode(COUNT[1], INPUT); pinMode(BUSY, INPUT); pinMode(VALID, INPUT);
   for (int i = 0; i < 3; i++) pinMode(DEST[i], INPUT);
+  for (int i = 0; i < 4; i++) { digitalWrite(TRIP_BCD[i], LOW); pinMode(TRIP_BCD[i], OUTPUT); }
   display.begin();
   display.setRotation(1);
   touchPanel.begin();
@@ -291,6 +302,7 @@ void loop() {
   if (busy && count < previousTripCount) tripSeconds = max(0, tripSeconds - (previousTripCount - count));
   previousTripCount = count;
   if (!busy) tripSeconds = 0;
+  writeTripSeconds(tripSeconds);
   if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas
   wasBusy = busy;
 
