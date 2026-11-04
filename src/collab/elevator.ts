@@ -1,23 +1,22 @@
 // Ascensor de cuatro pisos: control con integrados comerciales y Arduino GIGA como innovación.
 //
 // La lógica obligatoria (memoria del destino, bloqueo, piso actual, comparación, LEDs y los
-// displays del piso actual y del destino) la resuelven CI 74HC más un TLC555 de reloj. El GIGA
+// displays del piso actual y del destino) la resuelven CI 74LS más un TLC555 de reloj. El GIGA
 // no decide nada: inyecta llamadas de piso desde la GIGA Display Shield (como un pulsador más),
 // mueve la cabina activando los sensores de planta y muestra el estado y el tiempo del viaje. Sin él, el ascensor sigue funcionando
 // con los pulsadores y el DIP de sensores.
 //
-// Propuesta simulada a 3,3 V. La referencia física del decodificador debe confirmarse:
-// este modelo «74hc48» no valida un 74LS48 real a 3,3 V. Usar TLC555 CMOS, no NE555 bipolar.
-// La shield va montada detrás del GIGA y no ocupa cabezales.
+// Lógica 74LS alimentada por una fuente regulada de 5 V. El GIGA sigue a 3,3 V:
+// cinco módulos SparkFun BOB-12009 aíslan ambos dominios mediante MOSFETs BSS138.
+// El riel positivo inferior de la placa 2 es exclusivamente de 3,3 V; los demás son de 5 V.
+// La shield va montada detrás del GIGA y no ocupa cabezales. Usar TLC555 CMOS.
+// Los decodificadores LS48 incorporan las resistencias de salida de los segmentos.
+//   1 · Pulsadores y codificación   U15 TLC555 · U1 74LS08 · U2 74LS00 · U20 74LS08
+//   2 · Memoria e indicadores       LS/LB · U3 74LS04 · U4 TLC555 · U5 74LS74 · U6 74LS08 · U7 74LS32 · U8 74LS173
+//   3 · Sensores y comparación      U9 74LS00 · U10 74LS04 · U11 74LS173 · U12 74LS85 · U13 74LS08
+//   4 · Cuenta y tres displays      U18 74LS00 · U16 74LS193 · U14/U19/U17 74LS48
 //
-// Cuatro protoboards de 830 puntos; sin resistencias externas en los displays porque el modelo
-// 48 incluye 2 kΩ por salida. Para hardware hay que confirmar ese driver, no extrapolar a otro CI.
-//   1 · Pulsadores y codificación   U15 TLC555 · U1 74HC08 · U2 74HC00 · U20 74HC08
-//   2 · Memoria e indicadores       LS/LB · U3 74HC04 · U4 TLC555 · U5 74HC74 · U6 74HC08 · U7 74HC32 · U8 74HC193
-//   3 · Sensores y comparación      U9 74HC00 · U10 74HC04 · U11 74HC273 · U12 74HC85 · U13 74HC08
-//   4 · Cuenta y tres displays      U18 74HC00 · U16 74HC193 · U14/U19/U17 74HC48
-//
-// No hay 74HC148 en el laboratorio: los dos codificadores de 4 a 3 bits son de compuertas, y el
+// No hay 74LS148 en el laboratorio: los dos codificadores de 4 a 3 bits son de compuertas, y el
 // «hay sensor» sale de las puertas libres. U11 captura por flanco de llegada y conserva el piso
 // cuando se libera el sensor. Entre plantas todos los sensores deben estar inactivos.
 import { Bench, WIRE, SEGMENT_COLORS, type Ref } from './bench';
@@ -43,9 +42,9 @@ export const NET_NAMES: Record<string, string> = {
   sp: '1B=SP1;2B=SP2;3B=SP3;4B=SP4',
   reset: '2a=/RESET;2b=/RESET',
   u1: '1Y=/PED1;2Y=/PED2;3Y=/PED3;4Y=/PED4',
-  u2: '2Y=PED2_O_PED3;3Y=SEL2;4Y=PED3_O_PED1_HABILITADO',
+  u2: '1Y=/PARAR_LED;2Y=PED2_O_PED3;3Y=SEL2;4Y=PED3_O_PED1_HABILITADO',
   u20: '2Y=SEL0;3Y=SEL1',
-  u3: '3Y=/ACEPTAR;6Y=RESET',
+  u3: '2Y=/SUBIR_LED;4Y=/BAJAR_LED;3Y=/ACEPTAR;6Y=RESET',
   u4: 'OUT=CLK',
   u5: '1Q=OCUPADO;1QN=/OCUPADO;2Q=VÁLIDO',
   u6: '4Y=ACEPTAR;1Y=MANTENER;2Y=CAPTURA_PISO',
@@ -54,7 +53,7 @@ export const NET_NAMES: Record<string, string> = {
   u9: '1Y=SEN0;2Y=SEN1;3Y=SEN2;4Y=SEN01',
   u10: '1Y=/SEN0;2Y=/SEN1;3Y=/SEN01;4Y=/SEN2;5Y=SENSOR;6Y=/LLEGÓ',
   u11: 'Q0=PISO0;Q1=PISO1;Q2=PISO2',
-  u12: 'OAGTB=DEST>PISO;OALTB=DEST<PISO;OAEQB=DEST=PISO',
+  u12: 'OAGTB=PISO>DEST;OALTB=PISO<DEST;OAEQB=DEST=PISO',
   u13: '1Y=LLEGÓ;2Y=SUBIR;3Y=/SENSOR;4Y=BAJAR',
   u19: 'SA=P_A;SB=P_B;SC=P_C;SD=P_D;SE=P_E;SF=P_F;SG=P_G',
   u14: 'SA=SEG_A;SB=SEG_B;SC=SEG_C;SD=SEG_D;SE=SEG_E;SF=SEG_F;SG=SEG_G',
@@ -69,43 +68,51 @@ export function elevatorTemplate(): Template {
   if (cachedTemplate) return structuredClone(cachedTemplate);
   const r = new Bench();
   const [B1, B2, B3, B4] = ['b1', 'b2', 'b3', 'b4'];
+  r.auxiliaryBottomRail = B2;
   r.board(B1, 0, 0, '1 · Pulsadores, prioridad y reloj de cuenta');
   r.board(B2, 0, 360, '2 · Memoria y control');
   r.board(B3, 0, 720, '3 · Sensores, piso actual y comparación');
   r.board(B4, 0, 1080, '4 · Cuenta y visualización');
-  r.loose('giga', 'arduino-giga', -520, 500, { label: 'Arduino GIGA R1 WiFi · innovación' });
+  for (const p of r.parts) if (p.type === 'breadboard-full') p.props = { ...p.props, topVoltage: 5, bottomVoltage: p.key === B2 ? 3.3 : 5 };
+  r.loose('giga', 'arduino-giga', -620, 500, { label: 'Arduino GIGA R1 WiFi · innovación' });
   // La shield va encajada sobre el GIGA, como en el banco: se mueven juntos.
-  const board = { id: '', type: 'arduino-giga', x: -520, y: 500, rot: 0 as const, props: {} };
+  const board = { id: '', type: 'arduino-giga', x: -620, y: 500, rot: 0 as const, props: {} };
   const screen = mountedPosition({ id: '', type: 'giga-display-shield', x: 0, y: 0, rot: 0, props: {} }, board);
   r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · llamadas táctiles' });
 
-  const vcc = (ref: Ref) => r.rail(ref, true);
+  const vcc = (ref: Ref) => r.rail(ref, true, WIRE.v5);
   const gnd = (ref: Ref) => r.rail(ref, false);
 
-  // Una 74HC08 adicional resuelve prioridad 4 > 3 > 2 > 1 con las puertas libres de U2/U3.
+  // Una 74LS08 adicional resuelve prioridad 4 > 3 > 2 > 1 con las puertas libres de U2/U3.
   // U20 queda junto al codificador; U3 ocupa el extremo libre de la placa de control.
-  r.dip('u20', '74hc08', B1, 56, 'U20 · 74HC08 · prioridad de llamadas');
+  r.dip('u20', '74ls08', B1, 56, 'U20 · 74LS08 · prioridad de llamadas');
   r.dip('u15', 'ne555', B1, 1, 'U15 · TLC555 · 1 Hz');
   r.fromRail('u15R1', B1, 2, 'tp', 47_000);
   r.put('u15R2', 'resistor', B1, 2, 'c', { resistance: 47_000 });
   r.put('u15C', 'capacitor', B1, 5, 'j', { capacitance: 10e-6 });
 
-  // ── Alimentación: el GIGA da 3,3 V a la lógica y 5 V solo a la pantalla ──────
-  r.chainRails([B1, B2, B3, B4]);
+  // ── Alimentación: lógica a 5 V, GIGA e interfaces LV a 3,3 V ──────
+  r.chainRails([B1, B2, B3, B4], WIRE.v5);
   vcc(['u20', 'VCC']);
   gnd(['u20', 'GND']);
-  r.route(['giga', '3V3'], r.railHole(B1, 'tp', 5), WIRE.v33, (a, b) => [
-    { x: a.x, y: 236 },
-    { x: -6, y: 236 },
-    { x: -6, y: -6 },
-    { x: b.x, y: -6 },
-  ]);
-  r.route(['giga', 'GND.2'], r.railHole(B1, 'tn', 8), WIRE.gnd, (a, b) => [
-    { x: a.x, y: 241 },
-    { x: -10, y: 241 },
-    { x: -10, y: -9 },
-    { x: b.x, y: -9 },
-  ]);
+  r.loose('supply', 'bench-supply', -520, 220, { voltage: 5, current: 1, label: 'Fuente de lógica · 5 V' });
+  r.wire(['supply', '+'], r.railHole(B1, 'tp', 5), WIRE.v5);
+  r.wire(['supply', '-'], r.railHole(B1, 'tn', 8), WIRE.gnd);
+  r.wire(['giga', 'GND.2'], r.railHole(B2, 'tn', 8), WIRE.gnd);
+  r.wire(['giga','3V3'], r.railHole(B2,'bp',5), WIRE.v33);
+  for (let i = 0; i < 5; i++) {
+    const key = `level${i}`;
+    r.loose(key, 'level-converter-4', -145, 180 + i*200, { label: ['Interfaz · llamadas','Interfaz · sensores','Interfaz · destino','Interfaz · estado','Interfaz · tiempo total'][i] });
+    r.wire(r.railHole(B2,'bp',10+i), [key,'LV'], WIRE.v33);
+    r.wire(r.railHole(B2,'tp',40+i), [key,'HV'], WIRE.v5);
+    r.wire(r.railHole(B2,'bn',40+i), [key,'GND.H'], WIRE.gnd);
+  }
+  function interfaceWire(module: number, channel: number, pin: string, target: Ref, color: string, name: string) {
+    const key = `level${module}`, p = r.parts.find(p => p.key === key)!;
+    p.props = { ...p.props, nets: `${p.props?.nets ? p.props.nets+';' : ''}L${channel}=${name};H${channel}=${name}` };
+    r.wire(['giga',pin],[key,`L${channel}`],color);
+    r.wire([key,`H${channel}`],target,color);
+  }
 
   // ── Placa 1: pulsadores de cabina (PP) y de llamada (innovación) ─────────────
   // Cada pulsador: patilla 1 a masa y patilla 2 con pull-up de 10 kΩ desde el riel. Pulsado = 0.
@@ -121,9 +128,9 @@ export function elevatorTemplate(): Template {
       gnd([id, '1a']);
     }
   }
-  r.dip('u1', '74hc08', B1, 37, 'U1 · 74HC08 · PP o llamada');
-  r.dip('u2', '74hc00', B1, 46, 'U2 · 74HC00 · codificador de destino', true);
-  r.dip('u3', '74hc04', B2, 57, 'U3 · 74HC04 · inversores de control');
+  r.dip('u1', '74ls08', B1, 37, 'U1 · 74LS08 · PP o llamada');
+  r.dip('u2', '74ls00', B1, 46, 'U2 · 74LS00 · codificador de destino', true);
+  r.dip('u3', '74ls04', B2, 57, 'U3 · 74LS04 · inversores de control');
   for (const u of ['u1', 'u2', 'u3']) {
     vcc([u, 'VCC']);
     gnd([u, 'GND']);
@@ -141,8 +148,6 @@ export function elevatorTemplate(): Template {
   }
   // Codificador con prioridad: SEL2=P4; SEL1=(P2+P3)·/P4;
   // SEL0=(P3+P1·/P2)·/P4. Dos pulsaciones no generan un piso inexistente.
-  gnd(['u2', '1A']);
-  gnd(['u2', '1B']);
   r.wire(['u1', '2Y'], ['u2', '2A'], WIRE.cabin);
   r.wire(['u1', '3Y'], ['u2', '2B'], WIRE.cabin);
   r.wire(['u1', '4Y'], ['u2', '3A'], WIRE.cabin);
@@ -158,7 +163,7 @@ export function elevatorTemplate(): Template {
   r.wire(['u2', '2Y'], ['u20', '3A'], WIRE.cabin);
   r.wire(['u20', '2B'], ['u20', '3B'], WIRE.cabin);
   for (const pin of ['4A', '4B']) gnd(['u20', pin]);
-  for (const p of ['2A', '4A']) gnd(['u3', p]);
+
 
 
   // ── Placa 2: reloj, memoria del destino y máquina de estados ─────────────────
@@ -166,24 +171,24 @@ export function elevatorTemplate(): Template {
   r.put('reset', 'pushbutton', B2, 5, 'e', { cap: 'red', label: 'RESET general' });
   r.fromRail('resetR', B2, 7, 'tp', 10_000);
   gnd(['reset', '1a']);
-  // RESET activo en alto para los 74HC193 (el pulsador da RESET activo en bajo): U3, puerta 6.
+  // RESET activo en alto para los 74LS193 (el pulsador da RESET activo en bajo): U3, puerta 6.
   r.wire(['reset', '2a'], ['u3', '6A'], WIRE.reset);
   // U4 TLC555 astable: R1 = 1 kΩ, R2 = 33 kΩ, C = 1 µF → f = 1,44 / ((R1 + 2·R2)·C) ≈ 21 Hz.
   r.dip('u4', 'ne555', B2, 9, 'U4 · TLC555 · reloj de 21 Hz');
   vcc(['u4', 'VCC']);
   gnd(['u4', 'GND']);
   vcc(['u4', 'RESET']);
-  r.fromRail('u4R1', B2, 10, 'tp', 1000); // 3,3 V → DIS
+  r.fromRail('u4R1', B2, 10, 'tp', 1000); // 5 V → DIS
   r.put('u4R2', 'resistor', B2, 10, 'c', { resistance: 33_000 }); // DIS → threshold node
   r.put('u4C', 'capacitor', B2, 13, 'd', { capacitance: 1e-6 }); // threshold node → ground
   gnd(['u4C', '-']);
   r.wire(['u4R2', '2'], ['u4', 'THR'], WIRE.clock);
   r.wire(['u4', 'TRIG'], ['u4', 'THR'], WIRE.clock);
 
-  r.dip('u5', '74hc74', B2, 16, 'U5 · 74HC74 · OCUPADO y VÁLIDO');
-  r.dip('u6', '74hc08', B2, 26, 'U6 · 74HC08 · ACEPTAR y MANTENER');
-  r.dip('u7', '74hc32', B2, 36, 'U7 · 74HC32 · próximo estado');
-  r.dip('u8', '74hc193', B2, 46, 'U8 · 74HC193 · memoria del destino');
+  r.dip('u5', '74ls74', B2, 16, 'U5 · 74LS74 · OCUPADO y VÁLIDO');
+  r.dip('u6', '74ls08', B2, 26, 'U6 · 74LS08 · ACEPTAR y MANTENER');
+  r.dip('u7', '74ls32', B2, 36, 'U7 · 74LS32 · próximo estado');
+  r.dip('u8', '74ls173', B2, 46, 'U8 · 74LS173 · memoria del destino');
   for (const u of ['u5', 'u6', 'u7', 'u8']) {
     vcc([u, 'VCC']);
     gnd([u, 'GND']);
@@ -196,14 +201,13 @@ export function elevatorTemplate(): Template {
   r.wire(['u3', '6Y'], ['u8', 'MR'], WIRE.reset);
   vcc(['u5', '1PRE']);
   vcc(['u5', '2PRE']);
-  // Destino: el 74HC193 como registro. D0–D2 desde U2 y D3 a 0; con CPU = CPD = 1 nunca
-  // cuenta, solo carga (PL a 0 copia D al instante).
+  // Destination register: clocked capture while /ACEPTAR enables G1; outputs stay enabled.
   r.wire(['u20', '2Y'], ['u8', 'D0'], WIRE.dest);
   r.wire(['u20', '3Y'], ['u8', 'D1'], WIRE.dest);
   r.wire(['u2', '3Y'], ['u8', 'D2'], WIRE.dest);
   gnd(['u8', 'D3']);
-  vcc(['u8', 'CPU']);
-  vcc(['u8', 'CPD']);
+  for (const pin of ['M','N','G2']) gnd(['u8', pin]);
+  r.wire(['u4','OUT'], ['u8','CP'], WIRE.clock);
   // SOLICITUD = SEL0 + SEL1 + SEL2 (U7, puertas 2 y 3): todo piso pedido da un código distinto de 0.
   r.wire(['u20', '2Y'], ['u7', '2A'], WIRE.dest);
   r.wire(['u20', '3Y'], ['u7', '2B'], WIRE.dest);
@@ -212,9 +216,9 @@ export function elevatorTemplate(): Template {
   // ACEPTAR = /OCUPADO · SOLICITUD (U6, puerta 4).
   r.wire(['u5', '1QN'], ['u6', '4A'], WIRE.control);
   r.wire(['u7', '3Y'], ['u6', '4B'], WIRE.control);
-  // PL de U8 es activo en bajo: carga el destino mientras ACEPTAR = 1 (U3, puerta 3, lo invierte).
+  // U8 captures on the clock edge while /ACEPTAR is low; otherwise it retains the destination.
   r.wire(['u6', '4Y'], ['u3', '3A'], WIRE.control);
-  r.wire(['u3', '3Y'], ['u8', 'PL'], WIRE.control);
+  r.wire(['u3', '3Y'], ['u8', 'G1'], WIRE.control);
   // MANTENER = OCUPADO · /LLEGÓ (U6, puerta 1). OCUPADO⁺ = ACEPTAR + MANTENER (U7, puerta 1).
   r.wire(['u5', '1Q'], ['u6', '1A'], WIRE.control);
   r.wire(['u6', '1Y'], ['u7', '1A'], WIRE.control);
@@ -233,11 +237,11 @@ export function elevatorTemplate(): Template {
     r.fromRail(`sp${f}R`, B3, 6 + f, 'tp', 10_000);
     gnd(['sp', `${f}A`]);
   }
-  r.dip('u9', '74hc00', B3, 13, 'U9 · 74HC00 · codificador de sensores');
-  r.dip('u10', '74hc04', B3, 23, 'U10 · 74HC04 · SENSOR y /LLEGÓ');
-  r.dip('u11', '74hc273', B3, 33, 'U11 · 74HC273 · memoria del piso actual');
-  r.dip('u12', '74hc85', B3, 46, 'U12 · 74HC85 · comparador');
-  r.dip('u13', '74hc08', B3, 57, 'U13 · 74HC08 · LLEGÓ, SUBIR y BAJAR');
+  r.dip('u9', '74ls00', B3, 13, 'U9 · 74LS00 · codificador de sensores');
+  r.dip('u10', '74ls04', B3, 23, 'U10 · 74LS04 · SENSOR y /LLEGÓ');
+  r.dip('u11', '74ls173', B3, 33, 'U11 · 74LS173 · memoria del piso actual');
+  r.dip('u12', '74ls85', B3, 44, 'U12 · 74LS85 · comparador');
+  r.dip('u13', '74ls08', B3, 55, 'U13 · 74LS08 · LLEGÓ, SUBIR y BAJAR');
   for (const u of ['u9', 'u10', 'u11', 'u12', 'u13']) {
     vcc([u, 'VCC']);
     gnd([u, 'GND']);
@@ -260,7 +264,7 @@ export function elevatorTemplate(): Template {
   r.wire(['u10', '3Y'], ['u13', '3A'], WIRE.sensor);
   r.wire(['u10', '4Y'], ['u13', '3B'], WIRE.sensor);
   r.wire(['u13', '3Y'], ['u10', '5A'], WIRE.sensor);
-  // U11 es ahora un registro por flanco, no un contador con carga transparente.
+  // U11 is a four-bit LS173 register, with both data and output enables held low.
   // Captura al llegar a una planta; soltar el sensor produce un flanco de bajada y no borra Q.
   r.wire(['u9', '1Y'], ['u11', 'D0'], WIRE.current);
   r.wire(['u9', '2Y'], ['u11', 'D1'], WIRE.current);
@@ -269,28 +273,34 @@ export function elevatorTemplate(): Template {
   r.wire(['u10', '5Y'], ['u6', '2A'], WIRE.sensor);
   r.wire(['reset', '2b'], ['u6', '2B'], WIRE.reset);
   r.wire(['u6', '2Y'], ['u11', 'CP'], WIRE.sensor);
-  for (const pin of ['D3', 'D4', 'D5', 'D6', 'D7']) gnd(['u11', pin]);
-  r.wire(['reset', '2b'], ['u11', 'MR'], WIRE.reset);
-  // Comparador: A = destino (U8), B = piso actual (U11), con la cascada en «igual».
+  for (const pin of ['D3', 'M', 'N', 'G1', 'G2']) gnd(['u11', pin]);
+  r.wire(['u3', '6Y'], ['u11', 'MR'], WIRE.reset);
+  // Comparator matches the course diagram: A = actual floor, B = requested floor.
   for (let bit = 0; bit < 3; bit++) {
-    r.wire(['u8', `Q${bit}`], ['u12', `A${bit}`], WIRE.dest);
-    r.wire(['u11', `Q${bit}`], ['u12', `B${bit}`], WIRE.current);
+    r.wire(['u8', `Q${bit}`], ['u12', `B${bit}`], WIRE.dest);
+    r.wire(['u11', `Q${bit}`], ['u12', `A${bit}`], WIRE.current);
   }
   for (const p of ['A3', 'B3', 'IALTB', 'IAGTB']) gnd(['u12', p]);
   vcc(['u12', 'IAEQB']);
-  // LLEGÓ = IGUAL · SENSOR VÁLIDO; SUBIR = OCUPADO · (A > B); BAJAR = OCUPADO · (A < B).
+  // Arrival = equal AND sensor; up = busy AND A<B; down = busy AND A>B.
   r.wire(['u12', 'OAEQB'], ['u13', '1A'], WIRE.control);
+  // The spare NAND drives a third indicator for A=B, matching the reference diagram.
+  r.wire(['u12','OAEQB'],['u2','1A'],WIRE.control);
+  r.wire(['u2','1A'],['u2','1B'],WIRE.control);
+  r.put('stop','led',B3,1,'d',{color:'yellow',label:'PARAR · pisos iguales'});
+  r.fromRail('stopR',B3,2,'tp',2200);
+  r.wire(['u2','1Y'],['stop','K'],WIRE.control);
   r.wire(['u10', '5Y'], ['u13', '1B'], WIRE.sensor);
-  r.wire(['u12', 'OAGTB'], ['u13', '2A'], WIRE.control);
+  r.wire(['u12', 'OALTB'], ['u13', '2A'], WIRE.control);
   r.wire(['u5', '1Q'], ['u13', '2B'], WIRE.control);
   r.wire(['u13', '2B'], ['u13', '4A'], WIRE.control);
-  r.wire(['u12', 'OALTB'], ['u13', '4B'], WIRE.control);
+  r.wire(['u12', 'OAGTB'], ['u13', '4B'], WIRE.control);
   // /LLEGÓ vuelve a la placa 2 por U10 (puerta 6).
   r.wire(['u13', '1Y'], ['u10', '6A'], WIRE.control);
   r.wire(['u10', '6Y'], ['u6', '1B'], WIRE.control);
 
   // ── Placa 4: cuenta, destino, piso actual y segundos ─────────────────────────
-  r.dip('u14', '74hc48', B4, 18, 'U14 · 74HC48 · destino');
+  r.dip('u14', '74ls48', B4, 18, 'U14 · 74LS48 · destino');
   vcc(['u14', 'VCC']);
   for (const p of ['GND', 'D']) gnd(['u14', p]);
   vcc(['u14', 'LT']);
@@ -299,15 +309,16 @@ export function elevatorTemplate(): Template {
   r.wire(['u5', '2Q'], ['u14', 'BIRBO'], WIRE.control);
   ['A', 'B', 'C'].forEach((pin, bit) => r.wire(['u8', `Q${bit}`], ['u14', pin], WIRE.dest));
   compactDisplay('u14', 'seg', 28, 'Display · destino seleccionado');
-  // LS y LB: 1 kΩ limita la carga de cada salida lógica a menos de 2 mA a 3,3 V.
-  for (const [id, row, resistorRow, color, label, signal] of [
-    ['ls', 'd', 'b', 'green', 'LS · subiendo', ['u13', '2Y']],
-    ['lb', 'h', 'i', 'red', 'LB · bajando', ['u13', '4Y']],
+  // Existing LS04 inverters sink the indicator current through 2.2 kΩ resistors.
+  for (const [id, row, resistorRow, color, label, signal, inverter] of [
+    ['ls', 'd', 'b', 'green', 'LS · subiendo', ['u13', '2Y'], '2'],
+    ['lb', 'h', 'i', 'red', 'LB · bajando', ['u13', '4Y'], '4'],
   ] as const) {
     r.put(id, 'led', B2, 1, row, { color, label });
-    r.put(`${id}R`, 'resistor', B2, 2, resistorRow, { resistance: 1000 });
-    gnd([id, 'K']);
-    r.wire([...signal] as Ref, [`${id}R`, '2'], WIRE.control);
+    r.put(`${id}R`, 'resistor', B2, 2, resistorRow, { resistance: 2200 });
+    vcc([`${id}R`, '2']);
+    r.wire([...signal] as Ref, ['u3', `${inverter}A`], WIRE.control);
+    r.wire(['u3', `${inverter}Y`], [id,'K'], WIRE.control);
   }
 
   // ── Cuenta regresiva: reloj en placa 1, contador en placa 4 ───────────────────
@@ -319,12 +330,12 @@ export function elevatorTemplate(): Template {
   r.wire(['u15R2', '2'], ['u15C', '+'], WIRE.clock);
   r.wire(['u15R2', '2'], ['u15', 'THR'], WIRE.clock);
   r.wire(['u15', 'TRIG'], ['u15', 'THR'], WIRE.clock);
-  // U18 74HC00, tres puertas NAND:
+  // U18 74LS00, tres puertas NAND:
   //  1 · invierte el reloj: el 555 sube nada más arrancar y el 193 cuenta en el flanco de
   //      subida; invertido, el primer «menos uno» llega al cabo de un segundo y no al instante.
   //  2 y 3 · PL = TCD · OCUPADO: en marcha recarga 3 al pasar por 0 (préstamo); parado, PL = 0
   //      lo deja fijo en 3 para el próximo viaje.
-  r.dip('u18', '74hc00', B4, 1, 'U18 · 74HC00 · reloj invertido y recarga');
+  r.dip('u18', '74ls00', B4, 1, 'U18 · 74LS00 · reloj invertido y recarga');
   vcc(['u18', 'VCC']);
   gnd(['u18', 'GND']);
   r.wire(['u15', 'OUT'], ['u18', '1A'], WIRE.clock);
@@ -335,8 +346,8 @@ export function elevatorTemplate(): Template {
   r.wire(['u18', '3A'], ['u18', '3B'], WIRE.control);
   gnd(['u18', '4A']);
   gnd(['u18', '4B']);
-  // U16 74HC193 cuenta hacia abajo con el reloj invertido; carga 0011 = 3.
-  r.dip('u16', '74hc193', B4, 9, 'U16 · 74HC193 · cuenta regresiva 3-2-1');
+  // U16 74LS193 cuenta hacia abajo con el reloj invertido; carga 0011 = 3.
+  r.dip('u16', '74ls193', B4, 9, 'U16 · 74LS193 · cuenta regresiva 3-2-1');
   vcc(['u16', 'VCC']);
   gnd(['u16', 'GND']);
   r.wire(['u18', '1Y'], ['u16', 'CPD'], WIRE.clock);
@@ -350,18 +361,18 @@ export function elevatorTemplate(): Template {
   r.wire(['u18', '3Y'], ['u16', 'PL'], WIRE.control);
   // U16 remains the floor sequencer. The GIGA accumulates its ticks into total trip seconds
   // and drives U17 through four BCD GPIOs. VALID keeps the final zero visible after arrival.
-  r.dip('u17', '74hc48', B4, 50, 'U17 · 74HC48 · segundos', true);
+  r.dip('u17', '74ls48', B4, 50, 'U17 · 74LS48 · segundos', true);
   vcc(['u17', 'VCC']);
   gnd(['u17', 'GND']);
   vcc(['u17', 'LT']);
   vcc(['u17', 'RBI']);
   r.wire(['u5', '2Q'], ['u17', 'BIRBO'], WIRE.control);
-  ['A', 'B', 'C', 'D'].forEach((pin, bit) => r.wire(['giga', GIGA_PINS.trip[bit]], ['u17', pin], WIRE.current));
+  ['A', 'B', 'C', 'D'].forEach((pin, bit) => interfaceWire(4, bit+1, GIGA_PINS.trip[bit], ['u17',pin], WIRE.current, `TIEMPO${bit}`));
   compactDisplay('u17', 'seg2', 59, 'Display · segundos restantes del viaje');
 
   // ── Piso actual: driver y display al centro de la placa 4 ───────────────────
   // U19 lee U11. RBI a 0 apaga el cero: el display queda oscuro hasta que un sensor fija el piso.
-  r.dip('u19', '74hc48', B4, 34, 'U19 · 74HC48 · piso actual');
+  r.dip('u19', '74ls48', B4, 34, 'U19 · 74LS48 · piso actual');
   vcc(['u19', 'VCC']);
   gnd(['u19', 'GND']);
   vcc(['u19', 'LT']);
@@ -375,13 +386,13 @@ export function elevatorTemplate(): Template {
   // Llamadas y sensores en drenador abierto: INPUT suelta la línea y OUTPUT LOW la pone a 0,
   // igual que el pulsador o el interruptor de al lado. Nunca empuja 3,3 V contra ellos.
   for (let f = 1; f <= 4; f++) {
-    r.wire(['giga', GIGA_PINS.call[f - 1]], [`call${f}`, '2a'], WIRE.call);
-    r.wire(['giga', GIGA_PINS.sensor[f - 1]], ['sp', `${f}B`], WIRE.sensor);
+    interfaceWire(0,f,GIGA_PINS.call[f-1],[`call${f}`,'2a'],WIRE.call,`LL${f}`);
+    interfaceWire(1,f,GIGA_PINS.sensor[f-1],['sp',`${f}B`],WIRE.sensor,`SP${f}`);
   }
-  GIGA_PINS.count.forEach((pin, bit) => r.wire(['giga', pin], ['u16', `Q${bit}`], WIRE.monitor));
-  r.wire(['giga', GIGA_PINS.busy], ['u5', '1Q'], WIRE.monitor);
-  r.wire(['giga', GIGA_PINS.valid], ['u5', '2Q'], WIRE.monitor);
-  GIGA_PINS.dest.forEach((pin, bit) => r.wire(['giga', pin], ['u8', `Q${bit}`], WIRE.monitor));
+  GIGA_PINS.count.forEach((pin,bit) => interfaceWire(3,bit+1,pin,['u16',`Q${bit}`],WIRE.monitor,`CNT${bit}`));
+  interfaceWire(2,4,GIGA_PINS.busy,['u5','1Q'],WIRE.monitor,'OCUPADO');
+  interfaceWire(3,3,GIGA_PINS.valid,['u5','2Q'],WIRE.monitor,'VÁLIDO');
+  GIGA_PINS.dest.forEach((pin,bit) => interfaceWire(2,bit+1,pin,['u8',`Q${bit}`],WIRE.monitor,`DEST${bit}`));
 
   // La versión de clase omite el desacoplo cerámico por petición del usuario.
   // El modelo ideal no verifica ruido de alimentación: no certifica su omisión en hardware.
@@ -403,7 +414,7 @@ export function elevatorTemplate(): Template {
   cachedTemplate = r.template({
     id: 'elevator-course',
     name: 'Ascensor de cuatro pisos · CI + Arduino GIGA',
-    summary: 'Memoria del destino, bloqueo, sensores, comparador, displays del piso actual y del destino, cuenta regresiva y LEDs con CI 74HC. El GIGA añade llamadas táctiles y mueve la cabina.',
+    summary: 'Memoria del destino, bloqueo, sensores, comparador, displays del piso actual y del destino, cuenta regresiva y LEDs con CI 74LS. El GIGA añade llamadas táctiles y mueve la cabina.',
     level: 'Avanzado',
     category: 'Lógica secuencial',
     sketch: ELEVATOR_GIGA,

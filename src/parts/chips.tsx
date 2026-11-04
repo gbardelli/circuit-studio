@@ -1105,6 +1105,29 @@ const ne555Def: PartDef = (() => {
 // ── Catálogo ────────────────────────────────────────────────────────────────────
 // Legacy packages in the course diagrams. TTL thresholds do not apply to HC parts.
 const LEGACY = { ...TTL, inputThresholds: { low: 0.8, high: 2 }, minSupply: 4.5 };
+const LS = { ...LEGACY, minSupply: 4.75 };
+const asLS = <S,>(spec: ChipSpec<S>, type = spec.type.replace('hc','ls'), part = spec.part.replace('HC','LS')): ChipSpec<S> => ({
+  ...spec, ...LS, type, part,
+  keywords: [type, ...spec.keywords],
+  desc: { ...spec.desc, VCC: 'Alimentación TTL LS: 5 V nominales (4,75–5,25 V)' },
+});
+// TI SDLS067A: M/N output enables and G1/G2 data enables are active low; CLR is high.
+const register173: ChipSpec<{ q: number }> = {
+  type: '74ls173', part: '74LS173', name: 'Registro de 4 bits con habilitación', family: FF,
+  description: 'Registro D de cuatro bits. Captura por flanco ascendente con G1 y G2 bajos; M y N bajos habilitan las salidas. Borrado asíncrono activo alto. Alimentación de 5 V.',
+  keywords: ['sn74ls173a', 'registro', 'memoria', '4 bits', 'triestado'],
+  pins: ['M','N','Q0','Q1','Q2','Q3','CP','GND','G1','G2','D3','D2','D1','D0','MR','VCC'],
+  desc: { ...Object.fromEntries([0,1,2,3].flatMap(i=>[[`D${i}`,`Dato de entrada, bit ${i}`],[`Q${i}`,`Dato almacenado, bit ${i}`]])),
+    M: 'Habilitación de salidas, activa baja junto con N', N: 'Habilitación de salidas, activa baja junto con M',
+    G1: 'Habilitación de captura, activa baja junto con G2', G2: 'Habilitación de captura, activa baja junto con G1',
+    CP: 'Captura D0–D3 en el flanco ascendente si G1 y G2 están bajos', MR: 'Borrado asíncrono activo alto', VCC: 'Alimentación TTL LS: 5 V nominales (4,75–5,25 V)' },
+  ...LS, outputs: Q4, init: () => ({ q: 0 }),
+  evaluate(io, state) {
+    if (io.v('MR')) state.q = 0;
+    else if (!io.v('G1') && !io.v('G2') && io.rise('CP')) state.q = bits(io, D4);
+    return Object.fromEntries(Q4.map((pin, bit) => [pin, io.v('M') || io.v('N') ? null : Boolean(state.q & (1 << bit))]));
+  },
+};
 function jk73(edgeTriggered: boolean): ChipSpec<{ q: number[]; master: number[] }> {
   return {
     type: edgeTriggered ? '74ls73a' : '7473',
@@ -1202,6 +1225,12 @@ const encoder148: ChipSpec<Record<string, never>> = {
 
 export const CHIPS: PartDef[] = [
   ...gateChips.map((spec) => chipDef(spec)),
+  ...gateChips.filter(spec => ['74hc00','74hc08','74hc32','74hc04'].includes(spec.type)).map(spec => chipDef(asLS(spec))),
+  chipDef(register173),
+  chipDef(asLS(ff74)),
+  chipDef(asLS(comp85)),
+  chipDef(asLS(bcd48)),
+  chipDef(asLS(counter193)),
   chipDef(buffer125),
   ...cmosGates.map((spec) => chipDef(spec)),
   chipDef(jk73(false)),

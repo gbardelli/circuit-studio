@@ -4,7 +4,7 @@ import { PARTS } from '../parts';
 import type { RouteObstacle } from '../core/wireRouting';
 
 export function componentBodies(parts: readonly PartData[]): RouteObstacle[] {
-  return parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
+  const bodies = parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
     let b = PARTS[p.type].bounds(p.props);
     if (/^(74|cd4|ne555)/.test(p.type)) b = { x: b.x + 1, y: 3, w: b.w - 2, h: 24 };
     else if (p.type === 'resistor') b = { x: 9, y: -6, w: 22, h: 12 };
@@ -15,6 +15,9 @@ export function componentBodies(parts: readonly PartData[]): RouteObstacle[] {
     const margin = p.type === 'seven-segment' ? 4 : 0;
     return { x: x - margin, y: y - margin, w: Math.max(...corners.map(c => c.x)) - x + 2 * margin, h: Math.max(...corners.map(c => c.y)) - y + 2 * margin };
   });
+  const labels = parts.filter(p=>p.type.startsWith('breadboard')).flatMap(p=>['topVoltage','bottomVoltage'].flatMap((key,i)=>p.props[key]!==undefined?[{x:p.x+Number(p.props.cols??63)*10+55,y:p.y+(i?200:20)-12,w:52,h:21}]:[]));
+  const interfaceLabels=parts.filter(p=>p.type==='level-converter-4').map(p=>({x:p.x-30,y:p.y-26,w:110,h:15}));
+  return [...bodies,...labels,...interfaceLabels];
 }
 const distance = (a: Vec, b: Vec) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const inside = (p: Vec, r: RouteObstacle, margin = 0) => p.x > r.x - margin && p.x < r.x + r.w + margin && p.y > r.y - margin && p.y < r.y + r.h + margin;
@@ -40,7 +43,7 @@ export function shortenPhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
   for (const p of scene.parts) for (const pin of PARTS[p.type].pins(p.props)) {
     const key = pinKey(p.id, pin.id), group = base.netOf.get(key)!;
     if (!usedGroups.has(group) || occupied.has(key)) continue;
-    if (!p.type.startsWith('breadboard') && !PARTS[p.type].mcu) continue;
+    if (!p.type.startsWith('breadboard') && !PARTS[p.type].mcu && !['level-converter-4','bench-supply'].includes(p.type)) continue;
     const pos = toWorld(p, pin);
     if (p.type.startsWith('breadboard') && bodies.some(b => inside(pos, b, 2))) continue;
     if (!ports.has(group)) ports.set(group, []);
@@ -116,10 +119,6 @@ export function routePhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
   const costs = new Float64Array(count * 2), parents = new Int32Array(count * 2), visited = new Uint32Array(count * 2);
   let stamp = 0;
   const result = new Map<string, WireData>();
-  // Short local jumpers establish the corridors before inter-board buses are threaded through them.
-  const ordered = [...scene.wires].sort((a, b) => distance(a.a, a.b) - distance(b.a, b.b));
-  for (const wire of ordered) {
-    const start = at(wire.a), end = at(wire.b);
     const escape = (p: Vec, cell: number) => {
       if (!blocked[cell]) return [cell];
       const candidates: number[][] = [];
@@ -131,7 +130,13 @@ export function routePhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
       if (!candidates.length) throw new Error(`No terminal exit at ${p.x},${p.y}`);
       return candidates[0];
     };
-    const leadA = escape(wire.a, start), leadB = escape(wire.b, end);
+  const leads = new Map(all.map(p => [at(p), escape(p,at(p))]));
+  for(const path of leads.values()) terminalCells.add(path.at(-1)!);
+  // Short local jumpers establish the corridors before inter-board buses are threaded through them.
+  const ordered = [...scene.wires].sort((a, b) => distance(a.a, a.b) - distance(b.a, b.b));
+  for (const wire of ordered) {
+    const start = at(wire.a), end = at(wire.b);
+    const leadA = leads.get(start)!, leadB = leads.get(end)!;
     const source = leadA.at(-1)!, target = leadB.at(-1)!;
     stamp++;
     const queue = new Queue();
@@ -156,7 +161,7 @@ export function routePhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
         queue.push({ key, cost: cost + distance(point(next), point(target)) * 1.05 });
       }
     }
-    if (found < 0) throw new Error(`No clear route for ${wire.id}`);
+    if (found < 0) throw new Error(`No clear route for ${wire.id}: ${JSON.stringify([wire.a,wire.b])}`);
     const cells: number[] = [];
     for (let k = found; k >= 0; k = parents[k]) cells.push(k >> 1);
     cells.reverse();

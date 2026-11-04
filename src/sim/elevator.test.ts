@@ -18,6 +18,12 @@ function fixture(hex?: string) {
   const tick = (s = 0.11) => {
     for (let t = 0; t < s - 1e-9; t += 0.1) engine.tick(Math.min(0.1, s - t));
     expect(engine.status.converged).toBe(true);
+    for(const p of snapshot.parts.filter(p=>p.type.startsWith('74ls'))) {
+      const supply=engine.voltageAt(p.id,'VCC')!-engine.voltageAt(p.id,'GND')!;
+      expect(supply,p.id).toBeGreaterThanOrEqual(4.75);
+      expect(supply,p.id).toBeLessThanOrEqual(5.25);
+    }
+    for(const p of ['D6','D7','D8','D9','D23','D25','D27','D29','D31','D33','D35','D37','D39','D41','D43','D45','D47','D49','D51']) expect(engine.voltageAt('giga',p)!,p).toBeLessThan(3.6);
   };
   // Lógica de 3,3 V.
   const bit = (part: string, pin: string) => engine.voltageAt(part, pin)! > 1.65;
@@ -58,17 +64,33 @@ function fixture(hex?: string) {
 }
 
 describe('ascensor de cuatro pisos · requisitos del enunciado (solo integrados)', () => {
+  it('matches the reference comparator and direction indicators for all sixteen floor pairs', () => {
+    for(let actual=1;actual<=4;actual++)for(let requested=1;requested<=4;requested++) {
+      const h=fixture();h.floor(actual);h.press(`pp${requested}`);
+      expect(h.value('u8')).toBe(requested);
+      expect(h.bit('u12','OAGTB')).toBe(actual>requested);
+      expect(h.bit('u12','OAEQB')).toBe(actual===requested);
+      expect(h.bit('u12','OALTB')).toBe(actual<requested);
+      expect(h.up()).toBe(actual<requested);
+      expect(h.down()).toBe(actual>requested);
+      expect(Number(h.engine.getVisual('stop')?.i)>.0002).toBe(actual===requested);
+      h.engine.stop();
+    }
+  },60_000);
   it('cabe en cuatro protoboards y limita cada segmento en su driver, sin resistencias externas', () => {
     const scene = templateSnapshot(elevatorTemplate());
     expect(scene.parts.filter(p => p.type === 'breadboard-full')).toHaveLength(4);
-    expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(19);
+    expect(scene.parts.filter(p => p.type === 'resistor')).toHaveLength(20);
     expect(scene.parts.some(p => p.type === 'diode' || p.type === '74hc148')).toBe(false);
     expect(scene.parts.some(p => p.type === 'capacitor-ceramic')).toBe(false);
     expect(scene.parts.filter(p => p.type === 'capacitor')).toHaveLength(2);
     expect(scene.parts.filter(p => p.type === 'seven-segment')).toHaveLength(3);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => p.y)).size).toBe(1);
-    expect(scene.parts.filter(p => p.type === '74hc48')).toHaveLength(3);
+    expect(scene.parts.filter(p => p.type === '74ls48')).toHaveLength(3);
+    expect(scene.parts.filter(p => p.type === '74ls173')).toHaveLength(2);
+    expect(scene.parts.some(p => p.type === '74hc273' || p.type === '74hc193')).toBe(false);
+    expect(scene.parts.filter(p => p.type === 'level-converter-4')).toHaveLength(5);
   });
   it('arranca con el display apagado y los dos LEDs de marcha apagados', () => {
     const h = fixture();
@@ -302,5 +324,5 @@ describe.skipIf(!compilerAvailable())('ascensor con el GIGA y su Display Shield:
     expect(tripBCD()).toBe(0);
     expect(h.seconds()).toBe(0);
     h.engine.stop();
-  }, 240_000);
+  }, 600_000);
 });

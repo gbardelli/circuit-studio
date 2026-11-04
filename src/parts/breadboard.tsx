@@ -110,6 +110,10 @@ const BreadboardRender = memo(function BreadboardRender({ part }: RenderProps) {
       <path d={d} fill="#32342f" stroke="#b2b2a9" strokeWidth="0.9" strokeLinejoin="round" />
       <path d={d} fill="none" stroke="#fff" strokeWidth={0.5} transform="translate(0.4,0.7)" opacity={0.5} />
       {labels}
+      {(['topVoltage','bottomVoltage'] as const).map((key,i)=>part.props[key]!==undefined && <g key={key} pointerEvents="none">
+        <rect x={w+5} y={(i?200:20)-12} width={52} height={21} rx={4} fill="#15181c" stroke="#41464e" strokeWidth={.6}/>
+        <text x={w+31} y={(i?200:20)+2} fontSize={11} fontWeight={600} textAnchor="middle" fill={Number(part.props[key])===3.3?'#f47f85':'#efb16c'}>{String(part.props[key])} V</text>
+      </g>)}
     </g>
   );
 });

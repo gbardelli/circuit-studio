@@ -161,6 +161,8 @@ export function electricalChecks(
           );
         if (/^74hc/.test(part.type) && v !== undefined && g !== undefined && v - g > 6)
           add(part.id, logic.supply, 'error', 'Alimentación fuera del rango 74HC', `Se miden ${(v - g).toFixed(2)} V; confirma el rango del fabricante antes de alimentar.`, [pinKey(part.id, logic.supply)]);
+        if (/^74ls/.test(part.type) && v !== undefined && g !== undefined && v - g > 5.25)
+          add(part.id, logic.supply, 'error', 'Alimentación fuera del rango 74LS', `Se miden ${(v-g).toFixed(2)} V; el rango de trabajo es de 4,75 a 5,25 V.`, [pinKey(part.id,logic.supply)]);
       }
     }
     const io = def?.mcu?.vio;

@@ -52,6 +52,7 @@ interface Socket {
 }
 
 export class Bench {
+  auxiliaryBottomRail?: string;
   readonly parts: TemplatePart[] = [];
   readonly wires: TemplateWire[] = [];
   private boards = new Map<string, Vec>();
@@ -162,7 +163,8 @@ export class Bench {
   rail(ref: Ref, plus: boolean, color?: string) {
     const s = this.socket(ref)!;
     const col = Number(s.ref[1].replace(/^[a-z]+/, ''));
-    const hole = this.railHole(s.board, `${s.half === 'top' ? 't' : 'b'}${plus ? 'p' : 'n'}` as 'tp', col);
+    const half = plus && s.board === this.auxiliaryBottomRail ? 't' : s.half === 'top' ? 't' : 'b';
+    const hole = this.railHole(s.board, `${half}${plus ? 'p' : 'n'}` as 'tp', col);
     this.wires.push({ a: s.ref, b: hole, color: color ?? (plus ? WIRE.v33 : WIRE.gnd) });
   }
 
@@ -183,13 +185,13 @@ export class Bench {
    * Rieles de todas las placas, encadenados por la izquierda: arriba con abajo en cada placa
    * y el riel de abajo de una con el de arriba de la siguiente. `skip` deja sin +3,3 V una placa.
    */
-  chainRails(boards: string[]) {
+  chainRails(boards: string[], positiveColor = WIRE.v33) {
     boards.forEach((k, i) => {
-      this.wires.push({ a: this.railHole(k, 'tp', 1), b: this.railHole(k, 'bp', 1), color: WIRE.v33 });
+      if(k !== this.auxiliaryBottomRail) this.wires.push({ a: this.railHole(k, 'tp', 1), b: this.railHole(k, 'bp', 1), color: positiveColor });
       this.wires.push({ a: this.railHole(k, 'tn', 2), b: this.railHole(k, 'bn', 2), color: WIRE.gnd });
       const next = boards[i + 1];
       if (!next) return;
-      this.wires.push({ a: this.railHole(k, 'bp', 3), b: this.railHole(next, 'tp', 3), color: WIRE.v33 });
+      this.wires.push({ a: this.railHole(k, k === this.auxiliaryBottomRail ? 'tp' : 'bp', 3), b: this.railHole(next, 'tp', 3), color: positiveColor });
       this.wires.push({ a: this.railHole(k, 'bn', 4), b: this.railHole(next, 'tn', 4), color: WIRE.gnd });
     });
   }

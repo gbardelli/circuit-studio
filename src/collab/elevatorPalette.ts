@@ -16,6 +16,7 @@ export const ELEVATOR_SIGNAL_COLORS: Record<string, string> = {
   VÁLIDO: '#aab965', VÁLIDO_SIG: '#c5b778', SOLICITUD: '#d991b8',
   LLEGÓ: '#75b77c', '/LLEGÓ': '#77bdb4',
   SUBIR: '#dda15e', BAJAR: '#d5808d', CAPTURA_PISO: '#59b7b0',
+  '/SUBIR_LED': '#c5a878', '/BAJAR_LED': '#c78692', '/PARAR_LED': '#c5b56b',
   SEN0: '#4fb28b', SEN1: '#59a6c1', SEN2: '#8298cd', SEN01: '#8eb47c',
   '/SEN0': '#82c3a5', '/SEN1': '#8ec0cc', '/SEN2': '#acb5d8', '/SEN01': '#b4c59a',
   SENSOR: '#70b76e', '/SENSOR': '#9bb880',

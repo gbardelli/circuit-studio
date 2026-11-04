@@ -13,17 +13,22 @@ import { ELEVATOR_SIGNAL_COLORS } from './elevatorPalette';
 describe('physical elevator wiring', () => {
   const scene = templateSnapshot(elevatorTemplate());
   const nets = buildNetlist(scene, PARTS);
+  const bridges = scene.parts.filter(p=>p.type==='level-converter-4').flatMap(p=>[1,2,3,4].map(i=>({ id:`${p.id}-bridge${i}`, a:{part:p.id,pin:`L${i}`,x:0,y:0}, b:{part:p.id,pin:`H${i}`,x:0,y:0}, points:[],color:'#000000' })));
+  const logical = buildNetlist({...scene,wires:[...scene.wires,...bridges]},PARTS);
   it('preserves the original electrical partition of every device pin after relocating and rewiring', () => {
     // Only the total-time display interface intentionally changes: four BCD GPIOs and blanking.
-    const changed = new Set(['u17:A', 'u17:B', 'u17:C', 'u17:D', 'u17:BIRBO', 'giga:D6', 'giga:D7', 'giga:D8', 'giga:D9']);
+    const changed = new Set(['u17:A', 'u17:B', 'u17:C', 'u17:D', 'u17:BIRBO', 'giga:D6', 'giga:D7', 'giga:D8', 'giga:D9','giga:3V3','u11:MR','ls:A','ls:K','lb:A','lb:K','lsR:1','lsR:2','lbR:1','lbR:2','u3:2A','u3:2Y','u3:4A','u3:4Y','u2:1A','u2:1B','u2:1Y']);
+    const oldKeys = new Set(contract.flat());
+    const present = new Set(scene.parts.flatMap(p=>PARTS[p.type].pins(p.props).map(pin=>`${p.id}:${pin.id}`)));
+    const normalized = (key:string) => key.replace(/^u12:([AB])([0-3])$/,(_,bank,bit)=>`u12:${bank==='A'?'B':'A'}${bit}`).replace(/^u12:OAGTB$/,'u12:SWAP').replace(/^u12:OALTB$/,'u12:OAGTB').replace(/^u12:SWAP$/,'u12:OALTB');
     const groups = new Map<number, string[]>();
     for (const p of scene.parts.filter(p => !p.type.startsWith('breadboard'))) for (const pin of PARTS[p.type].pins(p.props)) {
-      const k = `${p.id}:${pin.id}`, n = nets.netOf.get(k)!;
-      if (changed.has(k)) continue;
+      const original = `${p.id}:${pin.id}`, k = normalized(original), n = logical.netOf.get(original)!;
+      if (changed.has(k) || !oldKeys.has(k)) continue;
       if (!groups.has(n)) groups.set(n, []); groups.get(n)!.push(k);
     }
-    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract.map(g => g.filter(k => !changed.has(k))).filter(g => g.length).sort((a, b) => a[0].localeCompare(b[0])));
-    ['A', 'B', 'C', 'D'].forEach((pin, bit) => expect(nets.netOf.get(`u17:${pin}`)).toBe(nets.netOf.get(`giga:D${6 + bit}`)));
+    expect([...groups.values()].map(g => g.sort()).sort((a, b) => a[0].localeCompare(b[0]))).toEqual(contract.map(g => g.filter(k => !changed.has(k) && present.has(k))).filter(g => g.length).sort((a, b) => a[0].localeCompare(b[0])));
+    ['A', 'B', 'C', 'D'].forEach((pin, bit) => expect(logical.netOf.get(`u17:${pin}`)).toBe(logical.netOf.get(`giga:D${6 + bit}`)));
     expect(nets.netOf.get('u17:BIRBO')).toBe(nets.netOf.get('u5:2Q'));
   });
   it('uses distinct free sockets and keeps every mounted leg inserted', () => {
@@ -33,7 +38,7 @@ describe('physical elevator wiring', () => {
       expect(terminals.has(key), key).toBe(false); terminals.add(key);
       if (end.part?.startsWith('b')) expect(occupied.has(key), key).toBe(false);
     }
-    for (const p of scene.parts.filter(p => !p.type.startsWith('breadboard') && !PARTS[p.type].mcu)) for (const pin of PARTS[p.type].pins(p.props)) expect(nets.inserted.has(`${p.id}:${pin.id}`)).toBe(true);
+    for (const p of scene.parts.filter(p => !p.type.startsWith('breadboard') && !PARTS[p.type].mcu)) for (const pin of PARTS[p.type].pins(p.props).filter(pin=>pin.kind==='leg')) expect(nets.inserted.has(`${p.id}:${pin.id}`)).toBe(true);
   });
   it('keeps every rounded cable and its stroke clear of the three display faces', () => {
     const displays = scene.parts.filter(p => p.type === 'seven-segment').map(p => ({ x: p.x - 8, y: p.y - 6, w: 56, h: 72 }));
@@ -62,8 +67,8 @@ describe('physical elevator wiring', () => {
       length += Math.abs(ps[n].x - ps[n-1].x) + Math.abs(ps[n].y - ps[n-1].y);
     }
     // Uniform gaps and four total-time BCD leads take priority over the tightest packing.
-    expect(length).toBeLessThan(83_040 * .72);
-    expect(scene.wires.length).toBeLessThan(263);
+    expect(length).toBeLessThan(83_040 * .90);
+    expect(scene.wires.length).toBeLessThan(320);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => toWorld(p, { x: 0, y: 0 }).y)).size).toBe(1);
   });
