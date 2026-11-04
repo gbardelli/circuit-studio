@@ -1,0 +1,36 @@
+/** Signal identities, rather than individual wire IDs, determine the cable color. */
+export const ELEVATOR_SIGNAL_COLORS: Record<string, string> = {
+  PP1: '#4d85d9', PP2: '#459fc2', PP3: '#7d8bcd', PP4: '#55ada9',
+  LL1: '#d4aa49', LL2: '#de9655', LL3: '#b7b758', LL4: '#dfb96a',
+  SP1: '#4db58f', SP2: '#53a8c2', SP3: '#85a36b', SP4: '#8b9acb',
+  '/PED1': '#6599ca', '/PED2': '#9aaa65', '/PED3': '#c69b65', '/PED4': '#c884a3',
+  PED2_O_PED3: '#b3a16f', PED3_O_PED1_HABILITADO: '#6ba8a5',
+  SEL0: '#789fcb', SEL1: '#a68acb', SEL2: '#cfa16b',
+  DEST0: '#e2b35c', DEST1: '#68b3d1', DEST2: '#a68bd4',
+  PISO0: '#62b48c', PISO1: '#759fd5', PISO2: '#c38bac',
+  CNT0: '#d2aa68', CNT1: '#72afd0', CNT2: '#a493cb', CNT3: '#c98ca4',
+  OCUPADO: '#e0a24f', '/OCUPADO': '#d9bf7a',
+  ACEPTAR: '#59b5ce', '/ACEPTAR': '#799acf',
+  MANTENER: '#b08fc7', OCUPADO_SIG: '#df927a',
+  VÁLIDO: '#aab965', VÁLIDO_SIG: '#c5b778', SOLICITUD: '#d991b8',
+  LLEGÓ: '#75b77c', '/LLEGÓ': '#77bdb4',
+  SUBIR: '#dda15e', BAJAR: '#d5808d', CAPTURA_PISO: '#59b7b0',
+  SEN0: '#4fb28b', SEN1: '#59a6c1', SEN2: '#8298cd', SEN01: '#8eb47c',
+  '/SEN0': '#82c3a5', '/SEN1': '#8ec0cc', '/SEN2': '#acb5d8', '/SEN01': '#b4c59a',
+  SENSOR: '#70b76e', '/SENSOR': '#9bb880',
+  CLK: '#45c3bb', CLK_1HZ: '#dfba59', '/CLK_1HZ': '#cba66d',
+  CARGA: '#cd92ab', '/CARGA': '#af92cb', '/PRÉSTAMO': '#88a8c1',
+  RESET: '#b497dc', '/RESET': '#c5a8df',
+};
+
+export const ELEVATOR_COLOR_GROUPS = [
+  { label: 'Cabina', names: ['PP1', 'PP2', 'PP3', 'PP4'] },
+  { label: 'Llamadas', names: ['LL1', 'LL2', 'LL3', 'LL4'] },
+  { label: 'Destino', names: ['SEL0', 'SEL1', 'SEL2', 'DEST0', 'DEST1', 'DEST2', '/PED1', '/PED2', '/PED3', '/PED4', 'PED2_O_PED3', 'PED3_O_PED1_HABILITADO'] },
+  { label: 'Piso actual', names: ['PISO0', 'PISO1', 'PISO2'] },
+  { label: 'Sensores', names: ['SP1', 'SP2', 'SP3', 'SP4', 'SEN0', 'SEN1', 'SEN2', 'SEN01', '/SEN0', '/SEN1', '/SEN2', '/SEN01', 'SENSOR', '/SENSOR', 'CAPTURA_PISO'] },
+  { label: 'Control', names: ['OCUPADO', '/OCUPADO', 'ACEPTAR', '/ACEPTAR', 'MANTENER', 'OCUPADO_SIG', 'VÁLIDO', 'VÁLIDO_SIG', 'SOLICITUD', 'LLEGÓ', '/LLEGÓ', 'SUBIR', 'BAJAR'] },
+  { label: 'Cuenta', names: ['CNT0', 'CNT1', 'CNT2', 'CNT3', 'CARGA', '/CARGA', '/PRÉSTAMO'] },
+  { label: 'Relojes', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ'] },
+  { label: 'Reinicio', names: ['RESET', '/RESET'] },
+].map(g => ({ label: g.label, color: ELEVATOR_SIGNAL_COLORS[g.names[0]], colors: g.names.map(n => ELEVATOR_SIGNAL_COLORS[n]) }));

@@ -19,6 +19,17 @@ export function componentBodies(parts: readonly PartData[]): RouteObstacle[] {
 const distance = (a: Vec, b: Vec) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
 const inside = (p: Vec, r: RouteObstacle, margin = 0) => p.x > r.x - margin && p.x < r.x + r.w + margin && p.y > r.y - margin && p.y < r.y + r.h + margin;
 
+export function colorNamedNetworks(scene: CircuitSnapshot, palette: Readonly<Record<string, string>>): CircuitSnapshot {
+  const nets = buildNetlist(scene, PARTS), colors = new Map<number, string>();
+  for (const p of scene.parts) for (const item of String(p.props.nets ?? '').split(';')) {
+    const split = item.indexOf('=');
+    if (split < 0) continue;
+    const name = item.slice(split + 1), net = nets.netOf.get(pinKey(p.id, item.slice(0, split)));
+    if (net !== undefined && palette[name] && !colors.has(net)) colors.set(net, palette[name]);
+  }
+  return { ...scene, wires: scene.wires.map(w => ({ ...w, color: colors.get(nets.netOf.get(pinKey(w.a.part!, w.a.pin!))!) ?? w.color })) };
+}
+
 /** Reuse breadboard strips as junctions. Each jumper still occupies two distinct, free holes. */
 export function shortenPhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
   const base = buildNetlist({ ...scene, wires: [] }, PARTS), full = buildNetlist(scene, PARTS);

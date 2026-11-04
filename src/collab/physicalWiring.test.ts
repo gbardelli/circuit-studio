@@ -7,6 +7,8 @@ import { roundedPath } from '../ui/wires';
 import { sharedTrackLength } from '../core/wireRouting';
 import { toWorld } from '../core/types';
 import contract from './fixtures/elevator-networks.json';
+import { componentBodies } from './physicalWiring';
+import { ELEVATOR_SIGNAL_COLORS } from './elevatorPalette';
 
 describe('physical elevator wiring', () => {
   const scene = templateSnapshot(elevatorTemplate());
@@ -54,9 +56,27 @@ describe('physical elevator wiring', () => {
       expect(ps[n].x === ps[n-1].x || ps[n].y === ps[n-1].y).toBe(true);
       length += Math.abs(ps[n].x - ps[n-1].x) + Math.abs(ps[n].y - ps[n-1].y);
     }
-    expect(length).toBeLessThan(83_040 * .65);
+    // Uniform component gaps take priority over the shortest possible packing.
+    expect(length).toBeLessThan(83_040 * .70);
     expect(scene.wires.length).toBeLessThan(263);
     const displays = scene.parts.filter(p => p.type === 'seven-segment');
     expect(new Set(displays.map(p => toWorld(p, { x: 0, y: 0 }).y)).size).toBe(1);
+  });
+  it('spaces every neighboring IC body on boards 2 and 3 by the same 30 units', () => {
+    for (const [low, high, count] of [[360, 720, 6], [720, 1080, 5]]) {
+      const chips = scene.parts.filter(p => /^(74|ne555)/.test(p.type) && p.y >= low && p.y < high).sort((a, b) => a.x - b.x);
+      expect(chips).toHaveLength(count);
+      const bodies = chips.map(p => componentBodies([p])[0]);
+      for (let n = 1; n < bodies.length; n++) expect(bodies[n].x - bodies[n-1].x - bodies[n-1].w).toBe(30);
+    }
+  });
+  it('uses one consistent color per named signal and distinguishes neighboring bus bits', () => {
+    for (const [part, pin, name] of [['u8', 'Q0', 'DEST0'], ['u8', 'Q1', 'DEST1'], ['u8', 'Q2', 'DEST2'], ['u5', '1Q', 'OCUPADO'], ['u6', '4Y', 'ACEPTAR'], ['sp', '1B', 'SP1']]) {
+      const net = nets.netOf.get(`${part}:${pin}`);
+      const wires = scene.wires.filter(w => nets.netOf.get(`${w.a.part}:${w.a.pin}`) === net);
+      expect(wires.length).toBeGreaterThan(0);
+      expect(new Set(wires.map(w => w.color))).toEqual(new Set([ELEVATOR_SIGNAL_COLORS[name]]));
+    }
+    expect(new Set(['DEST0', 'DEST1', 'DEST2', 'OCUPADO', 'ACEPTAR'].map(n => ELEVATOR_SIGNAL_COLORS[n])).size).toBe(5);
   });
 });

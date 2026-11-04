@@ -2,7 +2,7 @@
 // Physical routing runs after placement, so displays and chip bodies remain clear.
 import { toWorld, type Props, type Rotation, type Vec } from '../core/types';
 import { PARTS } from '../parts';
-import { routePhysicalWiring, shortenPhysicalWiring } from './physicalWiring';
+import { colorNamedNetworks, routePhysicalWiring, shortenPhysicalWiring } from './physicalWiring';
 import type { Template, TemplatePart, TemplateWire } from './templates';
 
 export type Ref = [string, string];
@@ -207,12 +207,12 @@ export class Bench {
     throw new Error(`Plantilla: no hay espacio para desacoplo en ${board}`);
   }
 
-  template(meta: Omit<Template, 'parts' | 'wires'>): Template {
+  template(meta: Omit<Template, 'parts' | 'wires'>, palette: Readonly<Record<string, string>> = {}): Template {
     const scene = {
       parts: this.parts.map(p => ({ id: p.key, type: p.type, x: p.x, y: p.y, rot: p.rot ?? 0, props: { ...PARTS[p.type].defaults, ...p.props } })),
       wires: this.wires.map((w, i) => ({ id: `w${i}`, color: w.color, points: w.points ?? [], a: { part: w.a[0], pin: w.a[1], ...this.at(w.a) }, b: { part: w.b[0], pin: w.b[1], ...this.at(w.b) } })),
     };
-    const result = routePhysicalWiring(shortenPhysicalWiring(scene));
+    const result = colorNamedNetworks(routePhysicalWiring(shortenPhysicalWiring(scene)), palette);
     return { ...meta, parts: this.parts, wires: result.wires.map(w => ({ a: [w.a.part!, w.a.pin!], b: [w.b.part!, w.b.pin!], points: w.points, color: w.color })) };
   }
 }
