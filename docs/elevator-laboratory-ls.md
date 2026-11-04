@@ -6,8 +6,8 @@ The interface modules contain discrete MOSFETs and pull-up resistors, not elevat
 
 | Board | Main functions |
 | --- | --- |
-| 1 | Cabin/hall inputs, gate-based priority encoder, nominal 1 Hz clock |
-| 2 | Destination memory, state logic, control clock, up/down indicators |
+| 1 | Cabin/hall inputs, gate-based priority encoder, nominal 1 Hz NE555 clock |
+| 2 | Destination memory, state logic, 5 V NE555 control clock, up/down indicators |
 | 3 | Floor sensors, actual-floor memory, comparator, equal-floor indicator |
 | 4 | Floor timing sequencer and the destination, actual-floor and total-seconds displays |
 

@@ -1,7 +1,7 @@
 // Ascensor de cuatro pisos: control con integrados comerciales y Arduino GIGA como innovación.
 //
 // La lógica obligatoria (memoria del destino, bloqueo, piso actual, comparación, LEDs y los
-// displays del piso actual y del destino) la resuelven CI 74LS más un TLC555 de reloj. El GIGA
+// displays del piso actual y del destino) la resuelven CI 74LS más un NE555 de reloj. El GIGA
 // no decide nada: inyecta llamadas de piso desde la GIGA Display Shield (como un pulsador más),
 // mueve la cabina activando los sensores de planta y muestra el estado y el tiempo del viaje. Sin él, el ascensor sigue funcionando
 // con los pulsadores y el DIP de sensores.
@@ -9,10 +9,10 @@
 // Lógica 74LS alimentada por una fuente regulada de 5 V. El GIGA sigue a 3,3 V:
 // cinco módulos SparkFun BOB-12009 aíslan ambos dominios mediante MOSFETs BSS138.
 // El riel positivo inferior de la placa 2 es exclusivamente de 3,3 V; los demás son de 5 V.
-// La shield va montada detrás del GIGA y no ocupa cabezales. Usar TLC555 CMOS.
+// La shield va montada detrás del GIGA y no ocupa cabezales. Los dos relojes usan NE555 a 5 V.
 // Los decodificadores LS48 incorporan las resistencias de salida de los segmentos.
-//   1 · Pulsadores y codificación   U15 TLC555 · U1 74LS08 · U2 74LS00 · U20 74LS08
-//   2 · Memoria e indicadores       LS/LB · U3 74LS04 · U4 TLC555 · U5 74LS74 · U6 74LS08 · U7 74LS32 · U8 74LS173
+//   1 · Pulsadores y codificación   U15 NE555 · U1 74LS08 · U2 74LS00 · U20 74LS08
+//   2 · Memoria e indicadores       LS/LB · U3 74LS04 · U4 NE555 · U5 74LS74 · U6 74LS08 · U7 74LS32 · U8 74LS173
 //   3 · Sensores y comparación      U9 74LS00 · U10 74LS04 · U11 74LS173 · U12 74LS85 · U13 74LS08
 //   4 · Cuenta y tres displays      U18 74LS00 · U16 74LS193 · U14/U19/U17 74LS48
 //
@@ -86,7 +86,7 @@ export function elevatorTemplate(): Template {
   // Una 74LS08 adicional resuelve prioridad 4 > 3 > 2 > 1 con las puertas libres de U2/U3.
   // U20 queda junto al codificador; U3 ocupa el extremo libre de la placa de control.
   r.dip('u20', '74ls08', B1, 56, 'U20 · 74LS08 · prioridad de llamadas');
-  r.dip('u15', 'ne555', B1, 1, 'U15 · TLC555 · 1 Hz');
+  r.dip('u15', 'ne555', B1, 1, 'U15 · NE555 · 1 Hz');
   r.fromRail('u15R1', B1, 2, 'tp', 47_000);
   r.put('u15R2', 'resistor', B1, 2, 'c', { resistance: 47_000 });
   r.put('u15C', 'capacitor', B1, 5, 'j', { capacitance: 10e-6 });
@@ -173,8 +173,8 @@ export function elevatorTemplate(): Template {
   gnd(['reset', '1a']);
   // RESET activo en alto para los 74LS193 (el pulsador da RESET activo en bajo): U3, puerta 6.
   r.wire(['reset', '2a'], ['u3', '6A'], WIRE.reset);
-  // U4 TLC555 astable: R1 = 1 kΩ, R2 = 33 kΩ, C = 1 µF → f = 1,44 / ((R1 + 2·R2)·C) ≈ 21 Hz.
-  r.dip('u4', 'ne555', B2, 9, 'U4 · TLC555 · reloj de 21 Hz');
+  // U4 NE555 astable: R1 = 1 kΩ, R2 = 33 kΩ, C = 1 µF → f = 1,44 / ((R1 + 2·R2)·C) ≈ 21 Hz.
+  r.dip('u4', 'ne555', B2, 9, 'U4 · NE555 · reloj de 21 Hz');
   vcc(['u4', 'VCC']);
   gnd(['u4', 'GND']);
   vcc(['u4', 'RESET']);
@@ -322,7 +322,7 @@ export function elevatorTemplate(): Template {
   }
 
   // ── Cuenta regresiva: reloj en placa 1, contador en placa 4 ───────────────────
-  // U15 TLC555 a 1 Hz (R1 = R2 = 47 kΩ, C = 10 µF → 1,44 / (141 kΩ · 10 µF) ≈ 1,02 Hz). Solo oscila mientras OCUPADO = 1:
+  // U15 NE555 a 1 Hz (R1 = R2 = 47 kΩ, C = 10 µF → 1,44 / (141 kΩ · 10 µF) ≈ 1,02 Hz). Solo oscila mientras OCUPADO = 1:
   // su RESET va a OCUPADO, así que parado queda a 0 y cada viaje empieza con el ciclo entero.
   vcc(['u15', 'VCC']);
   gnd(['u15', 'GND']);
@@ -408,7 +408,7 @@ export function elevatorTemplate(): Template {
   for (const p of r.parts) {
     if (p.key === 'giga') p.props = { ...p.props, nets: GIGA_PINS.trip.map((pin, bit) => `${pin}=TIEMPO${bit}`).join(';') };
     if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
-    if (p.key==='u4' || p.key==='u15') p.props = {...p.props, partNumber:'TLC555'};
+    if (p.key==='u4' || p.key==='u15') p.props = {...p.props, partNumber:'NE555'};
   }
 
   cachedTemplate = r.template({
