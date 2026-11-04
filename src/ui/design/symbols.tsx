@@ -1,6 +1,7 @@
 // Dibujo de los elementos del modo diseño (símbolos de forma distintiva IEEE 91) en coordenadas
 // locales, antes de girar. Colores de valor: 1 verde claro, 0 verde oscuro, X azul, error rojo.
 import { memo } from 'react';
+import { SEGMENT_PINS } from '../../logic/elements';
 import type { Bit } from '../../logic/types';
 import type { Placed } from './geometry';
 
@@ -10,6 +11,14 @@ const BODY = 'var(--d-body)';
 const MUTED = 'var(--d-muted)';
 const FONT = 'Geist, sans-serif';
 const MONO = 'Geist, sans-serif';
+
+// LED de salida: encendido, apagado y borde encendido.
+const LED: Record<string, { on: string; off: string; rim: string }> = {
+  green: { on: VALUE_COLOR[1], off: '#1b2a21', rim: '#bbf7d0' },
+  red: { on: '#f43f3f', off: '#2e1a1a', rim: '#fecaca' },
+  yellow: { on: '#facc15', off: '#2b2614', rim: '#fef08a' },
+  blue: { on: '#60a5fa', off: '#18212e', rim: '#bfdbfe' },
+};
 
 // Segmentos a–g de 0 a F, como un display hexadecimal.
 const HEX = [0x3f, 0x06, 0x5b, 0x4f, 0x66, 0x6d, 0x7d, 0x07, 0x7f, 0x6f, 0x77, 0x7c, 0x39, 0x5e, 0x79, 0x71];
@@ -106,8 +115,8 @@ function Box({ w, h, title, pins, st, accent }: { w: number; h: number; title: s
   );
 }
 
-function SevenSeg({ value }: { value: number | null | undefined }) {
-  const on = value == null ? 0 : HEX[value & 15];
+function SevenSeg({ value, mask }: { value?: number | null; mask?: number }) {
+  const on = mask ?? (value == null ? 0 : HEX[value & 15]);
   const seg = (i: number) => ((on >> i) & 1 ? '#ff5a3c' : 'rgba(255,90,60,.1)');
   const x = 22;
   const y = 12;
@@ -155,16 +164,38 @@ export const LogicSymbol = memo(function LogicSymbol({ placed, st }: { placed: P
   }
   if (k === 'out') {
     const v = st.pin('A');
+    const led = LED[String(node.props.color)] ?? LED.green;
     return (
       <g>
         <Stub x1={0} y1={10} x2={14} y2={10} v={v} />
-        {v === 1 && <circle cx={24} cy={10} r={13} fill={VALUE_COLOR[1]} opacity={0.18} />}
-        <circle cx={24} cy={10} r={9} fill={v === 1 ? VALUE_COLOR[1] : v === 2 ? 'rgba(91,141,239,.18)' : '#1b2a21'} stroke={v === 1 ? '#bbf7d0' : INK} strokeWidth={2} />
+        {v === 1 && <circle cx={24} cy={10} r={13} fill={led.on} opacity={0.18} />}
+        <circle cx={24} cy={10} r={9} fill={v === 1 ? led.on : v === 2 ? 'rgba(91,141,239,.18)' : led.off} stroke={v === 1 ? led.rim : INK} strokeWidth={2} />
         {label && (
           <text x={39} y={13.5} fontFamily={FONT} fontSize={9} fontWeight={600} fill={INK}>
             {label}
           </text>
         )}
+      </g>
+    );
+  }
+  if (k === 'seg7') {
+    // Segmento encendido solo con un 1: X o sin conectar se ven apagados.
+    const mask = SEGMENT_PINS.reduce((m, id, i) => (st.pin(id) === 1 ? m | (1 << i) : m), 0);
+    return (
+      <g>
+        {pins.map((p) => (
+          <Stub key={p.id} x1={w - 10} y1={p.y} x2={w} y2={p.y} v={st.pin(p.id)} />
+        ))}
+        <g transform="translate(-14 12) scale(1.8)">
+          <SevenSeg mask={mask} />
+        </g>
+        <g fontFamily={MONO} fontSize={7.5} fill={MUTED}>
+          {pins.map((p) => (
+            <text key={p.id} x={w - 5} y={p.y - 3} textAnchor="middle">
+              {p.id}
+            </text>
+          ))}
+        </g>
       </g>
     );
   }

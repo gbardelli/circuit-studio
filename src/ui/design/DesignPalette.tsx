@@ -1,10 +1,11 @@
 // Paleta del modo diseño: ocupa el panel de la biblioteca. Clic para armar la herramienta o
 // arrastrar hasta el lienzo; la búsqueda cubre también los 74HC y CD4000 como bloques.
-import { ChevronDown, Cpu, Plus, Search, X as Close } from 'lucide-react';
+import { ChevronDown, Cpu, LayoutTemplate, Plus, Search, X as Close } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
+import { DESIGN_EXAMPLES } from '../../collab/designExamples';
 import { baseElements, chipElements, elementDef, LOGIC_GROUPS, type ElementDef } from '../../logic/elements';
 import { icDependencies } from '../../logic/sim';
-import { IC_PREFIX, type LogicSheet } from '../../logic/types';
+import { IC_PREFIX, MAIN_SHEET, type LogicSheet } from '../../logic/types';
 import { useEditor } from '../context';
 import { place } from './geometry';
 import { useCreateIc } from './SheetTabs';
@@ -96,6 +97,34 @@ export function DesignPalette() {
             </section>
           );
         })}
+        {!project.readOnly && !q && sheet === MAIN_SHEET && (
+          <section className="lib-section">
+            <h3>Ejemplos</h3>
+            <div className="d-cards">
+              {DESIGN_EXAMPLES.map((ex) => (
+                <button
+                  key={ex.id}
+                  className="d-card"
+                  title={ex.description}
+                  onClick={() => {
+                    const ids = ex.insert(project.design, sheet);
+                    const ui = useDesignUi.getState();
+                    ui.select(ids);
+                    ui.requestFit();
+                  }}
+                >
+                  <span className="d-thumb">
+                    <LayoutTemplate size={18} />
+                  </span>
+                  <span className="d-meta">
+                    <strong>{ex.name}</strong>
+                    <small>{ex.description}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
         {q && !all.some(match) && (
           <div className="empty">
             <Search size={18} />

@@ -92,6 +92,12 @@ export function DesignCanvas() {
     const zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Math.min(r.width / (x1 - x0), (r.height - 80) / (y1 - y0))));
     setViewport({ zoom, x: (r.width - (x1 - x0) * zoom) / 2 - x0 * zoom, y: (r.height - (y1 - y0) * zoom) / 2 - y0 * zoom + 20 });
   }, [placed, setViewport]);
+  const fitTick = useDesignUi((s) => s.fitTick);
+  useEffect(() => {
+    if (fitTick) fit();
+    // Solo cuando se pide; no al mover elementos.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitTick]);
 
   // ── Edición ──────────────────────────────────────────────────────────────────────
   const select = useDesignUi.getState().select;

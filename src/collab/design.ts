@@ -61,6 +61,11 @@ export class DesignDoc {
     return this.sheets().filter((s) => s.kind === 'ic');
   }
 
+  /** Varios cambios en una sola transacción (un solo paso de deshacer). */
+  batch(fn: () => void) {
+    this.tx(fn);
+  }
+
   // ── Hojas ────────────────────────────────────────────────────────────────────────
   private create(id: string, kind: 'main' | 'ic', meta: Partial<Pick<LogicSheet, 'name' | 'part' | 'description'>>) {
     const m = new Y.Map<unknown>();

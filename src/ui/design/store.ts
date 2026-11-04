@@ -23,6 +23,9 @@ export interface DesignUi {
   /** Se incrementa para reiniciar la simulación (biestables y relojes a cero). */
   epoch: number;
   reset(): void;
+  /** Se incrementa para encuadrar la hoja abierta (tras insertar un ejemplo). */
+  fitTick: number;
+  requestFit(): void;
 }
 
 export const useDesignUi = create<DesignUi>((set) => ({
@@ -43,4 +46,6 @@ export const useDesignUi = create<DesignUi>((set) => ({
   setClipboard: (clipboard) => set({ clipboard }),
   epoch: 0,
   reset: () => set((s) => ({ epoch: s.epoch + 1 })),
+  fitTick: 0,
+  requestFit: () => set((s) => ({ fitTick: s.fitTick + 1 })),
 }));

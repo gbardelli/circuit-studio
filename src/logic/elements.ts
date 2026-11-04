@@ -120,6 +120,10 @@ function unary(kind: string, name: string, invert: boolean, key: string, descrip
 }
 
 // ── Entradas y salidas ──────────────────────────────────────────────────────────
+/** Entradas del display de 7 segmentos, de arriba abajo. */
+export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+export const LED_COLORS = ['green', 'red', 'yellow', 'blue'] as const;
+const LED_COLOR_NAMES: Record<(typeof LED_COLORS)[number], string> = { green: 'Verde', red: 'Rojo', yellow: 'Amarillo', blue: 'Azul' };
 const SOURCE_PIN: LogicPinDef[] = [{ id: 'Y', x: 40, y: 10, dir: 'out' }];
 const source = (env: Env): Behavior => ({ step: () => [env.source()] });
 
@@ -186,8 +190,11 @@ const ELEMENTS: ElementDef[] = [
     description: 'LED que muestra el bit que recibe. Dentro de un integrado es una patilla de salida.',
     keywords: ['salida', 'led', 'output', 'patilla', 'pin', 'sonda', 'probe'],
     key: 'o',
-    defaults: { label: '' },
-    fields: [{ key: 'label', label: 'Nombre', kind: 'text' }],
+    defaults: { label: '', color: 'green' },
+    fields: [
+      { key: 'label', label: 'Nombre', kind: 'text' },
+      { key: 'color', label: 'Color', kind: 'select', options: LED_COLORS.map((c) => ({ value: c, label: LED_COLOR_NAMES[c] })) },
+    ],
     size: () => ({ w: 40, h: 20 }),
     pins: () => [{ id: 'A', x: 0, y: 10, dir: 'in' }],
     behavior: () => ({ step: () => [] }),
@@ -201,6 +208,18 @@ const ELEMENTS: ElementDef[] = [
     defaults: {},
     size: () => ({ w: 60, h: 80 }),
     pins: () => [1, 2, 4, 8].map((w, i) => ({ id: `D${i}`, x: 0, y: 10 + i * 20, dir: 'in' as const, label: String(w) })),
+    behavior: () => ({ step: () => [] }),
+  },
+  {
+    kind: 'seg7',
+    name: 'Display de 7 segmentos',
+    group: 'Entradas y salidas',
+    description: 'Un dígito de siete segmentos: cada entrada (a–g) enciende su segmento. Se conecta a un decodificador BCD como el 74LS48.',
+    keywords: ['display', '7 segmentos', 'siete segmentos', 'digito', 'segmentos', 'catodo comun', 'a b c d e f g'],
+    defaults: {},
+    // Misma altura y paso que un bloque de 7 salidas: los cables al decodificador quedan rectos.
+    size: () => ({ w: 90, h: 160 }),
+    pins: () => SEGMENT_PINS.map((id, i) => ({ id, x: 90, y: 20 + i * 20, dir: 'in' as const })),
     behavior: () => ({ step: () => [] }),
   },
   gate('and', 'AND', and, false, 'a', 'Sale 1 solo si todas sus entradas valen 1.'),
@@ -369,12 +388,23 @@ export function chipPins(spec: ChipSpec<unknown>) {
   return { inputs: names.filter((n) => !spec.outputs.includes(n)), outputs: names.filter((n) => spec.outputs.includes(n)) };
 }
 
-function blockPins(inputs: { id: string; label?: string }[], outputs: { id: string; label?: string }[]): LogicPinDef[] {
+/** Con «flip» las entradas pasan a la derecha y las salidas a la izquierda; los rótulos siguen derechos. */
+function blockPins(inputs: { id: string; label?: string }[], outputs: { id: string; label?: string }[], flip = false): LogicPinDef[] {
   return [
-    ...inputs.map((p, i) => ({ ...p, x: 0, y: 20 + i * 20, dir: 'in' as const })),
-    ...outputs.map((p, i) => ({ ...p, x: 100, y: 20 + i * 20, dir: 'out' as const })),
+    ...inputs.map((p, i) => ({ ...p, x: flip ? 100 : 0, y: 20 + i * 20, dir: 'in' as const })),
+    ...outputs.map((p, i) => ({ ...p, x: flip ? 0 : 100, y: 20 + i * 20, dir: 'out' as const })),
   ];
 }
+const flipped = (p: Props) => num(p.flip, 0) === 1;
+const FLIP_FIELD: LogicField = {
+  key: 'flip',
+  label: 'Lados',
+  kind: 'select',
+  options: [
+    { value: '0', label: 'Entradas a la izquierda' },
+    { value: '1', label: 'Entradas a la derecha' },
+  ],
+};
 const blockSize = (inputs: number, outputs: number) => ({ w: 100, h: 20 * Math.max(inputs, outputs, 1) + 20 });
 
 function chipElement(type: string, spec: ChipSpec<unknown>): ElementDef {
@@ -385,9 +415,10 @@ function chipElement(type: string, spec: ChipSpec<unknown>): ElementDef {
     group: 'Integrados 74HC y CD4000',
     description: `${spec.name}. ${spec.description}`,
     keywords: [type, spec.part.toLowerCase(), ...spec.keywords],
-    defaults: {},
+    defaults: { flip: 0 },
+    fields: [FLIP_FIELD],
     size: () => blockSize(inputs.length, outputs.length),
-    pins: () => blockPins(inputs.map((id) => ({ id })), outputs.map((id) => ({ id }))),
+    pins: (p) => blockPins(inputs.map((id) => ({ id })), outputs.map((id) => ({ id })), flipped(p)),
     behavior: () => {
       let state = spec.init();
       let prev: Record<string, boolean> = {};
@@ -444,12 +475,14 @@ function icElement(sheet: LogicSheet): ElementDef {
     group: 'Mis integrados',
     description: sheet.description || sheet.name,
     keywords: [sheet.name.toLowerCase(), sheet.part.toLowerCase(), 'integrado', 'propio', 'custom'],
-    defaults: {},
+    defaults: { flip: 0 },
+    fields: [FLIP_FIELD],
     size: () => blockSize(ins.length, outs.length),
-    pins: () =>
+    pins: (p) =>
       blockPins(
         ins.map((n) => ({ id: n.id, label: pinName(n, signals.indexOf(n)) })),
         outs.map((n) => ({ id: n.id, label: pinName(n, signals.indexOf(n)) })),
+        flipped(p),
       ),
     behavior: (_p, ctx) => {
       const inner = ctx.instantiate(sheet.id);
