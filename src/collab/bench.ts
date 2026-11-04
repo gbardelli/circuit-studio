@@ -5,9 +5,10 @@
 // · Hacia otra placa: cada mitad sale por su pasillo exterior; entre placas contiguas el cable
 //   corre por el pasillo que comparten y, si no son contiguas, baja por el canal lateral derecho.
 // · Hacia el GIGA (a la izquierda): por el canal lateral izquierdo.
-// Dos cables nunca comparten un tramo de carril: se pueden seguir con el dedo.
+// Se reservan carriles separados para que los recorridos se puedan seguir visualmente.
 import { toWorld, type Props, type Rotation, type Vec } from '../core/types';
 import { PARTS } from '../parts';
+import { separateWireRoutes, sharedTrackLength } from '../core/wireRouting';
 import type { Template, TemplatePart, TemplateWire } from './templates';
 
 export type Ref = [string, string];
@@ -68,6 +69,7 @@ export class Bench {
   private order: string[] = [];
   private risers = new Map<'left' | 'right', [number, number][][]>();
   private crossings = new Map<string, number>();
+  private pendingRoutes: (() => void)[] = [];
 
   board(key: string, x: number, y: number, label?: string) {
     this.parts.push({ key, type: 'breadboard-full', x, y, props: label ? { label } : {} });
@@ -215,7 +217,7 @@ export class Bench {
     for (let i = 0; i < slots.length; i++) {
       if (slots[i].every(([a, b]) => hi < a || lo > b)) {
         slots[i].push([lo, hi]);
-        return side === 'right' ? BOARD_W + 14 + i * 5 : -14 - i * 5;
+        return side === 'right' ? BOARD_W + 14 + i * 8 : -14 - i * 8;
       }
     }
     throw new Error('Plantilla: no quedan canales laterales');
@@ -227,14 +229,17 @@ export class Bench {
     const want = Math.round((x - b.x - COL0) / 10) + 1;
     for (let d = 0; d < COLS; d++) {
       for (const c of d === 0 ? [want] : [want + d, want - d]) {
-        if (c >= 5 && c <= COLS && !this.used.has(`${board}:e${c}`) && !this.used.has(`${board}:f${c}`)) {
+        if (c >= 5 && c <= COLS && !this.used.has(`${board}:e${c}`) && !this.used.has(`${board}:f${c}`) && !this.crossings.has(`${board}:${c}`)) {
           const n = this.crossings.get(`${board}:${c}`) ?? 0;
           this.crossings.set(`${board}:${c}`, n + 1);
-          return b.x + colX(c) + [0, -3, 3, -6, 6][n % 5];
+          return b.x + colX(c);
         }
       }
     }
-    throw new Error(`Plantilla: no hay columna libre para cruzar ${board}`);
+    const side = x < b.x + BOARD_W / 2 ? 'left' : 'right';
+    const key = `${board}:outside:${side}`, index = this.crossings.get(key) ?? 0;
+    this.crossings.set(key, index + 1);
+    return b.x + (side === 'left' ? -8 - index * 8 : BOARD_W + 8 + index * 8);
   }
 
   /** Tramo desde un agujero hasta el borde de su pasillo exterior en la dirección `dir`. */
@@ -258,6 +263,10 @@ export class Bench {
     if (direct) return void this.wires.push({ a: ea, b: eb, color });
     const pa = this.at(ea);
     const pb = this.at(eb);
+    const wire: TemplateWire = { a: ea, b: eb, color };
+    this.wires.push(wire);
+    // Reserve terminals now, but choose corridors only once every component is mounted.
+    this.pendingRoutes.push(() => {
     let pts: Vec[] = [];
     if (sa && sb && sa.board === sb.board) {
       if (sa.half === sb.half) {
@@ -292,7 +301,8 @@ export class Bench {
       const fromBoard = [...xo.pts, { x: xo.x, y }, { x: rx, y }, { x: rx, y: free.y }];
       pts = sa ? fromBoard : fromBoard.slice().reverse();
     }
-    this.wires.push({ a: ea, b: eb, color, points: pts.length ? pts : undefined });
+    wire.points = pts.length ? pts : undefined;
+    });
   }
 
   /** Cable con un recorrido dado a mano (entre piezas sueltas). */
@@ -351,13 +361,31 @@ export class Bench {
   }
 
   template(meta: Omit<Template, 'parts' | 'wires'>): Template {
-    return { ...meta, parts: this.parts, wires: this.wires };
+    for (const route of this.pendingRoutes.splice(0)) route();
+    const obstacles = this.parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
+      const def = PARTS[p.type], props = { ...def.defaults, ...p.props };
+      let b = def.bounds(props);
+      if (/^(74|cd4|ne555)/.test(p.type)) b = { x: b.x + 2, y: b.y + 9, w: b.w - 4, h: b.h - 18 };
+      else if (p.type === 'resistor') b = { x: 9, y: -6, w: 22, h: 12 };
+      else if (p.type === 'pushbutton') b = { x: 0, y: 4, w: 20, h: 22 };
+      else if (p.type === 'led' || p.type === 'capacitor') b = { ...b, h: b.h - 10 };
+      const corners = [{ x: b.x, y: b.y }, { x: b.x + b.w, y: b.y }, { x: b.x, y: b.y + b.h }, { x: b.x + b.w, y: b.y + b.h }].map(at => toWorld({ ...p, rot: p.rot ?? 0 }, at));
+      const x = Math.min(...corners.map(c => c.x)), y = Math.min(...corners.map(c => c.y));
+      return { x, y, w: Math.max(...corners.map(c => c.x)) - x, h: Math.max(...corners.map(c => c.y)) - y };
+    });
+    let routes = separateWireRoutes(this.wires.map(w => [this.at(w.a), ...(w.points ?? []), this.at(w.b)]), obstacles);
+    for (let pass = 0; pass < 3; pass++) {
+      const candidate = separateWireRoutes([...routes].reverse(), obstacles).reverse();
+      if (sharedTrackLength(candidate) >= sharedTrackLength(routes)) break;
+      routes = candidate;
+    }
+    return { ...meta, parts: this.parts, wires: this.wires.map((wire, index) => ({ ...wire, points: routes[index].slice(1, -1) })) };
   }
 }
 
 function steps(from: number, to: number) {
   const out: number[] = [];
-  const d = from < to ? 4 : -4;
+  const d = from < to ? 6 : -6;
   for (let y = from; d > 0 ? y <= to : y >= to; y += d) out.push(y);
   return out;
 }

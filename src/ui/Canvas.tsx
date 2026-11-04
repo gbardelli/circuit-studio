@@ -17,7 +17,8 @@ import { useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath, shade } from './wires';
-import { ConnectionGuide, wireNet, wireCrossings } from './ConnectionGuide';
+import { ConnectionGuide, wireCrossings } from './ConnectionGuide';
+import { advanceFlow, emptyFlowFrame, nearestWire, wireEmphasis, type FlowFrame } from './wireFeedback';
 import { buildSchematic, flagWidth, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
 
 interface PinHit {
@@ -111,7 +112,6 @@ export function Canvas() {
   const stackTop = useMemo(() => new Set(sch ? [] : scene.parts.filter((p) => !p.props.flip && stackHost(p, scene.parts)).map((p) => p.id)), [sch, scene]);
 
   const focusedWire = !sch ? snapshot.wires.find(w => w.id === (hoverWire ?? wireSelection[0])) : undefined;
-  const focusedNet = focusedWire ? wireNet(focusedWire, netlist) : undefined;
   const crossings = useMemo(() => wireCrossings(boardScene), [boardScene]);
   /** Conexiones del esquema que la protoboard aún no hace: se muestran discontinuas. */
   const pending = useMemo(() => {
@@ -381,7 +381,8 @@ export function Canvas() {
     }
 
     const partId = target.closest('[data-part]')?.getAttribute('data-part') ?? null;
-    const wireId = target.closest('[data-wire]')?.getAttribute('data-wire') ?? null;
+    const hitWire = target.closest('[data-wire]')?.getAttribute('data-wire') ?? null;
+    const wireId = hitWire ? nearestWire(w, scene.wires, wire => wirePoints(wire, partsById), z, hitWire) : null;
     if (project.readOnly) { select(partId ? [partId] : [], wireId ? [wireId] : []); return; }
     const pin = findPin(w, partId);
 
@@ -459,7 +460,8 @@ export function Canvas() {
       const partId = target.closest?.('[data-part]')?.getAttribute('data-part') ?? null;
       setHoverPin(drag?.kind === 'end' ? findPin(w, null) : findPin(w, partId));
       setHoverPart(drag ? null : partId);
-      setHoverWire(drag ? null : (target.closest?.('[data-wire]')?.getAttribute('data-wire') ?? null));
+      const hitWire = target.closest?.('[data-wire]')?.getAttribute('data-wire') ?? null;
+      setHoverWire(drag || !hitWire ? null : target.closest?.('[data-handle]') ? hitWire : nearestWire(w, scene.wires, wire => wirePoints(wire, partsById), z, hitWire));
     }
     if (!drag) return;
     switch (drag.kind) {
@@ -803,49 +805,50 @@ export function Canvas() {
   const setShowFlow = useUi((s) => s.setShowFlow);
   const flowOn = !assemblyActive && simRunning && showFlow && !sch;
   const flowPaths = useRef(new Map<string, SVGPathElement>());
+  const flowFrames = useRef(new Map<string, FlowFrame>());
   const flowEdges = useMemo(() => connectionEdges(snapshot, PARTS), [snapshot]);
   useEffect(() => {
     if (!flowOn) return;
-    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-    const amps = new Map<string, number>();
-    const offset = new Map<string, number>();
+    const motion = matchMedia('(prefers-reduced-motion: reduce)');
+    let reduced = motion.matches;
+    const preference = () => { reduced = motion.matches; };
+    motion.addEventListener('change', preference);
+    const present = new Set(snapshot.wires.map(wire => wire.id));
+    for (const id of flowFrames.current.keys()) if (!present.has(id)) flowFrames.current.delete(id);
+    let amps = new Map<string, number>();
     let volts = new Map<string, number>();
     let last = performance.now();
     let measured = 0;
     let raf = 0;
     const step = (now: number) => {
-      const dt = Math.min(0.1, (now - last) / 1000);
+      const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
       if (now - measured > 70) {
         measured = now;
-        const fresh = wireCurrents(flowEdges, engine.pinCurrents());
+        amps = wireCurrents(flowEdges, engine.pinCurrents());
         volts = new Map();
         for (const w of snapshot.wires) {
-          const i = fresh.get(w.id) ?? 0;
-          amps.set(w.id, (amps.get(w.id) ?? i) * 0.6 + i * 0.4); // suaviza el PWM
           if (w.a.part && w.a.pin) volts.set(w.id, engine.voltageAt(w.a.part, w.a.pin) ?? 0);
         }
       }
       let top = 1;
       volts.forEach((v) => (top = Math.max(top, Math.abs(v))));
       for (const [id, el] of flowPaths.current) {
-        const i = amps.get(id) ?? 0;
-        if (Math.abs(i) < 2e-5) {
-          el.style.opacity = '0';
-          continue;
-        }
-        const speed = Math.min(320, 60 * Math.sqrt(Math.abs(i) / 1e-3));
-        const o = (offset.get(id) ?? 0) - Math.sign(i) * speed * (reduced ? 0 : dt);
-        offset.set(id, o % 1000);
-        el.style.opacity = '1';
-        el.style.strokeDashoffset = String(o % 1000);
-        const t = Math.min(1, Math.abs(volts.get(id) ?? 0) / top);
-        el.style.stroke = `hsl(${Math.round(215 - 215 * t)} 100% ${Math.round(80 - 6 * t)}%)`;
+        const frozen = reduced || engine.lab.paused || engine.lab.seeking;
+        const frame = advanceFlow(flowFrames.current.get(id) ?? emptyFlowFrame(), amps.get(id) ?? 0, volts.get(id) ?? 0, dt, frozen);
+        flowFrames.current.set(id, frame);
+        const opacity = String(Math.round(frame.opacity * 100) / 100);
+        if (el.style.opacity !== opacity) el.style.opacity = opacity;
+        if (frame.opacity < .005) continue;
+        if (!frozen) el.style.strokeDashoffset = frame.phase.toFixed(3);
+        const t = Math.min(1, Math.abs(frame.voltage) / top);
+        const color = `hsl(${Math.round(215 - 215 * t)} 90% 78%)`;
+        if (el.style.stroke !== color) el.style.stroke = color;
       }
       raf = requestAnimationFrame(step);
     };
     raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
+    return () => { cancelAnimationFrame(raf); motion.removeEventListener('change', preference); };
   }, [flowOn, flowEdges, engine, snapshot]);
 
   const hoverVoltage = hoverPin && simRunning ? engine.voltageAt(hoverPin.part, hoverPin.pin) : null;
@@ -912,9 +915,9 @@ export function Canvas() {
           {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && p.props.label).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill="#d6dce4" stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" pointerEvents="none">{String(p.props.label)}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
-              <g key={w.id} opacity={assemblyWire ? w.id===assemblyWire ? 1 : .12 : focusedNet !== undefined && wireNet(w, netlist) !== focusedNet ? .16 : 1}>
-                <WireView wire={w} points={livePoints(w)} z={z} selected={!project.readOnly && wireSelection.includes(w.id)} hovered={!drag && focusedNet !== undefined && wireNet(w, netlist) === focusedNet} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
-                {!drag && !focusedWire && (crossings.get(w.id) ?? []).map((p,i) => {
+              <g key={w.id} opacity={wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).opacity}>
+                <WireView wire={w} points={livePoints(w)} z={z} selected={!project.readOnly && wireSelection.includes(w.id)} hovered={!drag && wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).hovered} editing={drag?.kind === 'bend' && drag.wire === w.id ? drag.index : null} />
+                {!drag && (crossings.get(w.id) ?? []).map((p,i) => {
                   const onBoard = scene.parts.some(part=>{if(!part.type.startsWith('breadboard'))return false;const b=partBounds(part);return p.x>b.x && p.x<b.x+b.w && p.y>b.y && p.y<b.y+b.h;});
                   const d = p.vertical ? `M${p.x} ${p.y-4}V${p.y+4}` : `M${p.x-4} ${p.y}H${p.x+4}`;
                   return <g key={i} pointerEvents="none"><path d={d} fill="none" stroke={onBoard?'#e7e8e5':'#0d0f12'} strokeWidth={6.5}/><path d={d} fill="none" stroke={shade(w.color,-.45)} strokeWidth={3.3}/><path d={d} fill="none" stroke={w.color} strokeWidth={2.3}/></g>;
@@ -940,6 +943,7 @@ export function Canvas() {
                       else flowPaths.current.delete(w.id);
                     }}
                     d={roundedPath(livePoints(w))}
+                    strokeOpacity={wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).opacity}
                   />
                 ))}
             </g>
@@ -1343,7 +1347,7 @@ const WireView = memo(function WireView({ wire, points, z, selected, hovered, ed
   const r = 4 / z;
   return (
     <g data-wire={wire.id} className="wire">
-      <path d={d} stroke="transparent" strokeWidth={Math.max(6, 14 / z)} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={d} stroke="transparent" strokeWidth={Math.max(3.3, 12 / z)} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <WireShape points={points} color={wire.color} selected={selected} hovered={hovered} />
       {selected && (
         <g>
