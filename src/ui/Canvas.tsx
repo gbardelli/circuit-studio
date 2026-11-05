@@ -912,7 +912,8 @@ export function Canvas() {
             </g>
           )}
 
-          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && p.props.label).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill="#d6dce4" stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" pointerEvents="none">{String(p.props.label)}</text>)}
+          {/* Nombre de cada protoboard: doble clic lo edita (enfoca su campo en el inspector). */}
+          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && (p.props.label || selection.includes(p.id))).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill={p.props.label?'#d6dce4':'#7d8794'} fontStyle={p.props.label?undefined:'italic'} stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" style={{cursor:project.readOnly?undefined:'text'}} onDoubleClick={e=>{if(project.readOnly)return;e.stopPropagation();useUi.getState().select([p.id]);setTimeout(()=>{const input=document.getElementById(`board-name-${p.id}`) as HTMLInputElement|null;input?.focus();input?.select();},60);}}><title>Doble clic para cambiar el nombre</title>{String(p.props.label||'Protoboard sin nombre · doble clic para nombrarla')}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
               <g key={w.id} opacity={wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).opacity}>

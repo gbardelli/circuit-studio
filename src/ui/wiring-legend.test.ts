@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildNetlist } from '../core/netlist';
 import { PARTS } from '../parts';
 import type { CircuitSnapshot } from '../core/types';
-import { connectionLegend, updateLegendLabel } from './wiring-legend';
+import { connectionLegend, renameLegendEntry, updateLegendLabel } from './wiring-legend';
 
 const snapshot:CircuitSnapshot={parts:[{id:'chip',type:'74hc08',x:0,y:0,rot:0,props:{...PARTS['74hc08'].defaults,nets:'1A=AUDIO0;1B=AUDIO1'}}],wires:[{id:'one',a:{part:'chip',pin:'1A',x:0,y:0},b:{x:200,y:100},points:[],color:'#1878de'},{id:'two',a:{part:'chip',pin:'1B',x:0,y:0},b:{x:220,y:100},points:[],color:'#42ade8'}]};
 describe('project wiring legend',()=>{
@@ -28,5 +28,11 @@ describe('project wiring legend',()=>{
   it('identifies power from the connected pin, independent of wire color',()=>{
     const power:CircuitSnapshot={...snapshot,wires:[{...snapshot.wires[0],a:{part:'chip',pin:'GND',x:0,y:0},color:'#ff0000'}]};
     expect(connectionLegend(power,buildNetlist(power,PARTS),[])[0].label).toBe('GND');
+  });
+  it('renombra una entrada entera de la leyenda y vuelve a la automática con un nombre vacío', () => {
+    const named = renameLegendEntry([{ color: '#111111', colors: ['#111111'], label: 'Viejo' }], ['#AA0000', '#bb0000'], 'Llamadas');
+    expect(named[0]).toEqual({ color: '#aa0000', colors: ['#aa0000', '#bb0000'], label: 'Llamadas' });
+    expect(named[1].label).toBe('Viejo');
+    expect(renameLegendEntry(named, ['#aa0000', '#bb0000'], '  ')).toEqual([{ color: '#111111', colors: ['#111111'], label: 'Viejo' }]);
   });
 });

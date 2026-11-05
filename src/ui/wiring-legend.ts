@@ -52,6 +52,18 @@ export function updateLegendLabel(
       ]
     : next;
 }
+/** Renombra una entrada entera de la leyenda (todos sus colores). Vacío vuelve al nombre automático. */
+export function renameLegendEntry(raw: unknown, colors: string[], label: string): LegendEntry[] {
+  const targets = new Set(colors.map((c) => c.toLowerCase()));
+  const rest = configuredLegend(raw).flatMap((entry) => {
+    const left = entry.colors.filter((c) => !targets.has(c));
+    return left.length ? [{ ...entry, color: left[0], colors: left }] : [];
+  });
+  const list = [...targets];
+  return label.trim() && list.length
+    ? [{ color: list[0], colors: list, label: label.trim().slice(0, 80) }, ...rest]
+    : rest;
+}
 /** Meaning comes from explicit project labels or actual net connections, never a palette match. */
 export function connectionLegend(
   snapshot: CircuitSnapshot,

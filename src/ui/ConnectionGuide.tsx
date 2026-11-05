@@ -1,11 +1,11 @@
 import { X } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pinKey, type Netlist } from "../core/netlist";
 import type { CircuitSnapshot, WireData, Vec } from "../core/types";
 import { wirePoints } from "./geometry";
 import { useEditor } from "./context";
 import { namedPins } from "./readableConnections";
-import { connectionLegend } from "./wiring-legend";
+import { connectionLegend, renameLegendEntry, type LegendEntry } from "./wiring-legend";
 import { ConnectionEndpoint } from "./ConnectionEndpoint";
 import { HintButton } from "./Overlays";
 
@@ -174,28 +174,17 @@ export function ConnectionGuide({
         {legend.length > 0 && (
           <div className="connection-legend">
             {legend.map((entry) => (
-              <span
+              <LegendItem
                 key={entry.label}
-                title={
-                  (entry.names?.length ? entry.names.join(", ") : entry.label) +
-                  " · " +
-                  entry.colors.join(", ")
+                entry={entry}
+                editable={!project.readOnly && entry.label !== "Otras redes"}
+                onRename={(label) =>
+                  project.setMeta(
+                    "wiring.legend",
+                    renameLegendEntry(project.meta.get("wiring.legend"), entry.colors, label),
+                  )
                 }
-              >
-                <span className="connection-tones">
-                  {entry.colors.slice(0, 8).map((color) => (
-                    <i
-                      key={color}
-                      className="connection-swatch"
-                      style={{ background: color }}
-                    />
-                  ))}
-                  {entry.colors.length > 8 && (
-                    <small>+{entry.colors.length - 8}</small>
-                  )}
-                </span>
-                {entry.label}
-              </span>
+              />
             ))}
           </div>
         )}
@@ -204,5 +193,58 @@ export function ConnectionGuide({
         </span>
       </div>
     </aside>
+  );
+}
+
+/** Entrada de la leyenda: un clic la renombra en el sitio (Enter guarda, Esc cancela, vacío = automático). */
+function LegendItem({ entry, editable, onRename }: { entry: LegendEntry; editable: boolean; onRename: (label: string) => void }) {
+  const [editing, setEditing] = useState(false);
+  const tones = (
+    <span className="connection-tones">
+      {entry.colors.slice(0, 8).map((color) => (
+        <i key={color} className="connection-swatch" style={{ background: color }} />
+      ))}
+      {entry.colors.length > 8 && <small>+{entry.colors.length - 8}</small>}
+    </span>
+  );
+  const title = (entry.names?.length ? entry.names.join(", ") : entry.label) + " · " + entry.colors.join(", ");
+  if (editing)
+    return (
+      <span className="legend-item is-editing">
+        {tones}
+        <input
+          autoFocus
+          className="legend-input"
+          aria-label={`Nombre de «${entry.label}» en la leyenda`}
+          defaultValue={entry.label}
+          maxLength={80}
+          size={Math.max(6, entry.label.length + 1)}
+          onFocus={(e) => e.currentTarget.select()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+            if (e.key === "Escape") { e.currentTarget.value = entry.label; e.currentTarget.blur(); }
+            e.stopPropagation();
+          }}
+          onBlur={(e) => {
+            setEditing(false);
+            const next = e.currentTarget.value.trim();
+            if (next !== entry.label) onRename(next);
+          }}
+        />
+      </span>
+    );
+  if (!editable)
+    return (
+      <span className="legend-item" title={title}>
+        {tones}
+        {entry.label}
+      </span>
+    );
+  return (
+    <button type="button" className="legend-item is-editable" title={`${title}
+Clic para renombrar`} onClick={() => setEditing(true)}>
+      {tones}
+      {entry.label}
+    </button>
   );
 }
