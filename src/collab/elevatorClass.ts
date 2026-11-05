@@ -27,7 +27,27 @@ import { Bench, WIRE, SEGMENT_COLORS, type Ref } from './bench';
 import { ELEVATOR_CLASS_GIGA } from './elevatorClassSketch';
 import type { Template } from './templates';
 import { mountedPosition } from '../parts/stack';
-import { ELEVATOR_SIGNAL_COLORS } from './elevatorPalette';
+import { WIRE_COLORS, nearestWireColor } from '../ui/geometry';
+
+const tinker = (label: string) => WIRE_COLORS.find((c) => c.label === label)!.value;
+/** Cada grupo de señales del ascensor con un color de Tinkercad. */
+const GROUP_COLOR: Record<string, string> = {
+  Cabina: 'Azul', Llamadas: 'Amarillo', Destino: 'Morado', 'Piso actual': 'Turquesa', Sensores: 'Verde',
+  Control: 'Rosa', Cuenta: 'Marrón', Relojes: 'Marrón', Reinicio: 'Gris',
+};
+const GROUP_NAMES = [
+  { label: 'Cabina', names: ['PP1', 'PP2', 'PP3', 'PP4'] },
+  { label: 'Llamadas', names: ['LL1', 'LL2', 'LL3', 'LL4'] },
+  { label: 'Destino', names: ['SEL0', 'SEL1', 'SEL2', 'DEST0', 'DEST1', 'DEST2', '/PED1', '/PED2', '/PED3', '/PED4', 'PED2_O_PED3', 'PED3_O_PED1_HABILITADO'] },
+  { label: 'Piso actual', names: ['PISO0', 'PISO1', 'PISO2'] },
+  { label: 'Sensores', names: ['SP1', 'SP2', 'SP3', 'SP4', 'SEN0', 'SEN1', 'SEN2', 'SEN01', '/SEN0', '/SEN1', '/SEN2', '/SEN01', 'SENSOR', '/SENSOR', 'CAPTURA_PISO', 'SEN2_O_SEN3', 'SEN_P4'] },
+  { label: 'Control', names: ['OCUPADO', '/OCUPADO', 'ACEPTAR', '/ACEPTAR', 'MANTENER', 'OCUPADO_SIG', 'VÁLIDO', 'VÁLIDO_SIG', 'SOLICITUD', 'LLEGÓ', '/LLEGÓ', 'SUBIR', 'BAJAR', 'PISO>DEST', 'PISO<DEST', 'DEST=PISO'] },
+  { label: 'Relojes', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ'] },
+  { label: 'Reinicio', names: ['RESET', '/RESET'] },
+];
+const TINKERCAD_SIGNALS: Record<string, string> = Object.fromEntries(
+  GROUP_NAMES.flatMap((g) => g.names.map((n) => [n, tinker(GROUP_COLOR[g.label])])),
+);
 
 /** Pines del GIGA (columna impar del cabezal lateral) y lo que lee cada uno. */
 export const CLASS_GIGA_PINS = {
@@ -339,13 +359,17 @@ export function elevatorClassTemplate(): Template {
     if (NET_NAMES[p.key]) p.props = { ...p.props, nets: NET_NAMES[p.key] };
   }
 
-  cached = r.template({
+  // Colores de Tinkercad (12): uno por función, no un tono por señal.
+  const template = r.template({
     id: 'elevator-class',
     name: 'Ascensor con integrados de clase + GIGA',
     summary: 'Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con dos adaptadores TXS0108E, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.',
     level: 'Avanzado',
     category: 'Lógica secuencial',
     sketch: ELEVATOR_CLASS_GIGA,
-  }, ELEVATOR_SIGNAL_COLORS);
+  }, TINKERCAD_SIGNALS);
+  // 5 V (alimentación principal) en rojo y 3,3 V del GIGA en naranja; lo demás, al color de Tinkercad más cercano.
+  const tone = (c: string) => (c === WIRE.v5 ? tinker('Rojo') : c === WIRE.v33 ? tinker('Naranja') : nearestWireColor(c));
+  cached = { ...template, wires: template.wires.map((w) => ({ ...w, color: tone(w.color) })) };
   return structuredClone(cached);
 }

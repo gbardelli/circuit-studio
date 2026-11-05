@@ -7,6 +7,7 @@ import { useEditor } from "./context";
 import { namedPins } from "./readableConnections";
 import { connectionLegend, renameLegendEntry, type LegendEntry } from "./wiring-legend";
 import { ConnectionEndpoint } from "./ConnectionEndpoint";
+import { WIRE_COLORS } from "./geometry";
 import { HintButton } from "./Overlays";
 
 export function wireNet(w: WireData, nets: Netlist) {
@@ -263,21 +264,29 @@ Clic para ponerle nombre`} onClick={() => setEditing(true)}>
   );
 }
 
-/** Muestra de color que abre el selector nativo; aplica el color al cerrarlo (evento «change»). */
+/** Muestra de color: abre la paleta de 12 colores de Tinkercad y recolorea sus cables al elegir. */
 function ColorSwatch({ color, label, onPick }: { color: string; label: string; onPick: (next: string) => void }) {
-  const input = useRef<HTMLInputElement>(null);
-  const pick = useRef(onPick);
-  pick.current = onPick;
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLSpanElement>(null);
   useEffect(() => {
-    const el = input.current;
-    if (!el) return;
-    const change = () => { if (el.value.toLowerCase() !== color.toLowerCase()) pick.current(el.value); };
-    el.addEventListener("change", change);
-    return () => el.removeEventListener("change", change);
-  }, [color]);
+    if (!open) return;
+    const close = (e: PointerEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", esc);
+    return () => { window.removeEventListener("pointerdown", close); window.removeEventListener("keydown", esc); };
+  }, [open]);
+  const name = WIRE_COLORS.find((c) => c.value.toLowerCase() === color.toLowerCase())?.label ?? color;
   return (
-    <label className="connection-swatch is-picker" style={{ background: color }} title={`Cambiar el color ${color} en todos sus cables`} onClick={(e) => e.stopPropagation()}>
-      <input ref={input} type="color" aria-label={`Color ${color} de «${label}»`} defaultValue={/^#[0-9a-f]{6}$/i.test(color) ? color : "#888888"} />
-    </label>
+    <span ref={box} className="swatch-anchor">
+      <button type="button" className="connection-swatch is-picker" style={{ background: color }} aria-label={`Cambiar el color ${name} de «${label}»`} aria-expanded={open} title={`${name} · clic para cambiar el color de sus cables`} onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }} />
+      {open && (
+        <span className="swatch-palette" role="listbox" aria-label="Colores de cable">
+          {WIRE_COLORS.map((c) => (
+            <button key={c.value} type="button" role="option" aria-selected={c.value.toLowerCase() === color.toLowerCase()} title={c.label} style={{ background: c.value }} onClick={(e) => { e.stopPropagation(); setOpen(false); if (c.value.toLowerCase() !== color.toLowerCase()) onPick(c.value); }} />
+          ))}
+        </span>
+      )}
+    </span>
   );
 }
