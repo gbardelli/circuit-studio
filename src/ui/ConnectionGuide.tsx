@@ -1,5 +1,5 @@
 import { X } from "lucide-react";
-import { useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { pinKey, type Netlist } from "../core/netlist";
 import type { CircuitSnapshot, WireData, Vec } from "../core/types";
 import { wirePoints } from "./geometry";
@@ -175,9 +175,10 @@ export function ConnectionGuide({
           <div className="connection-legend">
             {legend.map((entry) => (
               <LegendItem
-                key={entry.label}
+                key={entry.color}
                 entry={entry}
-                editable={!project.readOnly && entry.label !== "Otras redes"}
+                editable={!project.readOnly}
+                onRecolor={(from, to) => project.recolorWires(from, to)}
                 onRename={(label) =>
                   project.setMeta(
                     "wiring.legend",
@@ -197,17 +198,25 @@ export function ConnectionGuide({
 }
 
 /** Entrada de la leyenda: un clic la renombra en el sitio (Enter guarda, Esc cancela, vacío = automático). */
-function LegendItem({ entry, editable, onRename }: { entry: LegendEntry; editable: boolean; onRename: (label: string) => void }) {
+function LegendItem({ entry, editable, onRename, onRecolor }: { entry: LegendEntry & { count?: number }; editable: boolean; onRename: (label: string) => void; onRecolor: (from: string, to: string) => void }) {
   const [editing, setEditing] = useState(false);
+  // Cada muestra de color es un selector: cambiarla recolorea todos los cables de ese color.
   const tones = (
     <span className="connection-tones">
-      {entry.colors.slice(0, 8).map((color) => (
-        <i key={color} className="connection-swatch" style={{ background: color }} />
-      ))}
+      {entry.colors.slice(0, 8).map((color) =>
+        editable ? (
+          <ColorSwatch key={color} color={color} label={entry.label} onPick={(next) => onRecolor(color, next)} />
+        ) : (
+          <i key={color} className="connection-swatch" style={{ background: color }} />
+        ),
+      )}
       {entry.colors.length > 8 && <small>+{entry.colors.length - 8}</small>}
     </span>
   );
-  const title = (entry.names?.length ? entry.names.join(", ") : entry.label) + " · " + entry.colors.join(", ");
+  const shown = entry.label || "Sin nombre";
+  const count = entry.count ? <small className="legend-count">×{entry.count}</small> : null;
+  const title = `${entry.colors.join(", ")} · ${entry.count ?? 0} cables${entry.names?.length ? `
+Redes: ${entry.names.slice(0, 12).join(", ")}${entry.names.length > 12 ? "…" : ""}` : ""}`;
   if (editing)
     return (
       <span className="legend-item is-editing">
@@ -215,10 +224,11 @@ function LegendItem({ entry, editable, onRename }: { entry: LegendEntry; editabl
         <input
           autoFocus
           className="legend-input"
-          aria-label={`Nombre de «${entry.label}» en la leyenda`}
+          aria-label={`Nombre del color ${entry.color} en la leyenda`}
           defaultValue={entry.label}
+          placeholder="Nombre de este color"
           maxLength={80}
-          size={Math.max(6, entry.label.length + 1)}
+          size={Math.max(14, entry.label.length + 1)}
           onFocus={(e) => e.currentTarget.select()}
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
@@ -237,14 +247,37 @@ function LegendItem({ entry, editable, onRename }: { entry: LegendEntry; editabl
     return (
       <span className="legend-item" title={title}>
         {tones}
-        {entry.label}
+        <span className={entry.label ? undefined : "legend-unnamed"}>{shown}</span>
+        {count}
       </span>
     );
   return (
-    <button type="button" className="legend-item is-editable" title={`${title}
-Clic para renombrar`} onClick={() => setEditing(true)}>
+    <span className="legend-item is-editable-row">
       {tones}
-      {entry.label}
-    </button>
+      <button type="button" className={`legend-name ${entry.label ? "" : "legend-unnamed"}`} title={`${title}
+Clic para ponerle nombre`} onClick={() => setEditing(true)}>
+        {shown}
+      </button>
+      {count}
+    </span>
+  );
+}
+
+/** Muestra de color que abre el selector nativo; aplica el color al cerrarlo (evento «change»). */
+function ColorSwatch({ color, label, onPick }: { color: string; label: string; onPick: (next: string) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const pick = useRef(onPick);
+  pick.current = onPick;
+  useEffect(() => {
+    const el = input.current;
+    if (!el) return;
+    const change = () => { if (el.value.toLowerCase() !== color.toLowerCase()) pick.current(el.value); };
+    el.addEventListener("change", change);
+    return () => el.removeEventListener("change", change);
+  }, [color]);
+  return (
+    <label className="connection-swatch is-picker" style={{ background: color }} title={`Cambiar el color ${color} en todos sus cables`} onClick={(e) => e.stopPropagation()}>
+      <input ref={input} type="color" aria-label={`Color ${color} de «${label}»`} defaultValue={/^#[0-9a-f]{6}$/i.test(color) ? color : "#888888"} />
+    </label>
   );
 }

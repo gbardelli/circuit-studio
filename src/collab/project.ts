@@ -489,6 +489,25 @@ export class Project {
     return id;
   }
 
+  /** Cambia un color de cable por otro en todo el montaje (y en la leyenda), en un solo paso de deshacer. */
+  recolorWires(from: string, to: string) {
+    const a = from.toLowerCase(), b = to.toLowerCase();
+    if (a === b) return;
+    this.tx(() => {
+      this.wires.forEach((m) => {
+        if (!m.get('sch') && String(m.get('color') ?? '').toLowerCase() === a) m.set('color', b);
+      });
+      const legend = this.meta.get('wiring.legend');
+      if (Array.isArray(legend)) {
+        this.meta.set('wiring.legend', legend.map((e: { color?: string; colors?: string[] }) => ({
+          ...e,
+          color: e.color?.toLowerCase() === a ? b : e.color,
+          colors: Array.isArray(e.colors) ? [...new Set(e.colors.map((c) => (c.toLowerCase() === a ? b : c.toLowerCase())))] : e.colors,
+        })));
+      }
+    });
+  }
+
   updateWire(id: string, patch: Partial<Pick<WireData, 'points' | 'color' | 'a' | 'b'>>) {
     this.tx(() => {
       const m = this.wires.get(id);

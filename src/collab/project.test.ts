@@ -166,4 +166,18 @@ describe('historial', () => {
     viewer.restore(Y.encodeStateAsUpdate(other));
     expect(viewer.snapshot().parts).toHaveLength(0);
   });
+
+  it('recolorea todos los cables de un color y su entrada de la leyenda en un solo paso', () => {
+    const p = open();
+    const a = p.addPart('resistor', 0, 0);
+    const end = { part: a, pin: '1', x: 0, y: 0 };
+    const w1 = p.addWire(end, { x: 50, y: 0 }, [], '#AA0000');
+    const w2 = p.addWire(end, { x: 0, y: 50 }, [], '#aa0000');
+    const w3 = p.addWire(end, { x: 50, y: 50 }, [], '#00aa00');
+    p.setMeta('wiring.legend', [{ color: '#aa0000', colors: ['#aa0000'], label: 'Llamadas' }]);
+    p.recolorWires('#aa0000', '#123456');
+    const color = (id: string) => p.snapshot().wires.find((w) => w.id === id)!.color;
+    expect([color(w1), color(w2), color(w3)]).toEqual(['#123456', '#123456', '#00aa00']);
+    expect(p.meta.get('wiring.legend')).toEqual([{ color: '#123456', colors: ['#123456'], label: 'Llamadas' }]);
+  });
 });

@@ -64,27 +64,25 @@ export function renameLegendEntry(raw: unknown, colors: string[], label: string)
     ? [{ color: list[0], colors: list, label: label.trim().slice(0, 80) }, ...rest]
     : rest;
 }
-/** Meaning comes from explicit project labels or actual net connections, never a palette match. */
+/**
+ * Leyenda real del montaje: una entrada por cada color que usan los cables (los más usados primero).
+ * Nada se deduce ni se agrupa: el nombre de cada color lo pone el usuario. Sin nombre, la entrada
+ * queda vacía (label = "") y la interfaz invita a nombrarla. `names` lista las redes que lleva ese
+ * color, solo como ayuda.
+ */
 export function connectionLegend(
   snapshot: CircuitSnapshot,
   nets: Netlist,
   raw: unknown,
-): LegendEntry[] {
-  const custom = configuredLegend(raw),
-    aliases = new Map<number, string[]>(),
-    pins = new Map<number, string[]>();
-  for (const [key, id] of nets.netOf)
-    pins.set(id, [
-      ...(pins.get(id) ?? []),
-      key.slice(key.lastIndexOf(":") + 1),
-    ]);
+): (LegendEntry & { count: number })[] {
+  const saved = configuredLegend(raw),
+    aliases = new Map<number, string[]>();
   for (const part of snapshot.parts)
     for (const [pin, name] of namedPins(part)) {
       const id = nets.netOf.get(pinKey(part.id, pin));
-      if (id !== undefined && name)
-        aliases.set(id, [...(aliases.get(id) ?? []), name]);
+      if (id !== undefined && name) aliases.set(id, [...(aliases.get(id) ?? []), name]);
     }
-  const groups = new Map<string, LegendEntry>();
+  const byColor = new Map<string, LegendEntry & { count: number }>();
   for (const wire of snapshot.wires) {
     if (wire.sch) continue;
     const color = wire.color.toLowerCase();
@@ -94,55 +92,21 @@ export function connectionLegend(
         : wire.b.part && wire.b.pin
           ? nets.netOf.get(pinKey(wire.b.part, wire.b.pin))
           : undefined;
-    const names = [
-        ...new Set(id === undefined ? [] : (aliases.get(id) ?? [])),
-      ].sort(),
-      physical = id === undefined ? [] : (pins.get(id) ?? []);
-    const override = custom.find((entry) => entry.colors.includes(color)),
-      name = names[0];
-    const label =
-      override?.label ??
-      (physical.some((pin) => /^(?:GND(?:\.\d+)?|VSS|-)$/i.test(pin))
-        ? "GND"
-        : physical.some((pin) => /^(?:3V3|5V|VCC|VDD|VIN|\+)$/i.test(pin))
-          ? "Alimentación"
-          : name
-            ? name
-                .replace(/^\/+/, "")
-                .replace(/\d+$/, "")
-                .replace(/_[A-G]$/, "")
-            : "Sin etiqueta");
-    const key = label || name || "Sin etiqueta",
-      entry = groups.get(key);
+    const names = id === undefined ? [] : (aliases.get(id) ?? []);
+    const entry = byColor.get(color);
     if (entry) {
-      if (!entry.colors.includes(color)) entry.colors.push(color);
+      entry.count++;
       entry.names = [...new Set([...(entry.names ?? []), ...names])];
-    } else groups.set(key, { color, colors: [color], label: key, names });
+    } else
+      byColor.set(color, {
+        color,
+        colors: [color],
+        label: saved.find((e) => e.colors.includes(color))?.label ?? "",
+        names: [...new Set(names)],
+        count: 1,
+      });
   }
-  const priority = (entry: LegendEntry) =>
-    custom.some((saved) => saved.label === entry.label)
-      ? 0
-      : entry.label === "Alimentación" || entry.label === "GND"
-        ? 1
-        : 2;
-  const entries = [...groups.values()].sort(
-    (a, b) =>
-      priority(a) - priority(b) ||
-      (b.names?.length ?? 0) - (a.names?.length ?? 0) ||
-      a.label.localeCompare(b.label),
-  );
-  if (entries.length <= 12) return entries;
-  const rest = entries.slice(11),
-    colors = [...new Set(rest.flatMap((entry) => entry.colors))];
-  return [
-    ...entries.slice(0, 11),
-    {
-      color: colors[0],
-      colors,
-      label: "Otras redes",
-      names: rest.flatMap((entry) =>
-        entry.names?.length ? entry.names : [entry.label],
-      ),
-    },
-  ];
+  return [...byColor.values()]
+    .map((e) => ({ ...e, names: (e.names ?? []).sort() }))
+    .sort((a, b) => Number(!a.label) - Number(!b.label) || b.count - a.count || a.color.localeCompare(b.color));
 }

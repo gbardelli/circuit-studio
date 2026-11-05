@@ -61,42 +61,44 @@ describe('ejemplo «Comparador de pisos» del modo diseño', () => {
   });
 });
 
-describe('ejemplo «Ascensor de clase» del modo diseño', () => {
+describe('ejemplo «Ascensor de clase» del modo diseño (mismo circuito que la protoboard)', () => {
+  const SEG = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
   function elevator() {
     const doc = new Y.Doc();
     const design = new DesignDoc(doc.getMap('logic'), (fn) => doc.transact(fn));
     DESIGN_EXAMPLES.find((e) => e.id === 'class-elevator')!.insert(design);
     const main = design.sheet(MAIN_SHEET)!;
     const sim = new LogicSim(main, (id) => design.sheet(id));
-    const node = (label: string) => main.nodes.find((n) => n.props.label === label)!;
-    const segs = main.nodes.filter((n) => n.kind === 'seg7').sort((a, b) => a.y - b.y);
+    const node = (label: string) => main.nodes.find((n) => String(n.props.label ?? '').startsWith(label))!;
+    // Fila 1 (placa 1) lleva el display del piso actual; fila 2 (placa 2), el del destino.
+    const [floorSeg, destSeg] = main.nodes.filter((n) => n.kind === 'seg7').sort((a, b) => a.y - b.y);
     const DIGITS: Record<string, number> = { '1111110': 0, '0110000': 1, '1101101': 2, '1111001': 3, '0110011': 4 };
-    const digit = (seg: (typeof segs)[number]) => {
+    const digit = (seg: typeof floorSeg) => {
       const bits = SEG.map((s) => sim.value(seg.id, s)).join('');
       return bits === '0000000' ? null : (DIGITS[bits] ?? bits);
     };
     const run = (s = 0.3) => sim.advance(s);
     const led = (label: string) => sim.value(node(label).id, 'A');
     const sensor = (f: number) => {
-      for (let i = 1; i <= 4; i++) sim.setSource(node(`SP${i}`).id, 0);
+      for (let i = 1; i <= 4; i++) sim.setSource(node(`SP${i}`).id, 1);
       run(0.05);
-      if (f) sim.setSource(node(`SP${f}`).id, 1);
+      if (f) sim.setSource(node(`SP${f}`).id, 0);
       run(0.1);
     };
     const press = (f: number) => {
-      sim.setSource(node(`PP${f}`).id, 1);
-      run(0.2);
       sim.setSource(node(`PP${f}`).id, 0);
       run(0.2);
+      sim.setSource(node(`PP${f}`).id, 1);
+      run(0.2);
     };
-    return { main, sim, digit, dest: () => digit(segs[0]), floor: () => digit(segs[1]), led, sensor, press, run, node };
+    return { main, sim, dest: () => digit(destSeg), floor: () => digit(floorSeg), led, sensor, press, run, node };
   }
-  const SEG = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 
-  it('usa los integrados de clase', () => {
+  it('tiene los mismos integrados que la protoboard (sin GIGA ni pantalla)', () => {
     const { main } = elevator();
     const chips = main.nodes.filter((n) => n.kind.startsWith('chip:')).map((n) => n.kind.slice(5)).sort();
-    expect(chips).toEqual(['74hc04', '74hc04', '74hc08', '74hc08', '74hc08', '74hc32', '74hc32', '74hc32', '74hc74', '74ls48', '74ls48', '74ls75', '74ls75', '74ls85']);
+    expect(chips).toEqual(['74hc00', '74hc00', '74hc04', '74hc04', '74hc08', '74hc08', '74hc08', '74hc08', '74hc32', '74hc74', '74ls48', '74ls48', '74ls75', '74ls75', '74ls85']);
+    expect(main.nodes.some((n) => n.kind === 'clock')).toBe(true);
   });
 
   it('viaje completo: guarda el destino, sube por los pisos, llega y acepta otro pedido', () => {
@@ -108,9 +110,9 @@ describe('ejemplo «Ascensor de clase» del modo diseño', () => {
     h.press(3);
     expect(h.dest()).toBe(3);
     expect(h.led('OCUPADO')).toBe(1);
-    expect(h.led('LS · SUBIENDO')).toBe(1);
-    h.press(2); // bloqueado en viaje
-    expect(h.dest()).toBe(3);
+    expect(h.led('LS')).toBe(1);
+    h.press(2);
+    expect(h.dest(), 'bloqueado en viaje').toBe(3);
     h.sensor(0);
     expect(h.floor(), 'conserva el piso entre plantas').toBe(1);
     h.sensor(2);
@@ -120,31 +122,19 @@ describe('ejemplo «Ascensor de clase» del modo diseño', () => {
     expect(h.floor()).toBe(3);
     h.run(0.2);
     expect(h.led('OCUPADO')).toBe(0);
-    expect(h.led('PARAR · A = B')).toBe(1);
+    expect(h.led('PARAR')).toBe(1);
     h.press(1);
     expect(h.dest()).toBe(1);
-    expect(h.led('LB · BAJANDO')).toBe(1);
+    expect(h.led('LB')).toBe(1);
   });
 
-  it('pulsadores y sensores con prioridad 4 > 3 > 2 > 1: nunca pasa de 4', () => {
+  it('con varios sensores activos gana el más alto: nunca pasa de 4', () => {
     for (let mask = 1; mask < 16; mask++) {
       const h = elevator();
       h.run(0.3);
-      for (let f = 1; f <= 4; f++) h.sim.setSource(h.node(`SP${f}`).id, (mask >> (f - 1)) & 1 ? 1 : 0);
+      for (let f = 1; f <= 4; f++) h.sim.setSource(h.node(`SP${f}`).id, (mask >> (f - 1)) & 1 ? 0 : 1);
       h.run(0.2);
-      const top = [4, 3, 2, 1].find((f) => mask & (1 << (f - 1)))!;
-      expect(h.floor(), `sensores ${mask.toString(2)}`).toBe(top);
-    }
-    for (let mask = 1; mask < 16; mask++) {
-      const h = elevator();
-      h.run(0.3);
-      const top = [4, 3, 2, 1].find((f) => mask & (1 << (f - 1)))!;
-      h.sensor(top === 1 ? 2 : 1);
-      for (let f = 1; f <= 4; f++) if (mask & (1 << (f - 1))) h.sim.setSource(h.node(`PP${f}`).id, 1);
-      h.run(0.2);
-      for (let f = 1; f <= 4; f++) h.sim.setSource(h.node(`PP${f}`).id, 0);
-      h.run(0.2);
-      expect(h.dest(), `pulsadores ${mask.toString(2)}`).toBe(top);
+      expect(h.floor(), `sensores ${mask.toString(2)}`).toBe([4, 3, 2, 1].find((f) => mask & (1 << (f - 1))));
     }
   });
 });
