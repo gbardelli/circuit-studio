@@ -1347,7 +1347,9 @@ const WireView = memo(function WireView({ wire, points, z, selected, hovered, ed
   const r = 4 / z;
   return (
     <g data-wire={wire.id} className="wire">
-      <path d={d} stroke="transparent" strokeWidth={Math.max(3.3, 12 / z)} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Zona de clic del cable: 12 px de pantalla, pero como mucho 8 unidades del dibujo. Sin tope,
+          con poco zoom tapaba los mandos de las piezas (DIP, pulsadores) que hay junto al cable. */}
+      <path d={d} stroke="transparent" strokeWidth={Math.min(8, Math.max(3.3, 12 / z))} fill="none" strokeLinecap="round" strokeLinejoin="round" />
       <WireShape points={points} color={wire.color} selected={selected} hovered={hovered} />
       {selected && (
         <g>

@@ -57,17 +57,22 @@ let cached: Template | undefined;
 export function elevatorClassTemplate(): Template {
   if (cached) return structuredClone(cached);
   const r = new Bench();
-  const [B1, B2, B3] = ['b1', 'b2', 'b3'];
+  const [B1, B2, B3, B4] = ['b1', 'b2', 'b3', 'b4'];
   r.board(B1, 0, 0, '1 · Pulsadores, prioridad y piso actual');
   r.board(B2, 0, 360, '2 · Control, destino y su display');
   r.board(B3, 0, 720, '3 · Sensores, piso actual y comparación');
-  for (const p of r.parts) if (p.type === 'breadboard-full') p.props = { ...p.props, topVoltage: 5, bottomVoltage: 5 };
-  r.loose('giga', 'arduino-giga', -700, 440, { label: 'Arduino GIGA R1 WiFi · pantalla' });
-  const board = { id: '', type: 'arduino-giga', x: -700, y: 440, rot: 0 as const, props: {} };
+  r.board(B4, 0, 1180, '4 · Interfaz con el GIGA · 2 × TXS0108E');
+  // Placa 4: riel de arriba a 5 V (lado B de los TXS) y riel de abajo a 3,3 V del GIGA (lado A).
+  r.auxiliaryBottomRail = B4;
+  for (const p of r.parts) if (p.type === 'breadboard-full') p.props = { ...p.props, topVoltage: 5, bottomVoltage: p.key === B4 ? 3.3 : 5 };
+  // El GIGA queda junto a la placa 4: sus cables a los TXS son cortos y no cruzan las demás.
+  r.loose('giga', 'arduino-giga', -470, 1190, { label: 'Arduino GIGA R1 WiFi · pantalla' });
+  const board = { id: '', type: 'arduino-giga', x: -470, y: 1190, rot: 0 as const, props: {} };
   const screen = mountedPosition({ id: '', type: 'giga-display-shield', x: 0, y: 0, rot: 0, props: {} }, board);
   r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · estado del ascensor' });
-  r.loose('txs1', 'level-converter-8', -190, 250, { label: 'TXS0108E 1 · destino, OCUPADO y piso' });
-  r.loose('txs2', 'level-converter-8', -190, 600, { label: 'TXS0108E 2 · llamadas y sensores' });
+  // Los módulos se clavan a caballo del canal: fila VB/B1–B8/GND en «d» y fila VA/A1–A8/OE en «g».
+  r.put('txs1', 'level-converter-8', B4, 12, 'd', { label: 'TXS 1 · destino, OCUPADO, piso' });
+  r.put('txs2', 'level-converter-8', B4, 38, 'd', { label: 'TXS 2 · llamadas y sensores' });
 
   const vcc = (ref: Ref) => r.rail(ref, true, WIRE.v5);
   const gnd = (ref: Ref) => r.rail(ref, false);
@@ -77,11 +82,13 @@ export function elevatorClassTemplate(): Template {
   };
 
   // ── Alimentación: fuente de protoboard a 5 V ──────────────────────────────
-  r.chainRails([B1, B2, B3], WIRE.v5);
+  r.chainRails([B1, B2, B3, B4], WIRE.v5);
   r.loose('supply', 'bench-supply', -520, 120, { voltage: 5, current: 1, label: 'Fuente de protoboard · 5 V' });
   r.wire(['supply', '+'], r.railHole(B1, 'tp', 5), WIRE.v5);
   r.wire(['supply', '-'], r.railHole(B1, 'tn', 8), WIRE.gnd);
-  r.wire(['giga', 'GND.2'], r.railHole(B2, 'tn', 8), WIRE.gnd);
+  // GIGA: masa común y su 3V3 al riel de abajo de la placa 4 (lado A de los TXS).
+  r.wire(['giga', 'GND.2'], r.railHole(B4, 'bn', 3), WIRE.gnd);
+  r.wire(['giga', '3V3'], r.railHole(B4, 'bp', 5), WIRE.v33);
 
   // ── Placa 1: pulsadores de cabina, prioridad 4 > 3 > 2 > 1 y display del piso actual ──
   // Cada pulsador: patilla 1 a masa y patilla 2 con pull-up de 10 kΩ al riel. Pulsado = 0.
@@ -143,6 +150,9 @@ export function elevatorClassTemplate(): Template {
 
   r.dip('u5', '74hc74', B2, 15, 'U5 · 74HC74 · OCUPADO y VÁLIDO');
   r.dip('u6', '74hc08', B2, 23, 'U6 · 74HC08 · ACEPTAR, MANTENER, LLEGÓ y LE');
+  // Las salidas TTL del 74LS85 (U12) dan ≈3,4 V en alto y una puerta HC a 5 V pide 3,5 V: cada una
+  // lleva un pull-up de 4,7 kΩ a 5 V, puesto en la entrada HC que la recibe (misma red).
+  r.fromRail('pullEq', B2, 26, 'bp', 4700); // A = B en U6.2A
   r.dip('u7', '74hc32', B2, 31, 'U7 · 74HC32 · próximo estado');
   r.dip('u8', '74ls75', B2, 39, 'U8 · 74LS75 · memoria del destino');
   for (const u of ['u5', 'u6', 'u7', 'u8']) power(u);
@@ -218,13 +228,11 @@ export function elevatorClassTemplate(): Template {
   r.dip('u9', '74hc00', B3, 12, 'U9 · 74HC00 · codificador de sensores y SENSOR');
   r.dip('u10', '74hc04', B3, 20, 'U10 · 74HC04 · codificador y retardo de datos');
   r.dip('u13', '74hc08', B3, 28, 'U13 · 74HC08 · SENSOR, SUBIR y BAJAR');
+  r.fromRail('pullLt', B3, 31, 'bp', 4700); // A < B en U13.2A
+  r.fromRail('pullGt', B3, 29, 'tp', 4700); // A > B en U13.4B
   r.dip('u21', '74hc08', B3, 36, 'U21 · 74HC08 · prioridad de sensores');
   r.dip('u11', '74ls75', B3, 44, 'U11 · 74LS75 · memoria del piso actual');
   r.dip('u12', '74ls85', B3, 53, 'U12 · 74LS85 · comparador');
-  // Salidas TTL del LS85 hacia puertas HC: pull-up de 4,7 kΩ (pines 5–7 → columnas 57–59).
-  r.fromRail('u12Rgt', B3, 57, 'tp', 4700);
-  r.fromRail('u12Req', B3, 58, 'tp', 4700);
-  r.fromRail('u12Rlt', B3, 59, 'tp', 4700);
   for (const u of ['u9', 'u10', 'u13', 'u21', 'u11', 'u12']) power(u);
   // Codificador con prioridad 4 > 3 > 2 > 1, como el de los pulsadores: aunque haya dos sensores
   // activos a la vez el piso nunca pasa de 4. SPn' = sensor n en bajo (activo).
@@ -299,14 +307,13 @@ export function elevatorClassTemplate(): Template {
   // VA (lado A) al 3V3 del GIGA, VB (lado B) a 5 V, OE unido a VA (habilitado) y tierra común.
   // El GIGA solo toca el lado A: nunca ve más de 3,3 V.
   const gigaNets: string[] = [];
-  const level = (id: string, vb: Ref, gndRef: Ref, from?: string) => {
-    r.wire(from ? [from, 'VA'] : ['giga', '3V3'], [id, 'VA'], WIRE.v33);
-    r.wire([id, 'VA'], [id, 'OE'], WIRE.v33);
-    r.wire(vb, [id, 'VB'], WIRE.v5);
-    r.wire(gndRef, [id, 'GND'], WIRE.gnd);
-  };
-  level('txs1', r.railHole(B2, 'tp', 52), r.railHole(B2, 'tn', 50));
-  level('txs2', r.railHole(B3, 'tp', 46), r.railHole(B3, 'tn', 44), 'txs1');
+  // VB al riel de 5 V, GND a masa, VA y OE al riel de 3,3 V (OE alto = canales habilitados).
+  for (const id of ['txs1', 'txs2']) {
+    vcc([id, 'VB']);
+    gnd([id, 'GND']);
+    r.wire([id, 'VA'], r.railHole(B4, 'bp', id === 'txs1' ? 12 : 38), WIRE.v33);
+    r.wire([id, 'OE'], r.railHole(B4, 'bp', id === 'txs1' ? 21 : 47), WIRE.v33);
+  }
   // TXS0108E 1: B1–B3 destino, B4 OCUPADO, B5–B7 piso actual (B8 libre). Entradas del GIGA.
   const read = (ch: number, pin: string, source: Ref, name: string) => {
     gigaNets.push(`${pin}=${name}`);

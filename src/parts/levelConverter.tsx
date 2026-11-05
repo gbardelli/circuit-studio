@@ -49,15 +49,16 @@ const TXS_BOTTOM = ['VA', ...Array.from({ length: 8 }, (_, i) => `A${i + 1}`), '
 const TXS_ROW = 50;
 const TxsRender = memo(function TxsRender({ part }: RenderProps) {
   return <g>
-    <text x={45} y={-14} fontSize={9} fontWeight={550} textAnchor="middle" fill="#dce2e8" stroke="#101215" strokeWidth={3} paintOrder="stroke">{String(part.props.label ?? 'TXS0108E')}</text>
     <rect x={-6} y={-6} width={102} height={TXS_ROW + 12} rx={3} fill="#1d4fa8" stroke="#6f9be6" strokeWidth={.6}/>
     {[TXS_TOP, TXS_BOTTOM].map((row, r) => row.map((id, i) => <g key={id}>
       <circle cx={i * 10} cy={r * TXS_ROW} r={3} fill="#c4a664"/><circle cx={i * 10} cy={r * TXS_ROW} r={1.4} fill="#161719"/>
       <text x={i * 10} y={r ? TXS_ROW - 6 : 9} fontSize={3.2} textAnchor="middle" fill="#e8eef9">{id}</text>
     </g>))}
-    <rect x={33} y={18} width={24} height={14} rx={1} fill="#16181b"/>
-    <text x={45} y={27} fontSize={3.4} textAnchor="middle" fill="#9aa1a8">TXS0108E</text>
-    <text x={45} y={39} fontSize={3} textAnchor="middle" fill="#cfe0ff">A 3V3 ↔ B 5V</text>
+    {/* El nombre va sobre la placa: encajada en la protoboard, fuera taparía los agujeros de los cables. */}
+    <text x={45} y={17} fontSize={4.6} fontWeight={600} textAnchor="middle" fill="#ffffff">{String(part.props.label ?? 'TXS0108E')}</text>
+    <rect x={35} y={21} width={20} height={10} rx={1} fill="#16181b"/>
+    <text x={45} y={27.6} fontSize={3} textAnchor="middle" fill="#9aa1a8">TXS0108E</text>
+    <text x={45} y={38} fontSize={3.6} textAnchor="middle" fill="#cfe0ff">A · 3,3 V (GIGA)   ↔   B · 5 V (CI)</text>
   </g>;
 });
 const TXS_DESC: Record<string, string> = {
@@ -71,8 +72,9 @@ export const levelConverter8: PartDef = {
   description: 'Módulo TXS0108E (HW-221). Ocho canales bidireccionales: A1–A8 al lado bajo (VA, 3,3 V) y B1–B8 al lado alto (VB, 5 V). OE debe ir a VA para habilitarlo. Tierra común.',
   keywords: ['txs0108e', 'txs0108', 'hw-221', 'level shifter', '8 canales', '3.3v', '5v', 'adaptador'], defaults: {},
   pins: () => [
-    ...TXS_TOP.map((id, i) => ({ id, x: i * 10, y: 0, kind: 'socket' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado B (5 V)` })),
-    ...TXS_BOTTOM.map((id, i) => ({ id, x: i * 10, y: TXS_ROW, kind: 'socket' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado A (3,3 V)` })),
+    // Patillas macho: el módulo se clava en la protoboard a caballo del canal (filas d y g).
+    ...TXS_TOP.map((id, i) => ({ id, x: i * 10, y: 0, kind: 'leg' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado B (5 V)` })),
+    ...TXS_BOTTOM.map((id, i) => ({ id, x: i * 10, y: TXS_ROW, kind: 'leg' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado A (3,3 V)` })),
   ],
   bounds: () => ({ x: -7, y: -7, w: 104, h: TXS_ROW + 14 }), reference: 'GND', model: 'SPICE', thumbScale: 0.9,
   sim(ctx) {

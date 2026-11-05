@@ -4,6 +4,8 @@ import { templateSnapshot } from '../collab/applyTemplate';
 import { compileSketch } from '../../server/compile';
 import { ELEVATOR_CLASS_GIGA } from '../collab/elevatorClassSketch';
 import { SimEngine } from './engine';
+import { buildNetlist, pinKey } from '../core/netlist';
+import { PARTS } from '../parts';
 import { findTemplate } from '../collab/applyTemplate';
 import { TEMPLATES } from '../collab/templates';
 
@@ -49,7 +51,16 @@ describe('ascensor de clase (LS75 / LS85 / LS48 + HC, 5 V)', () => {
   it('se arma y todo converge', () => {
     const h = fixture();
     h.tick();
-    expect(h.snapshot.parts.filter((p) => p.type === 'breadboard-full')).toHaveLength(3);
+    expect(h.snapshot.parts.filter((p) => p.type === 'breadboard-full')).toHaveLength(4);
+    // Los dos TXS0108E van encajados en la placa 4, no sueltos: cada patilla cae en un agujero.
+    const nets = buildNetlist(h.snapshot, PARTS);
+    for (const id of ['txs1', 'txs2']) for (const pin of ['VA', 'VB', 'GND', 'OE', 'A1', 'B8']) expect(nets.inserted.has(pinKey(id, pin)), `${id}.${pin}`).toBe(true);
+    // Pull-up de 4,7 kΩ en cada salida del LS85 (y en ninguna de sus entradas).
+    const netOf = (part: string, pin: string) => nets.netOf.get(pinKey(part, pin));
+    const pulled = new Set(h.snapshot.parts.filter((p) => p.type === 'resistor' && p.props.resistance === 4700).flatMap((p) => ['1', '2'].map((pin) => netOf(p.id, pin))));
+    for (const pin of ['OAGTB', 'OAEQB', 'OALTB']) expect(pulled.has(netOf('u12', pin)), pin).toBe(true);
+    for (const pin of ['A0', 'A1', 'B0', 'B1', 'B2']) expect(pulled.has(netOf('u12', pin)), pin).toBe(false);
+    for (const pin of ['OAGTB', 'OAEQB', 'OALTB']) if (h.bit('u12', pin)) expect(h.engine.voltageAt('u12', pin)!, pin).toBeGreaterThan(3.5);
     h.engine.stop();
   });
   it('el display del piso actual sigue a los sensores y conserva el piso al soltarlos', () => {

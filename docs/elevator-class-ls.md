@@ -29,7 +29,7 @@ Lo que **no** hace falta: 74LS173, 74LS193 ni 74HC86; tampoco hay display de cue
 | --- | --- | --- |
 | 4 | 1 kΩ | LS, LB, PARAR y OCUPADO (≈3 mA por LED) |
 | 9 | 10 kΩ | pull-up de PP1–PP4, RESET y SP1–SP4 |
-| 3 | 4,7 kΩ | pull-up de las salidas del LS85 que entran en puertas HC |
+| 3 | 4,7 kΩ | pull-up de las salidas A>B, A=B, A<B del LS85 (patillas 5–7), puestas en la entrada HC que reciben |
 | 1 + 1 | 1 kΩ + 33 kΩ, 1 µF | reloj del NE555 (f = 1,44 / ((R1 + 2·R2)·C)) |
 
 Los 74LS48 llevan resistencias internas de 2 kΩ a VCC en sus salidas: cada segmento queda limitado
@@ -43,7 +43,11 @@ Las 220 Ω del kit quedan de repuesto.
   (74LS85, 74LS48) y a los adaptadores, que aceptan 3,4 V.
 - Las salidas HC (5 V) hacia entradas LS no necesitan nada.
 
-## GIGA y adaptadores de nivel (2 × TXS0108E)
+## GIGA y adaptadores de nivel (2 × TXS0108E, protoboard 4)
+
+Los dos módulos van **encajados en la protoboard 4**, a caballo del canal (fila VB/B1–B8/GND en «d»,
+fila VA/A1–A8/OE en «g»). En esa placa el riel de arriba es de 5 V (lado B) y el de abajo de 3,3 V,
+alimentado desde el pin 3V3 del GIGA (lado A). El GIGA queda a la izquierda de la placa 4.
 
 Cada módulo TXS0108E (placa HW-221) tiene 8 canales bidireccionales: **A1–A8** en el lado bajo
 (**VA**, 1,2–3,6 V) y **B1–B8** en el lado alto (**VB**, 1,65–5,5 V), con VA ≤ VB.
