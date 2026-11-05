@@ -30,7 +30,7 @@ export function electricalReview(snapshot: CircuitSnapshot, volts: Record<string
     const add = (row: Omit<ElectricalMeasurement, 'part' | 'label'>) => rows.push({ part: part.id, label, ...row });
     if (part.type === '74hc48') pending.add('74HC48: referencia y fabricante por confirmar. El modelo de 3,3 V no certifica un 74LS48 real.');
     if (/^74ls/.test(part.type)) pending.add('Modelos funcionales 74LS: los consumos internos y las corrientes de entrada TTL no se reproducen por completo. Contrastar ICC, fan-out y corriente garantizada de salida con los datasheets antes de validar el montaje físico.');
-    if (part.type === 'ne555' && props.partNumber === 'TLC555') pending.add('Confirmar TLC555 CMOS en los dos relojes. Un NE555 bipolar no queda validado para 3,3 V por cambiar su etiqueta.');
+    if (part.type === 'tlc555') pending.add('Confirmar que los relojes son CMOS (TLC555, LMC555 o ICM7555). Un NE555 bipolar no oscila a 3,3 V.');
     if (part.type === 'pushbutton') pending.add('El rebote mecánico y los retardos reales de propagación no están modelados. Verificar antirrebote y captura de llamadas con el hardware real.');
     if (def.mcu) pending.add('El consumo interno de la placa y de sus shields, los picos de arranque y la temperatura no están modelados.');
     if (part.type === 'resistor' && finite(v('1')) && finite(v('2'))) {

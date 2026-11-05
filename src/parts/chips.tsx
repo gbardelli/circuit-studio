@@ -997,14 +997,15 @@ const l293d: ChipSpec<Record<string, never>> = {
 // ── 555 ─────────────────────────────────────────────────────────────────────────
 // Divisor interno de 3 × 5 kΩ, dos comparadores y un biestable. El temporizador pide pasos
 // de 20 µs mientras está alimentado para seguir la carga del condensador externo.
-const ne555Def: PartDef = (() => {
+interface Timer555Variant { type: string; part: string; name: string; description: string; keywords: string[]; vccDesc: string; minSupply: number }
+const timer555 = (variant: Timer555Variant): PartDef => {
   const spec: ChipSpec<Record<string, never>> = {
-    type: 'ne555',
-    part: 'NE555',
-    name: 'Temporizador 555',
+    type: variant.type,
+    part: variant.part,
+    name: variant.name,
     family: DRIVERS,
-    description: 'El temporizador más popular: genera pulsos (monoestable) u oscila solo (astable) con dos resistencias y un condensador.',
-    keywords: ['555', 'timer', 'temporizador', 'oscilador', 'astable', 'monoestable', 'reloj', 'parpadeo', 'pwm', 'lm555'],
+    description: variant.description,
+    keywords: variant.keywords,
     pins: ['GND', 'TRIG', 'OUT', 'RESET', 'CTRL', 'THR', 'DIS', 'VCC'],
     desc: {
       GND: 'Tierra',
@@ -1014,7 +1015,7 @@ const ne555Def: PartDef = (() => {
       CTRL: 'Tensión de control (2/3 de VCC). Normalmente a GND con 10 nF',
       THR: 'Umbral: si supera 2/3 de VCC, la salida baja',
       DIS: 'Descarga: se conecta a tierra cuando la salida está baja',
-      VCC: 'Alimentación (4,5–16 V)',
+      VCC: variant.vccDesc,
     },
     vcc: 'VCC',
     gnd: 'GND',
@@ -1064,7 +1065,7 @@ const ne555Def: PartDef = (() => {
           sample(v: Float64Array, dt: number) {
             t += dt;
             const ref = at(v, gnd);
-            const on = at(v, vcc) - ref > 3;
+            const on = at(v, vcc) - ref > variant.minSupply;
             if (on !== powered) {
               powered = on;
               dirty = true;
@@ -1100,7 +1101,21 @@ const ne555Def: PartDef = (() => {
       };
     },
   };
-})();
+};
+const ne555Def = timer555({
+  type: 'ne555', part: 'NE555', name: 'Temporizador 555',
+  description: 'El temporizador más popular: genera pulsos (monoestable) u oscila solo (astable) con dos resistencias y un condensador.',
+  keywords: ['555', 'timer', 'temporizador', 'oscilador', 'astable', 'monoestable', 'reloj', 'parpadeo', 'pwm', 'lm555'],
+  vccDesc: 'Alimentación (4,5–16 V)', minSupply: 3,
+});
+// Versión CMOS (TLC555, LMC555, ICM7555): mismo patillaje y mismas fórmulas, pero oscila desde ~2 V,
+// así que sirve con 3,3 V. Un NE555 bipolar no.
+const tlc555Def = timer555({
+  type: 'tlc555', part: 'TLC555', name: 'Temporizador 555 CMOS',
+  description: 'Temporizador 555 CMOS (TLC555, LMC555 o ICM7555). Mismo patillaje y mismas fórmulas que el NE555, pero funciona desde 2 V: úsalo con 3,3 V.',
+  keywords: ['555', 'tlc555', 'lmc555', 'icm7555', 'cmos', 'timer', 'temporizador', 'oscilador', 'astable', 'monoestable', 'reloj', '3,3 v'],
+  vccDesc: 'Alimentación (2–15 V; 3,3 V en el ascensor)', minSupply: 2,
+});
 
 // ── Catálogo ────────────────────────────────────────────────────────────────────
 // Legacy packages in the course diagrams. TTL thresholds do not apply to HC parts.
@@ -1275,6 +1290,7 @@ export const CHIPS: PartDef[] = [
   chipDef(uln2003),
   chipDef(l293d),
   ne555Def,
+  tlc555Def,
 ];
 
 export type { Props };

@@ -28,7 +28,7 @@ export function assemblyEndLabel(end:WireEnd,snapshot:CircuitSnapshot) {
   return part ? `${partTitle(part)} · ${part.type.startsWith('breadboard')?holeLabel(end.pin??'?'):end.pin??'?'}` : 'Extremo libre';
 }
 export function orientationText(part:PartData) {
-  if(/^(74hc|74ls|cd4|ne555|attiny)/.test(part.type)) return `Muesca hacia ${({0:'la izquierda',90:'arriba',180:'la derecha',270:'abajo'} as const)[part.rot]}.`;
+  if(/^(74hc|74ls|cd4|ne555|tlc555|attiny)/.test(part.type)) return `Muesca hacia ${({0:'la izquierda',90:'arriba',180:'la derecha',270:'abajo'} as const)[part.rot]}.`;
   if(part.type==='led') return 'Respeta el ánodo A y el cátodo K; la pata larga es el ánodo.';
   if(part.type==='capacitor') return 'Respeta los terminales + y − indicados en la pieza.';
   if(part.type.startsWith('breadboard')) return 'Coloca los rieles y las letras de las filas en la orientación indicada.';
@@ -46,7 +46,7 @@ export function buildAssemblyPlan(snapshot:CircuitSnapshot):AssemblyPlan {
     placements.set(id,[...(placements.get(id)??[]),{pin,board,hole}]);
     if(!parents.has(id))parents.set(id,new Set());parents.get(id)!.add(board);
   }
-  const rank=(p:PartData)=>p.type.startsWith('breadboard')?0:PARTS[p.type]?.mcu||PARTS[p.type]?.category==='Energía'?1:/^(74hc|74ls|cd4|ne555)/.test(p.type)?2:3;
+  const rank=(p:PartData)=>p.type.startsWith('breadboard')?0:PARTS[p.type]?.mcu||PARTS[p.type]?.category==='Energía'?1:/^(74hc|74ls|cd4|ne555|tlc555)/.test(p.type)?2:3;
   const stage=(p:PartData)=>{
     const board=[...(parents.get(p.id)??[])].map(id=>byId.get(id)!).find(b=>b.type.startsWith('breadboard'));
     return board?snapshot.parts.indexOf(board):snapshot.parts.indexOf(p);

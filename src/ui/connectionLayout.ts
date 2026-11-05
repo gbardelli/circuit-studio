@@ -109,7 +109,7 @@ export class OrthogonalRouter {
     this.boxes = parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
       const b = partBounds(p);
       if (!this.spaced) return b;
-      if (/^(74hc|cd4|ne555)/.test(p.type)) return { x:b.x+3, y:b.y+5, w:b.w-6, h:b.h-10 };
+      if (/^(74hc|cd4|ne555|tlc555)/.test(p.type)) return { x:b.x+3, y:b.y+5, w:b.w-6, h:b.h-10 };
       if (p.type === 'resistor') return p.rot === 90 || p.rot === 270 ? {x:b.x+1,y:b.y+9,w:b.w-2,h:b.h-18} : {x:b.x+9,y:b.y+1,w:b.w-18,h:b.h-2};
       if (p.type === 'led' || p.type === 'capacitor') return { ...b, h:b.h-9 };
       return b;

@@ -6,7 +6,7 @@ import type { RouteObstacle } from '../core/wireRouting';
 export function componentBodies(parts: readonly PartData[]): RouteObstacle[] {
   const bodies = parts.filter(p => !p.type.startsWith('breadboard')).map(p => {
     let b = PARTS[p.type].bounds(p.props);
-    if (/^(74|cd4|ne555)/.test(p.type)) b = { x: b.x + 1, y: 3, w: b.w - 2, h: 24 };
+    if (/^(74|cd4|ne555|tlc555)/.test(p.type)) b = { x: b.x + 1, y: 3, w: b.w - 2, h: 24 };
     else if (p.type === 'resistor') b = { x: 9, y: -6, w: 22, h: 12 };
     else if (p.type === 'pushbutton') b = { x: 0, y: 4, w: 20, h: 22 };
     else if (p.type === 'led' || p.type === 'capacitor') b = { ...b, h: b.h - 10 };

@@ -37,7 +37,7 @@ export function resistorBands(ohms: number) {
 
 /** Indicaciones de orientación con contenido real; el texto genérico no aporta en la tarjeta. */
 function orientationTip(part: PartData) {
-  return /^(74hc|74ls|cd4|ne555|attiny|led|capacitor|breadboard)/.test(part.type) ? orientationText(part) : null;
+  return /^(74hc|74ls|cd4|ne555|tlc555|attiny|led|capacitor|breadboard)/.test(part.type) ? orientationText(part) : null;
 }
 
 /** Con muchas patillas basta la primera y la última para fijar la posición; el resto se despliega. */

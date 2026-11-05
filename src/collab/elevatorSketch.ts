@@ -14,7 +14,7 @@ export const ELEVATOR_GIGA = `// Ascensor de 4 pisos · interfaz e innovación c
 //  3. Pantalla de 800 x 480: hueco con la cabina, piso actual, destino, tiempo TOTAL del viaje
 //     y sentido. El LED RGB de la shield repite el estado: verde sube, rojo baja, azul puertas.
 //
-// GIGA a 3,3 V y lógica LS a 5 V, unidos por adaptadores BSS138.
+// GIGA y lógica a 3,3 V: los pines van directos a los CI, sin adaptadores de nivel.
 // Llamadas y sensores en drenador abierto: INPUT suelta la línea (la sube el
 // pull-up de 10 kOhm) y OUTPUT LOW la pone a 0, igual que el pulsador que tiene al lado.
 // La shield va montada detrás del GIGA: no usa ningún pin de los cabezales D0-D53.
