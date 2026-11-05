@@ -5,7 +5,7 @@ import { Project } from '../collab/project';
 import { withStacks } from '../parts/stack';
 import { PARTS } from '../parts';
 import { schematicPlacement, withFrozenPlacement } from './schematic';
-import { applyTemplate, findTemplate } from '../collab/applyTemplate';
+import { applyTemplate, findTemplate, templateUpdate } from '../collab/applyTemplate';
 import { SimClient } from '../sim/client';
 import { Canvas, isTyping } from './Canvas';
 import { EditorContext, useEditor, useSnapshot, type EditorCtx } from './context';
@@ -29,6 +29,7 @@ export function Editor({ room, template }: { room: string; template: string | nu
   const [ctx, setCtx] = useState<EditorCtx | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [replacing, setReplacing] = useState<{ name: string; readOnly: boolean; run: () => void } | null>(null);
+  const [update, setUpdate] = useState<{ name: string; run: () => void } | null>(null);
   useStartupTask('project', !ctx && !error);
   // El proyecto (WebSocket + IndexedDB) nace y muere con el efecto: seguro ante StrictMode y recarga en caliente.
   useEffect(() => {
@@ -73,7 +74,18 @@ export function Editor({ room, template }: { room: string; template: string | nu
         project.undo.clear();
       }
       if (template) history.replaceState(null, '', `?p=${room}`);
+      if (!wantsReplace) setTimeout(checkUpdate, 600);
     };
+    // Circuito hecho con una plantilla que luego cambió: se ofrece actualizarlo (sin enlaces).
+    // Se comprueba cuando ya llegaron las piezas (del servidor o de la copia local).
+    let offered = false;
+    const checkUpdate = () => {
+      if (offered || project.readOnly || project.parts.size === 0 || window.top !== window.self) return;
+      const newer = templateUpdate(project.meta, project.name);
+      offered = true;
+      if (newer) setUpdate({ name: newer.name, run: () => replaceWith(project, newer) });
+    };
+    project.persistence.once('synced', () => setTimeout(checkUpdate, 600));
     if (project.provider) {
       project.provider.on('sync', seed);
       // Servidor caído: se siembra igualmente tras cargar la copia local.
@@ -108,6 +120,14 @@ export function Editor({ room, template }: { room: string; template: string | nu
   return (
     <EditorContext.Provider value={ctx}>
       <EditorShell />
+      {update && (
+        <div role="status" className="template-update">
+          <strong>Hay una versión nueva de «{update.name}».</strong>
+          <span>Actualizar cambia todo el montaje por el nuevo; la versión actual queda en Historial.</span>
+          <button className="btn primary" onClick={() => { update.run(); setUpdate(null); }}>Actualizar</button>
+          <button className="btn" onClick={() => setUpdate(null)}>Ahora no</button>
+        </div>
+      )}
       {replacing && (
         <div className="splash" role="dialog" aria-modal="true" aria-label="Reemplazar circuito" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.55)' }}>
           <div className="gate">

@@ -259,3 +259,16 @@ describe('ascensor de clase (LS75 / LS85 / LS48 + HC, 5 V)', () => {
     expect(JSON.parse(JSON.stringify(hidden))).toEqual(JSON.parse(JSON.stringify(elevatorClassTemplate())));
   });
 });
+
+describe('aviso de versión nueva de la plantilla', () => {
+  it('se ofrece en circuitos viejos del ascensor y desaparece al actualizar', async () => {
+    const { templateUpdate, templateVersion } = await import('../collab/applyTemplate');
+    const meta = new Map<string, unknown>();
+    expect(templateUpdate(meta, 'Ascensor con integrados de clase + GIGA (pantalla)')?.id).toBe('elevator-class');
+    expect(templateUpdate(meta, 'Mi circuito')).toBe(null);
+    meta.set('template', { id: 'elevator-class', version: 'vieja' });
+    expect(templateUpdate(meta, 'Mi circuito')?.id).toBe('elevator-class');
+    meta.set('template', { id: 'elevator-class', version: templateVersion(findTemplate('elevator-class')!) });
+    expect(templateUpdate(meta, 'Ascensor con integrados de clase + GIGA')).toBe(null);
+  });
+});

@@ -588,3 +588,7 @@
 .connection-legend .legend-item.is-editable:hover { border-color: #3a414b; background: #1a1e23; color: #eef2f7; }
 .connection-legend .legend-item.is-editable:focus-visible { outline: 2px solid var(--accent, #6aa7ff); outline-offset: 1px; }
 .connection-legend .legend-input { font: inherit; font-size: 13px; color: #eef2f7; background: #12151a; border: 1px solid var(--accent, #6aa7ff); border-radius: 5px; padding: 1px 6px; min-width: 6ch; }
+
+/* Aviso de plantilla actualizada: barra fija arriba, sin tapar el lienzo. */
+.template-update { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 900; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; max-width: min(760px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 10px; background: #14233a; border: 1px solid #3f6fb5; color: #e8f0fb; box-shadow: 0 8px 24px rgba(0,0,0,.4); font-size: 13px; }
+.template-update span { color: #b8c7dc; }
