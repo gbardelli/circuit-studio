@@ -2,8 +2,8 @@
 //
 // Lógica a 5 V con: 74LS75 ×2 (memoria del destino y del piso actual), 74LS85 (comparador),
 // 74LS48 ×2 (displays) y compuertas 74HC (00, 04, 08, 32) más un 74HC74 (OCUPADO / VÁLIDO) y un
-// NE555 de reloj. El GIGA (3,3 V) no decide nada: por cuatro adaptadores BOB-12009 (LV = 3V3 del
-// GIGA, HV = 5 V) lee destino, piso actual y OCUPADO, pulsa las líneas de llamada desde su pantalla
+// NE555 de reloj. El GIGA (3,3 V) no decide nada: por dos adaptadores TXS0108E de 8 canales (VA = 3V3
+// del GIGA, VB = 5 V, OE = VA) lee destino, piso actual y OCUPADO, pulsa las líneas de llamada desde su pantalla
 // táctil y, en modo AUTO, mueve la cabina activando los sensores de planta (3 s por piso).
 //
 //   1 · Pulsadores y prioridad    PP1–PP4 · U20 74HC08 · U2 74HC00 · U3 74HC04 · U19 74LS48 + display (piso actual)
@@ -66,10 +66,8 @@ export function elevatorClassTemplate(): Template {
   const board = { id: '', type: 'arduino-giga', x: -700, y: 440, rot: 0 as const, props: {} };
   const screen = mountedPosition({ id: '', type: 'giga-display-shield', x: 0, y: 0, rot: 0, props: {} }, board);
   r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · estado del ascensor' });
-  r.loose('conv1', 'level-converter-4', -220, 330, { label: 'Adaptador 1 · destino y OCUPADO' });
-  r.loose('conv2', 'level-converter-4', -220, 470, { label: 'Adaptador 2 · piso actual' });
-  r.loose('conv3', 'level-converter-4', -220, 190, { label: 'Adaptador 3 · llamadas táctiles' });
-  r.loose('conv4', 'level-converter-4', -220, 610, { label: 'Adaptador 4 · sensores (motor)' });
+  r.loose('txs1', 'level-converter-8', -190, 250, { label: 'TXS0108E 1 · destino, OCUPADO y piso' });
+  r.loose('txs2', 'level-converter-8', -190, 600, { label: 'TXS0108E 2 · llamadas y sensores' });
 
   const vcc = (ref: Ref) => r.rail(ref, true, WIRE.v5);
   const gnd = (ref: Ref) => r.rail(ref, false);
@@ -297,38 +295,37 @@ export function elevatorClassTemplate(): Template {
   vcc(['busyR', '2']);
   r.wire(['u5', '1QN'], ['busy', 'K'], WIRE.control);
 
-  // ── GIGA: solo lee, a través de dos adaptadores BOB-12009 ────────────────────
-  // LV a 3V3 del GIGA y HV a 5 V; el GIGA nunca ve más de 3,3 V.
+  // ── GIGA: dos adaptadores TXS0108E (8 canales cada uno) ─────────────────────
+  // VA (lado A) al 3V3 del GIGA, VB (lado B) a 5 V, OE unido a VA (habilitado) y tierra común.
+  // El GIGA solo toca el lado A: nunca ve más de 3,3 V.
   const gigaNets: string[] = [];
-  // El 3V3 y la masa del GIGA llegan al adaptador 1; los demás los toman del adaptador vecino.
-  const level = (id: string, hv: Ref, gndRef: Ref, from?: string) => {
-    r.wire(from ? [from, 'LV'] : ['giga', '3V3'], [id, 'LV'], WIRE.v33);
-    r.wire(hv, [id, 'HV'], WIRE.v5);
-    r.wire(from ? [from, 'GND.L'] : ['giga', 'GND.1'], [id, 'GND.L'], WIRE.gnd);
-    r.wire(gndRef, [id, 'GND.H'], WIRE.gnd);
+  const level = (id: string, vb: Ref, gndRef: Ref, from?: string) => {
+    r.wire(from ? [from, 'VA'] : ['giga', '3V3'], [id, 'VA'], WIRE.v33);
+    r.wire([id, 'VA'], [id, 'OE'], WIRE.v33);
+    r.wire(vb, [id, 'VB'], WIRE.v5);
+    r.wire(gndRef, [id, 'GND'], WIRE.gnd);
   };
-  level('conv1', r.railHole(B2, 'tp', 52), r.railHole(B2, 'tn', 50));
-  level('conv2', r.railHole(B3, 'tp', 46), r.railHole(B3, 'tn', 44), 'conv1');
-  const read = (conv: string, ch: number, pin: string, source: Ref, name: string) => {
+  level('txs1', r.railHole(B2, 'tp', 52), r.railHole(B2, 'tn', 50));
+  level('txs2', r.railHole(B3, 'tp', 46), r.railHole(B3, 'tn', 44), 'txs1');
+  // TXS0108E 1: B1–B3 destino, B4 OCUPADO, B5–B7 piso actual (B8 libre). Entradas del GIGA.
+  const read = (ch: number, pin: string, source: Ref, name: string) => {
     gigaNets.push(`${pin}=${name}`);
-    r.wire(source, [conv, `H${ch}`], WIRE.monitor);
-    r.wire([conv, `L${ch}`], ['giga', pin], WIRE.monitor);
+    r.wire(source, ['txs1', `B${ch}`], WIRE.monitor);
+    r.wire(['txs1', `A${ch}`], ['giga', pin], WIRE.monitor);
   };
-  CLASS_GIGA_PINS.dest.forEach((pin, bit) => read('conv1', bit + 1, pin, ['u8', `${bit + 1}Q`], `DEST${bit}`));
-  read('conv1', 4, CLASS_GIGA_PINS.busy, ['u5', '1Q'], 'OCUPADO');
-  CLASS_GIGA_PINS.floor.forEach((pin, bit) => read('conv2', bit + 1, pin, ['u11', `${bit + 1}Q`], `PISO${bit}`));
-  // Llamadas táctiles y sensores que mueve el GIGA: drenador abierto a través del adaptador.
-  // El GIGA pone su pin a 0 (OUTPUT LOW) y el lado de 5 V baja igual que un pulsador; con INPUT lo suelta.
-  level('conv3', r.railHole(B1, 'tp', 47), r.railHole(B1, 'tn', 45), 'conv1');
-  level('conv4', r.railHole(B3, 'tp', 40), r.railHole(B3, 'tn', 38), 'conv2');
-  const drive = (conv: string, ch: number, pin: string, target: Ref, name: string, color: string) => {
+  CLASS_GIGA_PINS.dest.forEach((pin, bit) => read(bit + 1, pin, ['u8', `${bit + 1}Q`], `DEST${bit}`));
+  read(4, CLASS_GIGA_PINS.busy, ['u5', '1Q'], 'OCUPADO');
+  CLASS_GIGA_PINS.floor.forEach((pin, bit) => read(bit + 5, pin, ['u11', `${bit + 1}Q`], `PISO${bit}`));
+  // TXS0108E 2: B1–B4 llamadas táctiles (en paralelo con PP1–PP4), B5–B8 sensores (en paralelo con el DIP).
+  // Drenador abierto: el GIGA pone su pin a 0 (OUTPUT LOW) y el lado de 5 V baja igual que un pulsador; con INPUT lo suelta.
+  const drive = (ch: number, pin: string, target: Ref, name: string, color: string) => {
     gigaNets.push(`${pin}=${name}`);
-    r.wire(['giga', pin], [conv, `L${ch}`], color);
-    r.wire([conv, `H${ch}`], target, color);
+    r.wire(['giga', pin], ['txs2', `A${ch}`], color);
+    r.wire(['txs2', `B${ch}`], target, color);
   };
-  CLASS_GIGA_PINS.call.forEach((pin, i) => drive('conv3', i + 1, pin, pp(i + 1), `LL${i + 1}`, WIRE.call));
+  CLASS_GIGA_PINS.call.forEach((pin, i) => drive(i + 1, pin, pp(i + 1), `LL${i + 1}`, WIRE.call));
   const sensorTaps: Ref[] = [['u10', '1A'], ['u21', '1B'], ['u13', '3A'], ['u21', '3B']];
-  CLASS_GIGA_PINS.sensor.forEach((pin, i) => drive('conv4', i + 1, pin, sensorTaps[i], `SP${i + 1}`, WIRE.sensor));
+  CLASS_GIGA_PINS.sensor.forEach((pin, i) => drive(i + 5, pin, sensorTaps[i], `SP${i + 1}`, WIRE.sensor));
 
   for (const p of r.parts) {
     if (p.key === 'giga') p.props = { ...p.props, nets: gigaNets.join(';') };
@@ -338,7 +335,7 @@ export function elevatorClassTemplate(): Template {
   cached = r.template({
     id: 'elevator-class',
     name: 'Ascensor con integrados de clase + GIGA',
-    summary: 'Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con cuatro adaptadores de nivel, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.',
+    summary: 'Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con dos adaptadores TXS0108E, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.',
     level: 'Avanzado',
     category: 'Lógica secuencial',
     sketch: ELEVATOR_CLASS_GIGA,

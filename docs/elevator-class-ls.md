@@ -5,8 +5,8 @@ Montaje **«Ascensor con integrados de clase + GIGA»**; no está en la galería
 regenerado con `npx tsx scripts/build-elevator-class.ts`).
 Código: `src/collab/elevatorClass.ts` (`elevatorClassTemplate()`); sketch: `src/collab/elevatorClassSketch.ts`.
 
-La lógica va a **5 V** y es de los integrados del kit. El GIGA (3,3 V) es la innovación: por cuatro
-adaptadores BOB-12009 lee destino, piso actual y OCUPADO, llama al ascensor desde su pantalla táctil
+La lógica va a **5 V** y es de los integrados del kit. El GIGA (3,3 V) es la innovación: por dos
+módulos TXS0108E (8 canales cada uno) lee destino, piso actual y OCUPADO, llama al ascensor desde su pantalla táctil
 (como un pulsador más) y en modo AUTO mueve la cabina activando los sensores (3 s por piso). En
 MANUAL los sensores se mueven a mano con el DIP. Sin el GIGA el ascensor funciona igual con PP1–PP4 y el DIP.
 
@@ -43,23 +43,29 @@ Las 220 Ω del kit quedan de repuesto.
   (74LS85, 74LS48) y a los adaptadores, que aceptan 3,4 V.
 - Las salidas HC (5 V) hacia entradas LS no necesitan nada.
 
-## GIGA y adaptadores de nivel
+## GIGA y adaptadores de nivel (2 × TXS0108E)
 
-El BOB-12009 tiene dos lados: **LV** (se alimenta con 3,3 V) y **HV** (5 V). Aquí LV va al pin
-**3V3** del GIGA, HV al riel de 5 V y las masas son comunes. El GIGA se conecta solo al lado LV, así
-que nunca ve más de 3,3 V; cada canal lleva 10 kΩ a su propio riel (≤0,5 mA).
+Cada módulo TXS0108E (placa HW-221) tiene 8 canales bidireccionales: **A1–A8** en el lado bajo
+(**VA**, 1,2–3,6 V) y **B1–B8** en el lado alto (**VB**, 1,65–5,5 V), con VA ≤ VB.
 
-| Adaptador | Canal | Línea | Pin GIGA |
-| --- | --- | --- | --- |
-| 1 | 1–3 | DEST0–2 (U8 1Q–3Q) | D23, D25, D27 |
-| 1 | 4 | OCUPADO (U5 1Q) | D29 |
-| 2 | 1–3 | PISO0–2 (U11 1Q–3Q) | D31, D33, D35 |
-| 3 | 1–4 | LL1–LL4 → líneas PP1–PP4 (salida, drenador abierto) | D37, D39, D41, D43 |
-| 4 | 1–4 | SP1–SP4 → sensores (salida, drenador abierto) | D45, D47, D49, D51 |
+- **VA** → pin **3V3** del GIGA. **VB** → riel de **5 V**. **GND** → masa común.
+- **OE** → unido a **VA**. Con OE en bajo o al aire los canales quedan desconectados: es el fallo
+  más habitual con este módulo.
+- El GIGA solo se conecta al lado **A**: nunca ve más de 3,3 V.
+- El chip trae pull-ups internas en cada lado; las de 10 kΩ de los pulsadores y del DIP quedan en
+  paralelo en el lado B, sin problema (≈0,5 mA por línea a 0).
 
-Las salidas del GIGA son de drenador abierto: `OUTPUT LOW` baja la línea (el adaptador la lleva a 0
-en el lado de 5 V, igual que un pulsador) e `INPUT` la suelta. El GIGA nunca empuja tensión.
+| Módulo | Canal | Línea | Sentido | Pin GIGA |
+| --- | --- | --- | --- | --- |
+| TXS 1 | A1–A3 / B1–B3 | DEST0–2 (U8 1Q–3Q) | CI → GIGA | D23, D25, D27 |
+| TXS 1 | A4 / B4 | OCUPADO (U5 1Q) | CI → GIGA | D29 |
+| TXS 1 | A5–A7 / B5–B7 | PISO0–2 (U11 1Q–3Q) | CI → GIGA | D31, D33, D35 |
+| TXS 1 | A8 / B8 | libre | | |
+| TXS 2 | A1–A4 / B1–B4 | LL1–LL4 → líneas PP1–PP4 | GIGA → CI | D37, D39, D41, D43 |
+| TXS 2 | A5–A8 / B5–B8 | SP1–SP4 → sensores | GIGA → CI | D45, D47, D49, D51 |
 
+Las salidas del GIGA son de drenador abierto: `OUTPUT LOW` baja la línea (el TXS la lleva a 0 en el
+lado de 5 V, igual que un pulsador) e `INPUT` la suelta. El GIGA nunca empuja tensión.
 El GIGA se alimenta por USB. **Nunca** conectes una salida de 5 V directo a un pin del GIGA.
 
 ## Cómo se maneja

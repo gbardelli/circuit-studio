@@ -11,7 +11,8 @@ export const ELEVATOR_CLASS_GIGA = `// Ascensor de 4 pisos · innovación con Ar
 //     3 s por piso y enciende el sensor del piso siguiente. En MANUAL lo haces tú con el DIP.
 //  3. Pantalla de 800 x 480: hueco con la cabina, piso actual, destino, tiempo y sentido.
 //
-// Los CI van a 5 V y el GIGA a 3,3 V: TODAS las líneas pasan por adaptadores BOB-12009.
+// Los CI van a 5 V y el GIGA a 3,3 V: TODAS las líneas pasan por dos TXS0108E
+// (VA = 3V3 del GIGA, VB = 5 V, OE unido a VA). El GIGA solo toca el lado A.
 // Llamadas y sensores en drenador abierto: OUTPUT LOW pone la línea a 0 (como el pulsador) e
 // INPUT la suelta; el GIGA nunca empuja tensión contra un pulsador o un interruptor.
 

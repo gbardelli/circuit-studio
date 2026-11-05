@@ -14,7 +14,7 @@ import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from
 import { lcdI2c, pcf8574, pcf8574a } from './i2c';
 import { nextion } from './nextion';
 import { gigaDisplayShield } from './gigaDisplay';
-import { levelConverter } from './levelConverter';
+import { levelConverter, levelConverter8 } from './levelConverter';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -53,6 +53,7 @@ export const PART_LIST: PartDef[] = [
   mosfet,
   npn,
   levelConverter,
+  levelConverter8,
   ...CHIPS,
   pcf8574,
   pcf8574a,

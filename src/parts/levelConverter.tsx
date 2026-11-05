@@ -38,3 +38,52 @@ export const levelConverter: PartDef = {
   },
   Render: ConverterRender,
 };
+
+// Módulo TXS0108E (HW-221): 8 canales bidireccionales. Fila de arriba VB, B1–B8, GND; fila de
+// abajo VA, A1–A8, OE. VA 1,2–3,6 V (lado bajo), VB 1,65–5,5 V (lado alto) y VA ≤ VB. OE alto
+// habilita; OE bajo deja todo en alta impedancia y desconecta las pull-ups internas.
+// Modelo: transistor de paso con la puerta en OE y pull-ups internas a cada lado (≈40 kΩ con la
+// salida en bajo; el acelerador de flancos no se modela).
+const TXS_TOP = ['VB', ...Array.from({ length: 8 }, (_, i) => `B${i + 1}`), 'GND'];
+const TXS_BOTTOM = ['VA', ...Array.from({ length: 8 }, (_, i) => `A${i + 1}`), 'OE'];
+const TXS_ROW = 50;
+const TxsRender = memo(function TxsRender({ part }: RenderProps) {
+  return <g>
+    <text x={45} y={-14} fontSize={9} fontWeight={550} textAnchor="middle" fill="#dce2e8" stroke="#101215" strokeWidth={3} paintOrder="stroke">{String(part.props.label ?? 'TXS0108E')}</text>
+    <rect x={-6} y={-6} width={102} height={TXS_ROW + 12} rx={3} fill="#1d4fa8" stroke="#6f9be6" strokeWidth={.6}/>
+    {[TXS_TOP, TXS_BOTTOM].map((row, r) => row.map((id, i) => <g key={id}>
+      <circle cx={i * 10} cy={r * TXS_ROW} r={3} fill="#c4a664"/><circle cx={i * 10} cy={r * TXS_ROW} r={1.4} fill="#161719"/>
+      <text x={i * 10} y={r ? TXS_ROW - 6 : 9} fontSize={3.2} textAnchor="middle" fill="#e8eef9">{id}</text>
+    </g>))}
+    <rect x={33} y={18} width={24} height={14} rx={1} fill="#16181b"/>
+    <text x={45} y={27} fontSize={3.4} textAnchor="middle" fill="#9aa1a8">TXS0108E</text>
+    <text x={45} y={39} fontSize={3} textAnchor="middle" fill="#cfe0ff">A 3V3 ↔ B 5V</text>
+  </g>;
+});
+const TXS_DESC: Record<string, string> = {
+  VB: 'Alimentación del lado B (alto): 1,65–5,5 V. Aquí 5 V', GND: 'Tierra común de los dos lados',
+  VA: 'Alimentación del lado A (bajo): 1,2–3,6 V y nunca mayor que VB. Aquí el 3V3 del GIGA',
+  OE: 'Habilitación: alto (únelo a VA) activa los canales; bajo los deja en alta impedancia',
+};
+export const levelConverter8: PartDef = {
+  type: 'level-converter-8', name: 'Adaptador de nivel · 8 canales', category: 'Semiconductores',
+  sku: 'TXS0108E',
+  description: 'Módulo TXS0108E (HW-221). Ocho canales bidireccionales: A1–A8 al lado bajo (VA, 3,3 V) y B1–B8 al lado alto (VB, 5 V). OE debe ir a VA para habilitarlo. Tierra común.',
+  keywords: ['txs0108e', 'txs0108', 'hw-221', 'level shifter', '8 canales', '3.3v', '5v', 'adaptador'], defaults: {},
+  pins: () => [
+    ...TXS_TOP.map((id, i) => ({ id, x: i * 10, y: 0, kind: 'socket' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado B (5 V)` })),
+    ...TXS_BOTTOM.map((id, i) => ({ id, x: i * 10, y: TXS_ROW, kind: 'socket' as const, label: TXS_DESC[id] ?? `Canal ${id.slice(1)}, lado A (3,3 V)` })),
+  ],
+  bounds: () => ({ x: -7, y: -7, w: 104, h: TXS_ROW + 14 }), reference: 'GND', model: 'SPICE', thumbScale: 0.9,
+  sim(ctx) {
+    const elements = [];
+    const oe = ctx.net('OE'), va = ctx.net('VA'), vb = ctx.net('VB');
+    for (let i = 1; i <= 8; i++) {
+      const a = ctx.net(`A${i}`), b = ctx.net(`B${i}`);
+      elements.push(new Resistor(va, a, () => 40_000), new Resistor(vb, b, () => 40_000),
+        new NMOS(b, oe, a, 1.0, .1), new Diode(a, b, 1e-12, 1.1));
+    }
+    return { elements };
+  },
+  Render: TxsRender,
+};

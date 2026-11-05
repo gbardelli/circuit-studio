@@ -1,10 +1,10 @@
 {
  "id": "elevator-class",
  "name": "Ascensor con integrados de clase + GIGA",
- "summary": "Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con cuatro adaptadores de nivel, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.",
+ "summary": "Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con dos adaptadores TXS0108E, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.",
  "level": "Avanzado",
  "category": "Lógica secuencial",
- "sketch": "// Ascensor de 4 pisos · innovación con Arduino GIGA R1 WiFi + GIGA Display Shield\n//\n// La lógica obligatoria la hacen los integrados de clase (74LS75, 74LS85, 74LS48 y 74HC):\n// memoria del destino, bloqueo, piso actual, comparación, LEDs LS/LB y los dos displays.\n// El GIGA no decide nada; añade:\n//  1. Llamadas desde la pantalla táctil (innovación): pulsa la línea del piso como un botón más.\n//  2. Motor de la cabina (modo AUTO): cuando los CI piden subir o bajar, apaga el sensor, espera\n//     3 s por piso y enciende el sensor del piso siguiente. En MANUAL lo haces tú con el DIP.\n//  3. Pantalla de 800 x 480: hueco con la cabina, piso actual, destino, tiempo y sentido.\n//\n// Los CI van a 5 V y el GIGA a 3,3 V: TODAS las líneas pasan por adaptadores BOB-12009.\n// Llamadas y sensores en drenador abierto: OUTPUT LOW pone la línea a 0 (como el pulsador) e\n// INPUT la suelta; el GIGA nunca empuja tensión contra un pulsador o un interruptor.\n\n#include <Arduino_GigaDisplay_GFX.h>\n#include <Arduino_GigaDisplayTouch.h>\n#include <Arduino_GigaDisplay.h>\n\nGigaDisplay_GFX display;\nArduino_GigaDisplayTouch touchPanel;\nGigaDisplayRGB rgb;\n\nconst int DEST[3]   = {23, 25, 27};      // destino guardado en U8 (74LS75)\nconst int BUSY      = 29;                // OCUPADO (U5)\nconst int FLOOR[3]  = {31, 33, 35};      // piso actual guardado en U11 (74LS75)\nconst int CALL[4]   = {37, 39, 41, 43};  // llamada de piso 1-4 (en paralelo con PP1-PP4)\nconst int SENSOR[4] = {45, 47, 49, 51};  // sensor de planta 1-4 (en paralelo con el DIP)\n\nconst unsigned long FLOOR_MS  = 3000;    // lo que tarda la cabina en recorrer un piso\nconst unsigned long SETTLE_MS = 250;     // deja que los CI lean el sensor nuevo\nconst unsigned long DOORS_MS  = 1500;    // puertas abiertas al llegar\nconst unsigned long PULSE_MS  = 250;     // pulsación de una llamada táctil\n\n#define RGB565(r, g, b) (uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))\nconst uint16_t BG = RGB565(10, 12, 15), PANEL = RGB565(21, 25, 30), CARD = RGB565(29, 34, 41);\nconst uint16_t LINE = RGB565(50, 57, 66), TEXT = RGB565(236, 239, 243), DIM = RGB565(128, 138, 150);\nconst uint16_t GREEN = RGB565(52, 199, 120), RED = RGB565(240, 84, 84), AMBER = RGB565(245, 176, 65);\nconst uint16_t BLUE = RGB565(70, 156, 255), CABIN = RGB565(226, 232, 240);\n\n// Pantalla apaisada (rotación 1): 800 x 480\nconst int SX = 36, SY = 84, SW = 150, SLOT = 92;          // hueco: 4 plantas de 92 px\nconst int CARD_X = 236, CARD_Y = 84;                       // piso actual\nconst int SIDE_X = 516, SIDE_W = 248;                      // destino y tiempo\nconst int CALL_X = 236, CALL_Y = 352, CALL_W = 119, CALL_H = 104, CALL_GAP = 12;\nconst int MODE_X = 640, MODE_Y = 14, MODE_W = 124, MODE_H = 36;\n\nbool autoMode = true;\nint floorNow = 1;        // planta de la cabina\nint dir = 0;             // +1 sube, -1 baja, 0 parada\nunsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};\nbool wasBusy = false, wasTouching = false;\n\nint shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -1, shownTime = -1, shownCalls = -1, shownMode = -1;\nbool shownDoors = false;\nchar buf[16];\n\nvoid press(int pin)   { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }\nvoid release(int pin) { pinMode(pin, INPUT); }\n\nvoid label(int x, int y, int w, int h, int size, uint16_t fg, uint16_t bg, const char* s) {\n  int width = strlen(s) * 6 * size - size;\n  display.setTextSize(size);\n  display.setTextColor(fg, bg);\n  display.setCursor(x + (w - width) / 2, y + (h - 7 * size) / 2);\n  display.print(s);\n}\n\n// AUTO: solo el sensor de la planta donde está parada la cabina; entre plantas, ninguno.\nvoid driveSensors() {\n  for (int i = 0; i < 4; i++) {\n    if (autoMode && dir == 0 && floorNow == i + 1) press(SENSOR[i]);\n    else release(SENSOR[i]);\n  }\n}\n\n// Sensor más alto activo (misma prioridad que el codificador de los CI).\nint readSensors() {\n  for (int i = 3; i >= 0; i--) if (digitalRead(SENSOR[i]) == LOW) return i + 1;\n  return 0;\n}\n\n// Un número de tres bits que lleva 4 ms estable (los latches cambian de golpe).\n// Bus 0 = destino, bus 1 = piso actual.\nint busStable[2] = {0, 0}, busCandidate[2] = {0, 0};\nunsigned long busSince[2] = {0, 0};\nint readBus(const int* pins, int k) {\n  int raw = digitalRead(pins[0]) | (digitalRead(pins[1]) << 1) | (digitalRead(pins[2]) << 2);\n  unsigned long now = millis();\n  if (raw != busCandidate[k]) { busCandidate[k] = raw; busSince[k] = now; }\n  if ((unsigned long)(now - busSince[k]) >= 4) busStable[k] = busCandidate[k];\n  return busStable[k];\n}\n\n// Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.\nint wanted(bool busy, int dest) {\n  if (!busy || dest < 1 || dest > 4 || dest == floorNow) return 0;\n  return dest > floorNow ? 1 : -1;\n}\n\nvoid motor(unsigned long now, bool busy, int dest, int hwFloor) {\n  if (!autoMode) { int s = readSensors(); if (s) floorNow = s; else if (hwFloor >= 1 && hwFloor <= 4) floorNow = hwFloor; dir = 0; return; }\n  if (dir != 0) {\n    if ((unsigned long)(now - segStart) >= FLOOR_MS) {   // 3 s: la cabina alcanza el piso siguiente\n      floorNow += dir; dir = 0; driveSensors();\n      settleUntil = now + SETTLE_MS; segStart = now;\n    }\n    return;\n  }\n  if ((long)(now - settleUntil) < 0) return;\n  dir = wanted(busy, dest);\n  if (dir != 0) { doorsUntil = 0; segStart = now; driveSensors(); }   // cierra puertas y sale de la planta\n}\n\n// ── Pantalla ───────────────────────────────────────────────────────────────\nvoid drawFrame() {\n  display.fillScreen(BG);\n  display.fillRect(0, 0, 800, 64, PANEL);\n  display.fillRect(0, 64, 800, 1, LINE);\n  display.setTextSize(3);\n  display.setTextColor(TEXT, PANEL);\n  display.setCursor(36, 21);\n  display.print(\"ASCENSOR\");\n  display.setTextColor(DIM, PANEL);\n  display.print(\"  4 PISOS\");\n  for (int f = 1; f <= 4; f++) {\n    snprintf(buf, sizeof buf, \"%d\", f);\n    label(4, SY + (4 - f) * SLOT, 28, SLOT, 3, DIM, BG, buf);\n  }\n  display.fillRoundRect(CARD_X, CARD_Y, 264, 230, 10, CARD);\n  label(CARD_X + 20, CARD_Y + 14, 120, 20, 2, DIM, CARD, \"PISO ACTUAL\");\n  display.fillRoundRect(SIDE_X, CARD_Y, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 14, 84, 20, 2, DIM, CARD, \"DESTINO\");\n  display.fillRoundRect(SIDE_X, CARD_Y + 120, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 134, 192, 20, 2, DIM, CARD, \"TIEMPO DEL VIAJE\");\n  label(CALL_X, CALL_Y - 30, 160, 20, 2, DIM, BG, \"LLAMAR AL PISO\");\n}\n\nvoid arrow(int x, int y, int status, uint16_t c) {\n  display.fillRect(x, y, 40, 44, CARD);\n  if (status == 1) { display.fillTriangle(x + 20, y, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y + 22, 14, 22, c); }\n  else if (status == 2) { display.fillTriangle(x + 20, y + 44, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y, 14, 22, c); }\n  else display.fillRect(x + 4, y + 19, 32, 6, c);\n}\n\nvoid drawShaft(int cab, bool doors) {\n  display.fillRoundRect(SX, SY, SW, 4 * SLOT, 8, PANEL);\n  for (int k = 1; k < 4; k++) display.fillRect(SX + 8, SY + k * SLOT, SW - 16, 1, LINE);\n  display.fillRoundRect(SX + 10, cab, SW - 20, SLOT - 12, 6, CABIN);\n  if (doors) display.fillRect(SX + SW / 2 - 16, cab + 8, 32, SLOT - 28, PANEL);\n  else display.fillRect(SX + SW / 2 - 1, cab + 8, 2, SLOT - 28, LINE);\n}\n\nvoid render(unsigned long now, bool busy, int dest, int hwFloor) {\n  bool doors = (long)(now - doorsUntil) < 0;\n  bool hasDest = dest >= 1 && dest <= 4;\n  int heading = dir != 0 ? dir : wanted(busy, dest);\n\n  long travel = dir == 0 ? 0 : (long)((now - segStart) * SLOT / FLOOR_MS);\n  if (travel > SLOT - 2) travel = SLOT - 2;\n  int cab = SY + (4 - floorNow) * SLOT + 6 - dir * travel;\n  if (cab != shownCab || doors != shownDoors) { drawShaft(cab, doors); shownCab = cab; shownDoors = doors; }\n\n  // Parado se ve el piso que guardan los CI (U11); en marcha, el que va cruzando la cabina.\n  int shown = dir == 0 ? (hwFloor >= 1 && hwFloor <= 4 ? hwFloor : floorNow) : (travel * 2 > SLOT ? floorNow + dir : floorNow);\n  if (shown != shownFloor) {\n    snprintf(buf, sizeof buf, \"%d\", shown);\n    label(CARD_X + 20, CARD_Y + 40, 150, 140, 16, TEXT, CARD, buf);\n    shownFloor = shown;\n  }\n\n  int status = heading > 0 ? 1 : heading < 0 ? 2 : doors ? 3 : busy ? 4 : 0;\n  if (status != shownStatus) {\n    const char* names[] = {\"EN ESPERA\", \"SUBIENDO\", \"BAJANDO\", \"PUERTAS\", \"ESPERANDO\"};\n    uint16_t colors[] = {DIM, GREEN, RED, BLUE, AMBER};\n    arrow(CARD_X + 196, CARD_Y + 88, status, colors[status]);\n    display.fillRect(CARD_X + 20, CARD_Y + 186, 224, 32, CARD);\n    label(CARD_X + 20, CARD_Y + 186, 224, 32, 3, colors[status], CARD, names[status]);\n    if (status == 1) rgb.on(0, 160, 60);\n    else if (status == 2) rgb.on(180, 0, 0);\n    else if (status == 3) rgb.on(0, 60, 200);\n    else if (status == 4) rgb.on(160, 100, 0);\n    else rgb.on(20, 20, 20);\n    shownStatus = status;\n  }\n\n  int d = hasDest ? dest : 0;\n  if (d != shownDest) {\n    if (hasDest) snprintf(buf, sizeof buf, \"PISO %d\", dest); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, CARD);\n    label(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, 6, hasDest ? TEXT : DIM, CARD, buf);\n    shownDest = d;\n  }\n\n  // Tiempo que falta: 3 s por piso que queda por recorrer.\n  int secs = -1;\n  if (busy && hasDest) {\n    long left = (long)abs(dest - floorNow) * FLOOR_MS - (dir != 0 ? (long)(now - segStart) : 0);\n    secs = left <= 0 ? 0 : (int)((left + 999) / 1000);\n  }\n  if (secs != shownTime) {\n    if (secs >= 0) snprintf(buf, sizeof buf, \"%d s\", secs); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, CARD);\n    label(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, 6, secs >= 0 ? TEXT : DIM, CARD, buf);\n    shownTime = secs;\n  }\n\n  // Botones de llamada: azul mientras se pulsa, ámbar el destino en curso.\n  int calls = 0;\n  for (int f = 1; f <= 4; f++) {\n    int s = (long)(now - pulseUntil[f - 1]) < 0 ? 2 : (busy && dest == f) ? 1 : 0;\n    calls |= s << (2 * (f - 1));\n  }\n  if (calls != shownCalls) {\n    for (int f = 1; f <= 4; f++) {\n      int s = (calls >> (2 * (f - 1))) & 3;\n      if (shownCalls >= 0 && s == ((shownCalls >> (2 * (f - 1))) & 3)) continue;\n      uint16_t bg = s == 2 ? BLUE : s == 1 ? AMBER : CARD;\n      int x = CALL_X + (f - 1) * (CALL_W + CALL_GAP);\n      display.fillRoundRect(x, CALL_Y, CALL_W, CALL_H, 12, bg);\n      snprintf(buf, sizeof buf, \"%d\", f);\n      label(x, CALL_Y, CALL_W, CALL_H, 7, s ? BG : TEXT, bg, buf);\n    }\n    shownCalls = calls;\n  }\n\n  if ((autoMode ? 1 : 0) != shownMode) {\n    uint16_t c = autoMode ? GREEN : AMBER;\n    display.fillRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, PANEL);\n    display.drawRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, c);\n    label(MODE_X, MODE_Y, MODE_W, MODE_H, 2, c, PANEL, autoMode ? \"AUTO\" : \"MANUAL\");\n    shownMode = autoMode ? 1 : 0;\n  }\n}\n\nvoid touch(int x, int y, unsigned long now) {\n  if (y >= MODE_Y && y < MODE_Y + MODE_H && x >= MODE_X && x < MODE_X + MODE_W) {  // AUTO / MANUAL\n    autoMode = !autoMode;\n    dir = 0;\n    driveSensors();\n    return;\n  }\n  if (y >= CALL_Y && y < CALL_Y + CALL_H && x >= CALL_X) {  // llamada de piso\n    int f = (x - CALL_X) / (CALL_W + CALL_GAP);\n    if (f > 3 || (x - CALL_X) % (CALL_W + CALL_GAP) >= CALL_W) return;\n    press(CALL[f]);\n    pulseUntil[f] = now + PULSE_MS;\n  }\n}\n\n// El panel entrega coordenadas en vertical (480 x 800); con la rotación 1 se giran a la\n// pantalla. Si en tu shield el toque sale reflejado, cambia aquí el sentido de los ejes.\nvoid readTouch(unsigned long now) {\n  GDTpoint_t points[5];\n  bool touching = touchPanel.getTouchPoints(points) > 0;\n  if (touching && !wasTouching) touch(points[0].y, 479 - points[0].x, now);\n  wasTouching = touching;\n}\n\nvoid setup() {\n  for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }\n  for (int i = 0; i < 3; i++) { pinMode(DEST[i], INPUT); pinMode(FLOOR[i], INPUT); }\n  pinMode(BUSY, INPUT);\n  display.begin();\n  display.setRotation(1);\n  touchPanel.begin();\n  rgb.begin();\n  driveSensors();                       // la cabina empieza en el piso 1\n  settleUntil = millis() + SETTLE_MS;\n  drawFrame();\n}\n\nvoid loop() {\n  unsigned long now = millis();\n  for (int i = 0; i < 4; i++) if (pulseUntil[i] && (long)(now - pulseUntil[i]) >= 0) { release(CALL[i]); pulseUntil[i] = 0; }\n  readTouch(now);\n\n  bool busy = digitalRead(BUSY);\n  int dest = readBus(DEST, 0);\n  int hwFloor = readBus(FLOOR, 1);\n  if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas\n  wasBusy = busy;\n\n  motor(now, busy, dest, hwFloor);\n  render(now, busy, dest, hwFloor);\n}\n",
+ "sketch": "// Ascensor de 4 pisos · innovación con Arduino GIGA R1 WiFi + GIGA Display Shield\n//\n// La lógica obligatoria la hacen los integrados de clase (74LS75, 74LS85, 74LS48 y 74HC):\n// memoria del destino, bloqueo, piso actual, comparación, LEDs LS/LB y los dos displays.\n// El GIGA no decide nada; añade:\n//  1. Llamadas desde la pantalla táctil (innovación): pulsa la línea del piso como un botón más.\n//  2. Motor de la cabina (modo AUTO): cuando los CI piden subir o bajar, apaga el sensor, espera\n//     3 s por piso y enciende el sensor del piso siguiente. En MANUAL lo haces tú con el DIP.\n//  3. Pantalla de 800 x 480: hueco con la cabina, piso actual, destino, tiempo y sentido.\n//\n// Los CI van a 5 V y el GIGA a 3,3 V: TODAS las líneas pasan por dos TXS0108E\n// (VA = 3V3 del GIGA, VB = 5 V, OE unido a VA). El GIGA solo toca el lado A.\n// Llamadas y sensores en drenador abierto: OUTPUT LOW pone la línea a 0 (como el pulsador) e\n// INPUT la suelta; el GIGA nunca empuja tensión contra un pulsador o un interruptor.\n\n#include <Arduino_GigaDisplay_GFX.h>\n#include <Arduino_GigaDisplayTouch.h>\n#include <Arduino_GigaDisplay.h>\n\nGigaDisplay_GFX display;\nArduino_GigaDisplayTouch touchPanel;\nGigaDisplayRGB rgb;\n\nconst int DEST[3]   = {23, 25, 27};      // destino guardado en U8 (74LS75)\nconst int BUSY      = 29;                // OCUPADO (U5)\nconst int FLOOR[3]  = {31, 33, 35};      // piso actual guardado en U11 (74LS75)\nconst int CALL[4]   = {37, 39, 41, 43};  // llamada de piso 1-4 (en paralelo con PP1-PP4)\nconst int SENSOR[4] = {45, 47, 49, 51};  // sensor de planta 1-4 (en paralelo con el DIP)\n\nconst unsigned long FLOOR_MS  = 3000;    // lo que tarda la cabina en recorrer un piso\nconst unsigned long SETTLE_MS = 250;     // deja que los CI lean el sensor nuevo\nconst unsigned long DOORS_MS  = 1500;    // puertas abiertas al llegar\nconst unsigned long PULSE_MS  = 250;     // pulsación de una llamada táctil\n\n#define RGB565(r, g, b) (uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))\nconst uint16_t BG = RGB565(10, 12, 15), PANEL = RGB565(21, 25, 30), CARD = RGB565(29, 34, 41);\nconst uint16_t LINE = RGB565(50, 57, 66), TEXT = RGB565(236, 239, 243), DIM = RGB565(128, 138, 150);\nconst uint16_t GREEN = RGB565(52, 199, 120), RED = RGB565(240, 84, 84), AMBER = RGB565(245, 176, 65);\nconst uint16_t BLUE = RGB565(70, 156, 255), CABIN = RGB565(226, 232, 240);\n\n// Pantalla apaisada (rotación 1): 800 x 480\nconst int SX = 36, SY = 84, SW = 150, SLOT = 92;          // hueco: 4 plantas de 92 px\nconst int CARD_X = 236, CARD_Y = 84;                       // piso actual\nconst int SIDE_X = 516, SIDE_W = 248;                      // destino y tiempo\nconst int CALL_X = 236, CALL_Y = 352, CALL_W = 119, CALL_H = 104, CALL_GAP = 12;\nconst int MODE_X = 640, MODE_Y = 14, MODE_W = 124, MODE_H = 36;\n\nbool autoMode = true;\nint floorNow = 1;        // planta de la cabina\nint dir = 0;             // +1 sube, -1 baja, 0 parada\nunsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};\nbool wasBusy = false, wasTouching = false;\n\nint shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -1, shownTime = -1, shownCalls = -1, shownMode = -1;\nbool shownDoors = false;\nchar buf[16];\n\nvoid press(int pin)   { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }\nvoid release(int pin) { pinMode(pin, INPUT); }\n\nvoid label(int x, int y, int w, int h, int size, uint16_t fg, uint16_t bg, const char* s) {\n  int width = strlen(s) * 6 * size - size;\n  display.setTextSize(size);\n  display.setTextColor(fg, bg);\n  display.setCursor(x + (w - width) / 2, y + (h - 7 * size) / 2);\n  display.print(s);\n}\n\n// AUTO: solo el sensor de la planta donde está parada la cabina; entre plantas, ninguno.\nvoid driveSensors() {\n  for (int i = 0; i < 4; i++) {\n    if (autoMode && dir == 0 && floorNow == i + 1) press(SENSOR[i]);\n    else release(SENSOR[i]);\n  }\n}\n\n// Sensor más alto activo (misma prioridad que el codificador de los CI).\nint readSensors() {\n  for (int i = 3; i >= 0; i--) if (digitalRead(SENSOR[i]) == LOW) return i + 1;\n  return 0;\n}\n\n// Un número de tres bits que lleva 4 ms estable (los latches cambian de golpe).\n// Bus 0 = destino, bus 1 = piso actual.\nint busStable[2] = {0, 0}, busCandidate[2] = {0, 0};\nunsigned long busSince[2] = {0, 0};\nint readBus(const int* pins, int k) {\n  int raw = digitalRead(pins[0]) | (digitalRead(pins[1]) << 1) | (digitalRead(pins[2]) << 2);\n  unsigned long now = millis();\n  if (raw != busCandidate[k]) { busCandidate[k] = raw; busSince[k] = now; }\n  if ((unsigned long)(now - busSince[k]) >= 4) busStable[k] = busCandidate[k];\n  return busStable[k];\n}\n\n// Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.\nint wanted(bool busy, int dest) {\n  if (!busy || dest < 1 || dest > 4 || dest == floorNow) return 0;\n  return dest > floorNow ? 1 : -1;\n}\n\nvoid motor(unsigned long now, bool busy, int dest, int hwFloor) {\n  if (!autoMode) { int s = readSensors(); if (s) floorNow = s; else if (hwFloor >= 1 && hwFloor <= 4) floorNow = hwFloor; dir = 0; return; }\n  if (dir != 0) {\n    if ((unsigned long)(now - segStart) >= FLOOR_MS) {   // 3 s: la cabina alcanza el piso siguiente\n      floorNow += dir; dir = 0; driveSensors();\n      settleUntil = now + SETTLE_MS; segStart = now;\n    }\n    return;\n  }\n  if ((long)(now - settleUntil) < 0) return;\n  dir = wanted(busy, dest);\n  if (dir != 0) { doorsUntil = 0; segStart = now; driveSensors(); }   // cierra puertas y sale de la planta\n}\n\n// ── Pantalla ───────────────────────────────────────────────────────────────\nvoid drawFrame() {\n  display.fillScreen(BG);\n  display.fillRect(0, 0, 800, 64, PANEL);\n  display.fillRect(0, 64, 800, 1, LINE);\n  display.setTextSize(3);\n  display.setTextColor(TEXT, PANEL);\n  display.setCursor(36, 21);\n  display.print(\"ASCENSOR\");\n  display.setTextColor(DIM, PANEL);\n  display.print(\"  4 PISOS\");\n  for (int f = 1; f <= 4; f++) {\n    snprintf(buf, sizeof buf, \"%d\", f);\n    label(4, SY + (4 - f) * SLOT, 28, SLOT, 3, DIM, BG, buf);\n  }\n  display.fillRoundRect(CARD_X, CARD_Y, 264, 230, 10, CARD);\n  label(CARD_X + 20, CARD_Y + 14, 120, 20, 2, DIM, CARD, \"PISO ACTUAL\");\n  display.fillRoundRect(SIDE_X, CARD_Y, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 14, 84, 20, 2, DIM, CARD, \"DESTINO\");\n  display.fillRoundRect(SIDE_X, CARD_Y + 120, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 134, 192, 20, 2, DIM, CARD, \"TIEMPO DEL VIAJE\");\n  label(CALL_X, CALL_Y - 30, 160, 20, 2, DIM, BG, \"LLAMAR AL PISO\");\n}\n\nvoid arrow(int x, int y, int status, uint16_t c) {\n  display.fillRect(x, y, 40, 44, CARD);\n  if (status == 1) { display.fillTriangle(x + 20, y, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y + 22, 14, 22, c); }\n  else if (status == 2) { display.fillTriangle(x + 20, y + 44, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y, 14, 22, c); }\n  else display.fillRect(x + 4, y + 19, 32, 6, c);\n}\n\nvoid drawShaft(int cab, bool doors) {\n  display.fillRoundRect(SX, SY, SW, 4 * SLOT, 8, PANEL);\n  for (int k = 1; k < 4; k++) display.fillRect(SX + 8, SY + k * SLOT, SW - 16, 1, LINE);\n  display.fillRoundRect(SX + 10, cab, SW - 20, SLOT - 12, 6, CABIN);\n  if (doors) display.fillRect(SX + SW / 2 - 16, cab + 8, 32, SLOT - 28, PANEL);\n  else display.fillRect(SX + SW / 2 - 1, cab + 8, 2, SLOT - 28, LINE);\n}\n\nvoid render(unsigned long now, bool busy, int dest, int hwFloor) {\n  bool doors = (long)(now - doorsUntil) < 0;\n  bool hasDest = dest >= 1 && dest <= 4;\n  int heading = dir != 0 ? dir : wanted(busy, dest);\n\n  long travel = dir == 0 ? 0 : (long)((now - segStart) * SLOT / FLOOR_MS);\n  if (travel > SLOT - 2) travel = SLOT - 2;\n  int cab = SY + (4 - floorNow) * SLOT + 6 - dir * travel;\n  if (cab != shownCab || doors != shownDoors) { drawShaft(cab, doors); shownCab = cab; shownDoors = doors; }\n\n  // Parado se ve el piso que guardan los CI (U11); en marcha, el que va cruzando la cabina.\n  int shown = dir == 0 ? (hwFloor >= 1 && hwFloor <= 4 ? hwFloor : floorNow) : (travel * 2 > SLOT ? floorNow + dir : floorNow);\n  if (shown != shownFloor) {\n    snprintf(buf, sizeof buf, \"%d\", shown);\n    label(CARD_X + 20, CARD_Y + 40, 150, 140, 16, TEXT, CARD, buf);\n    shownFloor = shown;\n  }\n\n  int status = heading > 0 ? 1 : heading < 0 ? 2 : doors ? 3 : busy ? 4 : 0;\n  if (status != shownStatus) {\n    const char* names[] = {\"EN ESPERA\", \"SUBIENDO\", \"BAJANDO\", \"PUERTAS\", \"ESPERANDO\"};\n    uint16_t colors[] = {DIM, GREEN, RED, BLUE, AMBER};\n    arrow(CARD_X + 196, CARD_Y + 88, status, colors[status]);\n    display.fillRect(CARD_X + 20, CARD_Y + 186, 224, 32, CARD);\n    label(CARD_X + 20, CARD_Y + 186, 224, 32, 3, colors[status], CARD, names[status]);\n    if (status == 1) rgb.on(0, 160, 60);\n    else if (status == 2) rgb.on(180, 0, 0);\n    else if (status == 3) rgb.on(0, 60, 200);\n    else if (status == 4) rgb.on(160, 100, 0);\n    else rgb.on(20, 20, 20);\n    shownStatus = status;\n  }\n\n  int d = hasDest ? dest : 0;\n  if (d != shownDest) {\n    if (hasDest) snprintf(buf, sizeof buf, \"PISO %d\", dest); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, CARD);\n    label(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, 6, hasDest ? TEXT : DIM, CARD, buf);\n    shownDest = d;\n  }\n\n  // Tiempo que falta: 3 s por piso que queda por recorrer.\n  int secs = -1;\n  if (busy && hasDest) {\n    long left = (long)abs(dest - floorNow) * FLOOR_MS - (dir != 0 ? (long)(now - segStart) : 0);\n    secs = left <= 0 ? 0 : (int)((left + 999) / 1000);\n  }\n  if (secs != shownTime) {\n    if (secs >= 0) snprintf(buf, sizeof buf, \"%d s\", secs); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, CARD);\n    label(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, 6, secs >= 0 ? TEXT : DIM, CARD, buf);\n    shownTime = secs;\n  }\n\n  // Botones de llamada: azul mientras se pulsa, ámbar el destino en curso.\n  int calls = 0;\n  for (int f = 1; f <= 4; f++) {\n    int s = (long)(now - pulseUntil[f - 1]) < 0 ? 2 : (busy && dest == f) ? 1 : 0;\n    calls |= s << (2 * (f - 1));\n  }\n  if (calls != shownCalls) {\n    for (int f = 1; f <= 4; f++) {\n      int s = (calls >> (2 * (f - 1))) & 3;\n      if (shownCalls >= 0 && s == ((shownCalls >> (2 * (f - 1))) & 3)) continue;\n      uint16_t bg = s == 2 ? BLUE : s == 1 ? AMBER : CARD;\n      int x = CALL_X + (f - 1) * (CALL_W + CALL_GAP);\n      display.fillRoundRect(x, CALL_Y, CALL_W, CALL_H, 12, bg);\n      snprintf(buf, sizeof buf, \"%d\", f);\n      label(x, CALL_Y, CALL_W, CALL_H, 7, s ? BG : TEXT, bg, buf);\n    }\n    shownCalls = calls;\n  }\n\n  if ((autoMode ? 1 : 0) != shownMode) {\n    uint16_t c = autoMode ? GREEN : AMBER;\n    display.fillRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, PANEL);\n    display.drawRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, c);\n    label(MODE_X, MODE_Y, MODE_W, MODE_H, 2, c, PANEL, autoMode ? \"AUTO\" : \"MANUAL\");\n    shownMode = autoMode ? 1 : 0;\n  }\n}\n\nvoid touch(int x, int y, unsigned long now) {\n  if (y >= MODE_Y && y < MODE_Y + MODE_H && x >= MODE_X && x < MODE_X + MODE_W) {  // AUTO / MANUAL\n    autoMode = !autoMode;\n    dir = 0;\n    driveSensors();\n    return;\n  }\n  if (y >= CALL_Y && y < CALL_Y + CALL_H && x >= CALL_X) {  // llamada de piso\n    int f = (x - CALL_X) / (CALL_W + CALL_GAP);\n    if (f > 3 || (x - CALL_X) % (CALL_W + CALL_GAP) >= CALL_W) return;\n    press(CALL[f]);\n    pulseUntil[f] = now + PULSE_MS;\n  }\n}\n\n// El panel entrega coordenadas en vertical (480 x 800); con la rotación 1 se giran a la\n// pantalla. Si en tu shield el toque sale reflejado, cambia aquí el sentido de los ejes.\nvoid readTouch(unsigned long now) {\n  GDTpoint_t points[5];\n  bool touching = touchPanel.getTouchPoints(points) > 0;\n  if (touching && !wasTouching) touch(points[0].y, 479 - points[0].x, now);\n  wasTouching = touching;\n}\n\nvoid setup() {\n  for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }\n  for (int i = 0; i < 3; i++) { pinMode(DEST[i], INPUT); pinMode(FLOOR[i], INPUT); }\n  pinMode(BUSY, INPUT);\n  display.begin();\n  display.setRotation(1);\n  touchPanel.begin();\n  rgb.begin();\n  driveSensors();                       // la cabina empieza en el piso 1\n  settleUntil = millis() + SETTLE_MS;\n  drawFrame();\n}\n\nvoid loop() {\n  unsigned long now = millis();\n  for (int i = 0; i < 4; i++) if (pulseUntil[i] && (long)(now - pulseUntil[i]) >= 0) { release(CALL[i]); pulseUntil[i] = 0; }\n  readTouch(now);\n\n  bool busy = digitalRead(BUSY);\n  int dest = readBus(DEST, 0);\n  int hwFloor = readBus(FLOOR, 1);\n  if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas\n  wasBusy = busy;\n\n  motor(now, busy, dest, hwFloor);\n  render(now, busy, dest, hwFloor);\n}\n",
  "parts": [
   {
    "key": "b1",
@@ -61,42 +61,22 @@
    "rot": 0
   },
   {
-   "key": "conv1",
-   "type": "level-converter-4",
-   "x": -220,
-   "y": 330,
+   "key": "txs1",
+   "type": "level-converter-8",
+   "x": -190,
+   "y": 250,
    "props": {
-    "label": "Adaptador 1 · destino y OCUPADO"
+    "label": "TXS0108E 1 · destino, OCUPADO y piso"
    },
    "rot": 0
   },
   {
-   "key": "conv2",
-   "type": "level-converter-4",
-   "x": -220,
-   "y": 470,
+   "key": "txs2",
+   "type": "level-converter-8",
+   "x": -190,
+   "y": 600,
    "props": {
-    "label": "Adaptador 2 · piso actual"
-   },
-   "rot": 0
-  },
-  {
-   "key": "conv3",
-   "type": "level-converter-4",
-   "x": -220,
-   "y": 190,
-   "props": {
-    "label": "Adaptador 3 · llamadas táctiles"
-   },
-   "rot": 0
-  },
-  {
-   "key": "conv4",
-   "type": "level-converter-4",
-   "x": -220,
-   "y": 610,
-   "props": {
-    "label": "Adaptador 4 · sensores (motor)"
+    "label": "TXS0108E 2 · llamadas y sensores"
    },
    "rot": 0
   },
@@ -663,16 +643,7 @@
     "b3",
     "tp3"
    ],
-   "points": [
-    {
-     "x": 55,
-     "y": 560
-    },
-    {
-     "x": 55,
-     "y": 740
-    }
-   ],
+   "points": [],
    "color": "#f2862e"
   },
   {
@@ -1057,16 +1028,7 @@
     "b3",
     "tp53"
    ],
-   "points": [
-    {
-     "x": 545,
-     "y": 780
-    },
-    {
-     "x": 545,
-     "y": 740
-    }
-   ],
+   "points": [],
    "color": "#f2862e"
   },
   {
@@ -1104,13 +1066,21 @@
     "tp52"
    ],
    "b": [
-    "conv1",
-    "HV"
+    "txs1",
+    "VB"
    ],
    "points": [
     {
      "x": 540,
-     "y": 350
+     "y": 320
+    },
+    {
+     "x": -205,
+     "y": 320
+    },
+    {
+     "x": -205,
+     "y": 250
     }
    ],
    "color": "#f2862e"
@@ -1121,21 +1091,29 @@
     "tp46"
    ],
    "b": [
-    "conv2",
-    "HV"
+    "txs2",
+    "VB"
    ],
    "points": [
     {
      "x": 480,
-     "y": 600
+     "y": 595
     },
     {
-     "x": -115,
-     "y": 600
+     "x": -5,
+     "y": 595
     },
     {
-     "x": -115,
-     "y": 490
+     "x": -5,
+     "y": 570
+    },
+    {
+     "x": -200,
+     "y": 570
+    },
+    {
+     "x": -200,
+     "y": 600
     }
    ],
    "color": "#f2862e"
@@ -1143,44 +1121,247 @@
   {
    "a": [
     "b1",
-    "tp47"
+    "tn2"
    ],
    "b": [
-    "conv3",
-    "HV"
+    "b1",
+    "bn2"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn4"
+   ],
+   "b": [
+    "b2",
+    "tn4"
    ],
    "points": [
     {
-     "x": 490,
-     "y": 5
-    },
-    {
-     "x": -135,
-     "y": 5
-    },
-    {
-     "x": -135,
+     "x": 55,
      "y": 210
+    },
+    {
+     "x": 55,
+     "y": 390
     }
    ],
-   "color": "#f2862e"
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn2"
+   ],
+   "b": [
+    "b2",
+    "bn2"
+   ],
+   "points": [
+    {
+     "x": 15,
+     "y": 390
+    },
+    {
+     "x": 15,
+     "y": 570
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn4"
+   ],
+   "b": [
+    "b3",
+    "tn4"
+   ],
+   "points": [],
+   "color": "#26272b"
   },
   {
    "a": [
     "b3",
-    "tp40"
+    "tn2"
    ],
    "b": [
-    "conv4",
-    "HV"
+    "b3",
+    "bn2"
    ],
    "points": [
     {
-     "x": 420,
-     "y": 630
+     "x": 40,
+     "y": 745
+    },
+    {
+     "x": 50,
+     "y": 745
+    },
+    {
+     "x": 50,
+     "y": 870
+    },
+    {
+     "x": 40,
+     "y": 870
     }
    ],
-   "color": "#f2862e"
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "supply",
+    "-"
+   ],
+   "b": [
+    "b1",
+    "tn8"
+   ],
+   "points": [
+    {
+     "x": -480,
+     "y": 140
+    },
+    {
+     "x": 5,
+     "y": 140
+    },
+    {
+     "x": 5,
+     "y": 55
+    },
+    {
+     "x": 100,
+     "y": 55
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "giga",
+    "GND.2"
+   ],
+   "b": [
+    "b2",
+    "tn8"
+   ],
+   "points": [
+    {
+     "x": -570,
+     "y": 665
+    },
+    {
+     "x": -250,
+     "y": 665
+    },
+    {
+     "x": -250,
+     "y": 515
+    },
+    {
+     "x": -25,
+     "y": 515
+    },
+    {
+     "x": -25,
+     "y": 385
+    },
+    {
+     "x": 100,
+     "y": 385
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "a5"
+   ],
+   "b": [
+    "b1",
+    "tn5"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "a9"
+   ],
+   "b": [
+    "b1",
+    "tn9"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "a13"
+   ],
+   "b": [
+    "b1",
+    "tn13"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "a17"
+   ],
+   "b": [
+    "b1",
+    "tn17"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "j28"
+   ],
+   "b": [
+    "b1",
+    "bn28"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "a31"
+   ],
+   "b": [
+    "b1",
+    "tn31"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "j46"
+   ],
+   "b": [
+    "b1",
+    "bn46"
+   ],
+   "points": [],
+   "color": "#26272b"
   },
   {
    "a": [
@@ -1189,220 +1370,12 @@
    ],
    "b": [
     "b1",
-    "a23"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "g52"
-   ],
-   "b": [
-    "b2",
-    "g53"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "g7"
-   ],
-   "b": [
-    "b3",
-    "g8"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "h8"
-   ],
-   "b": [
-    "b3",
-    "h9"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "g9"
-   ],
-   "b": [
-    "b3",
-    "g10"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "g53"
-   ],
-   "b": [
-    "b3",
-    "g54"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "g56"
-   ],
-   "b": [
-    "b1",
-    "g54"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "h55"
-   ],
-   "b": [
-    "b2",
-    "h53"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "h54"
-   ],
-   "b": [
-    "b3",
-    "h56"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn5"
-   ],
-   "b": [
-    "b1",
-    "a5"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn9"
-   ],
-   "b": [
-    "b1",
-    "a9"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn13"
-   ],
-   "b": [
-    "b1",
-    "a13"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn17"
-   ],
-   "b": [
-    "b1",
-    "a17"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn31"
-   ],
-   "b": [
-    "b1",
-    "a31"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "tn3"
-   ],
-   "b": [
-    "b2",
-    "a3"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "tn43"
-   ],
-   "b": [
-    "b2",
-    "a43"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "h50"
-   ],
-   "b": [
-    "b3",
-    "h53"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "tn23"
-   ],
-   "b": [
-    "b1",
-    "b23"
+    "tn25"
    ],
    "points": [
     {
-     "x": 245,
+     "x": 260,
      "y": 30
-    },
-    {
-     "x": 245,
-     "y": 70
     }
    ],
    "color": "#26272b"
@@ -1410,11 +1383,52 @@
   {
    "a": [
     "b1",
-    "tn59"
+    "a23"
    ],
    "b": [
     "b1",
+    "tn23"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "j56"
+   ],
+   "b": [
+    "b1",
+    "bn56"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "j54"
+   ],
+   "b": [
+    "b1",
+    "bn55"
+   ],
+   "points": [
+    {
+     "x": 560,
+     "y": 210
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
     "a60"
+   ],
+   "b": [
+    "b1",
+    "tn61"
    ],
    "points": [
     {
@@ -1426,48 +1440,12 @@
   },
   {
    "a": [
-    "b1",
-    "bn5"
+    "b2",
+    "a3"
    ],
    "b": [
-    "b1",
-    "j5"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "bn28"
-   ],
-   "b": [
-    "b1",
-    "j28"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "bn46"
-   ],
-   "b": [
-    "b1",
-    "j46"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "bn56"
-   ],
-   "b": [
-    "b1",
-    "j56"
+    "b2",
+    "tn3"
    ],
    "points": [],
    "color": "#26272b"
@@ -1475,11 +1453,149 @@
   {
    "a": [
     "b2",
-    "tn59"
+    "j7"
    ],
    "b": [
+    "b2",
+    "bn7"
+   ],
+   "points": [
+    {
+     "x": 95,
+     "y": 530
+    },
+    {
+     "x": 95,
+     "y": 570
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "a11"
+   ],
+   "b": [
+    "b2",
+    "tn11"
+   ],
+   "points": [
+    {
+     "x": 120,
+     "y": 420
+    },
+    {
+     "x": 120,
+     "y": 390
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j21"
+   ],
+   "b": [
+    "b2",
+    "bn21"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j29"
+   ],
+   "b": [
+    "b2",
+    "bn29"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j37"
+   ],
+   "b": [
+    "b2",
+    "bn37"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "a43"
+   ],
+   "b": [
+    "b2",
+    "tn43"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j45"
+   ],
+   "b": [
+    "b2",
+    "bn45"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j55"
+   ],
+   "b": [
+    "b2",
+    "bn55"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j52"
+   ],
+   "b": [
+    "b2",
+    "bn52"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "j53"
+   ],
+   "b": [
+    "b2",
+    "bn53"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
     "b2",
     "a60"
+   ],
+   "b": [
+    "b2",
+    "tn61"
    ],
    "points": [
     {
@@ -1491,214 +1607,21 @@
   },
   {
    "a": [
-    "b2",
-    "bn3"
-   ],
-   "b": [
-    "b2",
-    "j3"
-   ],
-   "points": [
-    {
-     "x": 45,
-     "y": 570
-    },
-    {
-     "x": 45,
-     "y": 530
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn7"
-   ],
-   "b": [
-    "b2",
-    "j7"
-   ],
-   "points": [
-    {
-     "x": 95,
-     "y": 570
-    },
-    {
-     "x": 95,
-     "y": 530
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn21"
-   ],
-   "b": [
-    "b2",
-    "j21"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn29"
-   ],
-   "b": [
-    "b2",
-    "j29"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn37"
-   ],
-   "b": [
-    "b2",
-    "j37"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn45"
-   ],
-   "b": [
-    "b2",
-    "j45"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn55"
-   ],
-   "b": [
-    "b2",
-    "j55"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "tn47"
-   ],
-   "b": [
-    "b3",
-    "a48"
-   ],
-   "points": [
-    {
-     "x": 500,
-     "y": 750
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "tn53"
-   ],
-   "b": [
-    "b3",
-    "a54"
-   ],
-   "points": [
-    {
-     "x": 560,
-     "y": 750
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "bn7"
-   ],
-   "b": [
     "b3",
     "j7"
    ],
+   "b": [
+    "b3",
+    "bn7"
+   ],
    "points": [
-    {
-     "x": 95,
-     "y": 930
-    },
     {
      "x": 95,
      "y": 890
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "bn26"
-   ],
-   "b": [
-    "b3",
-    "j26"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "bn34"
-   ],
-   "b": [
-    "b3",
-    "j34"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "bn50"
-   ],
-   "b": [
-    "b3",
-    "j50"
-   ],
-   "points": [],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b3",
-    "g60"
-   ],
-   "b": [
-    "b3",
-    "g56"
-   ],
-   "points": [
-    {
-     "x": 620,
-     "y": 855
     },
     {
-     "x": 580,
-     "y": 855
+     "x": 95,
+     "y": 930
     }
    ],
    "color": "#26272b"
@@ -1706,11 +1629,47 @@
   {
    "a": [
     "b3",
-    "bn17"
+    "j8"
    ],
    "b": [
     "b3",
+    "bn8"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j9"
+   ],
+   "b": [
+    "b3",
+    "bn9"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j10"
+   ],
+   "b": [
+    "b3",
+    "bn10"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
     "j18"
+   ],
+   "b": [
+    "b3",
+    "bn19"
    ],
    "points": [
     {
@@ -1723,11 +1682,35 @@
   {
    "a": [
     "b3",
-    "bn41"
+    "j26"
    ],
    "b": [
     "b3",
+    "bn26"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j34"
+   ],
+   "b": [
+    "b3",
+    "bn34"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
     "j42"
+   ],
+   "b": [
+    "b3",
+    "bn43"
    ],
    "points": [
     {
@@ -1739,175 +1722,16 @@
   },
   {
    "a": [
-    "b2",
-    "tn11"
-   ],
-   "b": [
-    "b2",
-    "e11"
-   ],
-   "points": [
-    {
-     "x": 150,
-     "y": 390
-    },
-    {
-     "x": 150,
-     "y": 455
-    },
-    {
-     "x": 130,
-     "y": 455
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
     "b3",
-    "d48"
+    "a48"
    ],
    "b": [
     "b3",
-    "g50"
+    "tn49"
    ],
    "points": [
     {
-     "x": 630,
-     "y": 810
-    },
-    {
-     "x": 630,
-     "y": 865
-    },
-    {
-     "x": 520,
-     "y": 865
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "giga",
-    "GND.5"
-   ],
-   "b": [
-    "conv4",
-    "GND.L"
-   ],
-   "points": [
-    {
-     "x": -295,
-     "y": 630
-    },
-    {
-     "x": -295,
-     "y": 640
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "conv1",
-    "GND.L"
-   ],
-   "b": [
-    "conv2",
-    "GND.L"
-   ],
-   "points": [
-    {
-     "x": -255,
-     "y": 360
-    },
-    {
-     "x": -255,
-     "y": 500
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "conv1",
-    "GND.H"
-   ],
-   "b": [
-    "conv3",
-    "GND.H"
-   ],
-   "points": [
-    {
-     "x": -135,
-     "y": 360
-    },
-    {
-     "x": -135,
-     "y": 220
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "conv2",
-    "GND.H"
-   ],
-   "b": [
-    "conv4",
-    "GND.H"
-   ],
-   "points": [
-    {
-     "x": -135,
-     "y": 500
-    },
-    {
-     "x": -135,
-     "y": 640
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b1",
-    "bn1"
-   ],
-   "b": [
-    "b2",
-    "tn1"
-   ],
-   "points": [
-    {
-     "x": 35,
-     "y": 210
-    },
-    {
-     "x": 35,
-     "y": 390
-    }
-   ],
-   "color": "#26272b"
-  },
-  {
-   "a": [
-    "b2",
-    "bn1"
-   ],
-   "b": [
-    "b3",
-    "tn1"
-   ],
-   "points": [
-    {
-     "x": 25,
-     "y": 570
-    },
-    {
-     "x": 25,
+     "x": 500,
      "y": 750
     }
    ],
@@ -1915,46 +1739,121 @@
   },
   {
    "a": [
-    "b1",
-    "bn2"
+    "b3",
+    "j60"
    ],
    "b": [
-    "conv3",
-    "GND.L"
+    "b3",
+    "bn61"
    ],
    "points": [
     {
-     "x": 40,
-     "y": 250
-    },
-    {
-     "x": -235,
-     "y": 250
-    },
-    {
-     "x": -235,
-     "y": 220
+     "x": 620,
+     "y": 930
     }
    ],
    "color": "#26272b"
   },
   {
    "a": [
-    "supply",
-    "-"
+    "b3",
+    "j50"
    ],
    "b": [
-    "giga",
-    "GND.1"
+    "b3",
+    "bn50"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "a54"
+   ],
+   "b": [
+    "b3",
+    "tn55"
    ],
    "points": [
     {
-     "x": -480,
-     "y": 425
-    },
+     "x": 560,
+     "y": 750
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j53"
+   ],
+   "b": [
+    "b3",
+    "bn53"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j54"
+   ],
+   "b": [
+    "b3",
+    "bn55"
+   ],
+   "points": [
     {
-     "x": -600,
-     "y": 425
+     "x": 560,
+     "y": 930
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "j56"
+   ],
+   "b": [
+    "b3",
+    "bn56"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn50"
+   ],
+   "b": [
+    "txs1",
+    "GND"
+   ],
+   "points": [
+    {
+     "x": 520,
+     "y": 250
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "tn44"
+   ],
+   "b": [
+    "txs2",
+    "GND"
+   ],
+   "points": [
+    {
+     "x": 460,
+     "y": 600
     }
    ],
    "color": "#26272b"
@@ -1962,20 +1861,24 @@
   {
    "a": [
     "b1",
-    "g11"
+    "j11"
    ],
    "b": [
     "b1",
-    "g23"
+    "a34"
    ],
    "points": [
     {
-     "x": 130,
-     "y": 135
+     "x": 140,
+     "y": 170
     },
     {
-     "x": 250,
-     "y": 135
+     "x": 140,
+     "y": 25
+    },
+    {
+     "x": 360,
+     "y": 25
     }
    ],
    "color": "#3e7bfa"
@@ -1983,11 +1886,11 @@
   {
    "a": [
     "b1",
-    "d34"
+    "b34"
    ],
    "b": [
     "b1",
-    "h23"
+    "j23"
    ],
    "points": [
     {
@@ -2000,68 +1903,47 @@
     },
     {
      "x": 315,
-     "y": 135
+     "y": 165
     },
     {
-     "x": 255,
-     "y": 135
-    },
-    {
-     "x": 255,
-     "y": 150
+     "x": 250,
+     "y": 165
     }
    ],
    "color": "#3e7bfa"
   },
   {
    "a": [
-    "b1",
-    "j11"
-   ],
-   "b": [
-    "conv3",
-    "H2"
-   ],
-   "points": [
-    {
-     "x": 130,
-     "y": 195
-    },
-    {
-     "x": -160,
-     "y": 195
-    },
-    {
-     "x": -160,
-     "y": 200
-    }
-   ],
-   "color": "#3e7bfa"
-  },
-  {
-   "a": [
-    "b1",
-    "d33"
+    "txs2",
+    "B2"
    ],
    "b": [
     "b1",
-    "g36"
+    "i11"
    ],
    "points": [
     {
-     "x": 350,
-     "y": 100
+     "x": -170,
+     "y": 540
     },
     {
-     "x": 400,
-     "y": 100
+     "x": 10,
+     "y": 540
     },
     {
-     "x": 400,
-     "y": 140
+     "x": 10,
+     "y": 175
+    },
+    {
+     "x": 125,
+     "y": 175
+    },
+    {
+     "x": 125,
+     "y": 160
     }
    ],
-   "color": "#3e7bfa"
+   "color": "#f5c518"
   },
   {
    "a": [
@@ -2070,16 +1952,24 @@
    ],
    "b": [
     "b1",
-    "b33"
+    "a33"
    ],
    "points": [
     {
      "x": 170,
-     "y": 75
+     "y": 55
+    },
+    {
+     "x": 285,
+     "y": 55
+    },
+    {
+     "x": 285,
+     "y": 50
     },
     {
      "x": 350,
-     "y": 75
+     "y": 50
     }
    ],
    "color": "#3e7bfa"
@@ -2087,97 +1977,189 @@
   {
    "a": [
     "b1",
-    "j15"
+    "b33"
    ],
    "b": [
-    "conv3",
-    "H3"
+    "b1",
+    "j36"
    ],
    "points": [
     {
-     "x": 170,
-     "y": 230
-    }
-   ],
-   "color": "#3e7bfa"
-  },
-  {
-   "a": [
-    "b1",
-    "g32"
-   ],
-   "b": [
-    "b1",
-    "g33"
-   ],
-   "points": [],
-   "color": "#3e7bfa"
-  },
-  {
-   "a": [
-    "b1",
-    "g26"
-   ],
-   "b": [
-    "b1",
-    "d26"
-   ],
-   "points": [
-    {
-     "x": 310,
-     "y": 140
+     "x": 350,
+     "y": 100
     },
     {
-     "x": 310,
-     "y": 95
+     "x": 400,
+     "y": 100
+    },
+    {
+     "x": 400,
+     "y": 165
+    },
+    {
+     "x": 380,
+     "y": 165
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "txs2",
+    "B3"
+   ],
+   "b": [
+    "b1",
+    "c15"
+   ],
+   "points": [
+    {
+     "x": -160,
+     "y": 530
+    },
+    {
+     "x": -20,
+     "y": 530
+    },
+    {
+     "x": -20,
+     "y": 180
+    },
+    {
+     "x": 145,
+     "y": 180
+    },
+    {
+     "x": 145,
+     "y": 80
+    }
+   ],
+   "color": "#f5c518"
+  },
+  {
+   "a": [
+    "b1",
+    "b19"
+   ],
+   "b": [
+    "b1",
+    "j32"
+   ],
+   "points": [
+    {
+     "x": 220,
+     "y": 70
+    },
+    {
+     "x": 220,
+     "y": 180
+    },
+    {
+     "x": 340,
+     "y": 180
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "i32"
+   ],
+   "b": [
+    "b1",
+    "j33"
+   ],
+   "points": [
+    {
+     "x": 350,
+     "y": 160
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "c19"
+   ],
+   "b": [
+    "b1",
+    "j26"
+   ],
+   "points": [
+    {
+     "x": 215,
+     "y": 80
+    },
+    {
+     "x": 215,
+     "y": 175
     },
     {
      "x": 280,
-     "y": 95
+     "y": 175
     }
    ],
    "color": "#3e7bfa"
   },
   {
    "a": [
-    "b1",
-    "h32"
-   ],
-   "b": [
-    "b1",
-    "h26"
-   ],
-   "points": [],
-   "color": "#3e7bfa"
-  },
-  {
-   "a": [
-    "b1",
-    "i19"
-   ],
-   "b": [
     "b1",
     "i26"
    ],
-   "points": [],
+   "b": [
+    "b1",
+    "a26"
+   ],
+   "points": [
+    {
+     "x": 310,
+     "y": 160
+    },
+    {
+     "x": 310,
+     "y": 65
+    },
+    {
+     "x": 280,
+     "y": 65
+    }
+   ],
    "color": "#3e7bfa"
   },
   {
    "a": [
-    "b1",
-    "j19"
+    "txs2",
+    "B4"
    ],
    "b": [
-    "conv3",
-    "H4"
+    "b1",
+    "d19"
    ],
    "points": [
     {
-     "x": 210,
-     "y": 240
+     "x": -150,
+     "y": 545
+    },
+    {
+     "x": -5,
+     "y": 545
+    },
+    {
+     "x": -5,
+     "y": 235
+    },
+    {
+     "x": 185,
+     "y": 235
+    },
+    {
+     "x": 185,
+     "y": 90
     }
    ],
-   "color": "#3e7bfa"
+   "color": "#f5c518"
   },
   {
    "a": [
@@ -2185,41 +2167,53 @@
     "j7"
    ],
    "b": [
-    "conv3",
-    "H1"
+    "b1",
+    "j40"
    ],
    "points": [
     {
      "x": 90,
-     "y": 190
+     "y": 185
+    },
+    {
+     "x": 420,
+     "y": 185
     }
    ],
    "color": "#3e7bfa"
   },
   {
    "a": [
-    "b1",
-    "g7"
+    "txs2",
+    "B1"
    ],
    "b": [
     "b1",
-    "g40"
+    "i7"
    ],
    "points": [
     {
-     "x": 95,
-     "y": 140
+     "x": -180,
+     "y": 525
     },
     {
-     "x": 95,
-     "y": 180
+     "x": 0,
+     "y": 525
     },
     {
-     "x": 420,
-     "y": 180
+     "x": 0,
+     "y": 215
+    },
+    {
+     "x": 45,
+     "y": 215
+    },
+    {
+     "x": 45,
+     "y": 160
     }
    ],
-   "color": "#3e7bfa"
+   "color": "#f5c518"
   },
   {
    "a": [
@@ -2233,11 +2227,11 @@
    "points": [
     {
      "x": 430,
-     "y": 175
+     "y": 145
     },
     {
      "x": 240,
-     "y": 175
+     "y": 145
     }
    ],
    "color": "#3e7bfa"
@@ -2254,11 +2248,11 @@
    "points": [
     {
      "x": 260,
-     "y": 155
+     "y": 130
     },
     {
      "x": 410,
-     "y": 155
+     "y": 130
     },
     {
      "x": 410,
@@ -2291,11 +2285,7 @@
     },
     {
      "x": 405,
-     "y": 135
-    },
-    {
-     "x": 370,
-     "y": 135
+     "y": 140
     }
    ],
    "color": "#3e7bfa"
@@ -2309,16 +2299,7 @@
     "b1",
     "g25"
    ],
-   "points": [
-    {
-     "x": 360,
-     "y": 145
-    },
-    {
-     "x": 270,
-     "y": 145
-    }
-   ],
+   "points": [],
    "color": "#6ba8a5"
   },
   {
@@ -2344,8 +2325,57 @@
   },
   {
    "a": [
+    "u11",
+    "1Q"
+   ],
+   "b": [
+    "b1",
+    "j55"
+   ],
+   "points": [
+    {
+     "x": 455,
+     "y": 820
+    },
+    {
+     "x": 455,
+     "y": 565
+    },
+    {
+     "x": 650,
+     "y": 565
+    },
+    {
+     "x": 650,
+     "y": 515
+    },
+    {
+     "x": 705,
+     "y": 515
+    },
+    {
+     "x": 705,
+     "y": 415
+    },
+    {
+     "x": 640,
+     "y": 415
+    },
+    {
+     "x": 640,
+     "y": 175
+    },
+    {
+     "x": 570,
+     "y": 175
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
     "b3",
-    "b44"
+    "a44"
    ],
    "b": [
     "b3",
@@ -2353,7 +2383,11 @@
    ],
    "points": [
     {
-     "x": 460,
+     "x": 465,
+     "y": 780
+    },
+    {
+     "x": 465,
      "y": 795
     },
     {
@@ -2365,74 +2399,98 @@
   },
   {
    "a": [
+    "b3",
+    "b44"
+   ],
+   "b": [
+    "txs1",
+    "B5"
+   ],
+   "points": [
+    {
+     "x": 450,
+     "y": 790
+    },
+    {
+     "x": 450,
+     "y": 610
+    },
+    {
+     "x": -80,
+     "y": 610
+    },
+    {
+     "x": -80,
+     "y": 215
+    },
+    {
+     "x": -140,
+     "y": 215
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
+    "u11",
+    "2Q"
+   ],
+   "b": [
     "b1",
-    "j55"
-   ],
-   "b": [
-    "b3",
-    "c59"
+    "j49"
    ],
    "points": [
     {
-     "x": 570,
-     "y": 380
+     "x": 495,
+     "y": 820
     },
     {
-     "x": 655,
-     "y": 380
+     "x": 495,
+     "y": 590
     },
     {
-     "x": 655,
-     "y": 400
-    },
-    {
-     "x": 690,
-     "y": 400
-    },
-    {
-     "x": 690,
-     "y": 540
+     "x": 665,
+     "y": 590
     },
     {
      "x": 665,
      "y": 540
     },
     {
-     "x": 665,
-     "y": 800
+     "x": 670,
+     "y": 540
+    },
+    {
+     "x": 670,
+     "y": 530
+    },
+    {
+     "x": 700,
+     "y": 530
+    },
+    {
+     "x": 700,
+     "y": 410
+    },
+    {
+     "x": 635,
+     "y": 410
+    },
+    {
+     "x": 635,
+     "y": 225
+    },
+    {
+     "x": 510,
+     "y": 225
     }
    ],
-   "color": "#62b48c"
+   "color": "#759fd5"
   },
   {
    "a": [
     "b3",
-    "a44"
-   ],
-   "b": [
-    "conv2",
-    "H1"
-   ],
-   "points": [
-    {
-     "x": 460,
-     "y": 605
-    },
-    {
-     "x": -110,
-     "y": 605
-    },
-    {
-     "x": -110,
-     "y": 470
-    }
-   ],
-   "color": "#62b48c"
-  },
-  {
-   "a": [
-    "b3",
-    "b45"
+    "a45"
    ],
    "b": [
     "b3",
@@ -2453,76 +2511,84 @@
   {
    "a": [
     "b3",
-    "a45"
+    "b45"
    ],
    "b": [
-    "b1",
-    "j49"
+    "txs1",
+    "B6"
    ],
    "points": [
     {
-     "x": 470,
-     "y": 585
+     "x": 475,
+     "y": 790
     },
     {
-     "x": 675,
-     "y": 585
+     "x": 475,
+     "y": 615
     },
     {
-     "x": 675,
-     "y": 545
+     "x": -75,
+     "y": 615
     },
     {
-     "x": 685,
-     "y": 545
+     "x": -75,
+     "y": 210
     },
     {
-     "x": 685,
-     "y": 395
-    },
-    {
-     "x": 660,
-     "y": 395
-    },
-    {
-     "x": 660,
-     "y": 225
-    },
-    {
-     "x": 510,
-     "y": 225
+     "x": -130,
+     "y": 210
     }
    ],
    "color": "#759fd5"
   },
   {
    "a": [
-    "b3",
-    "c45"
+    "u11",
+    "3Q"
    ],
    "b": [
-    "conv2",
-    "H2"
+    "b1",
+    "j50"
    ],
    "points": [
     {
-     "x": 465,
-     "y": 800
+     "x": 525,
+     "y": 820
     },
     {
-     "x": 465,
+     "x": 525,
      "y": 580
     },
     {
-     "x": -105,
+     "x": 660,
      "y": 580
     },
     {
-     "x": -105,
-     "y": 480
+     "x": 660,
+     "y": 535
+    },
+    {
+     "x": 695,
+     "y": 535
+    },
+    {
+     "x": 695,
+     "y": 400
+    },
+    {
+     "x": 655,
+     "y": 400
+    },
+    {
+     "x": 655,
+     "y": 220
+    },
+    {
+     "x": 520,
+     "y": 220
     }
    ],
-   "color": "#759fd5"
+   "color": "#c38bac"
   },
   {
    "a": [
@@ -2551,66 +2617,37 @@
     "b50"
    ],
    "b": [
-    "b1",
-    "j50"
+    "txs1",
+    "B7"
    ],
    "points": [
     {
-     "x": 525,
+     "x": 515,
      "y": 790
     },
     {
-     "x": 525,
+     "x": 515,
      "y": 580
     },
     {
-     "x": 740,
+     "x": 360,
      "y": 580
     },
     {
-     "x": 740,
-     "y": 220
+     "x": 360,
+     "y": 550
     },
     {
-     "x": 520,
-     "y": 220
-    }
-   ],
-   "color": "#c38bac"
-  },
-  {
-   "a": [
-    "b3",
-    "c50"
-   ],
-   "b": [
-    "conv2",
-    "H3"
-   ],
-   "points": [
-    {
-     "x": 475,
-     "y": 800
+     "x": -70,
+     "y": 550
     },
     {
-     "x": 475,
-     "y": 615
+     "x": -70,
+     "y": 240
     },
     {
-     "x": -130,
-     "y": 615
-    },
-    {
-     "x": -130,
-     "y": 545
-    },
-    {
-     "x": -160,
-     "y": 545
-    },
-    {
-     "x": -160,
-     "y": 510
+     "x": -120,
+     "y": 240
     }
    ],
    "color": "#c38bac"
@@ -2878,11 +2915,11 @@
    "points": [
     {
      "x": 200,
-     "y": 245
+     "y": 215
     },
     {
      "x": 460,
-     "y": 245
+     "y": 215
     }
    ],
    "color": "#45c3bb"
@@ -3031,12 +3068,8 @@
    ],
    "points": [
     {
-     "x": 440,
-     "y": 460
-    },
-    {
      "x": 400,
-     "y": 460
+     "y": 450
     },
     {
      "x": 400,
@@ -3106,16 +3139,16 @@
      "y": 375
     },
     {
-     "x": 155,
+     "x": 150,
      "y": 375
     },
     {
-     "x": 155,
-     "y": 445
+     "x": 150,
+     "y": 455
     },
     {
      "x": 145,
-     "y": 445
+     "y": 455
     },
     {
      "x": 145,
@@ -3164,39 +3197,19 @@
    ],
    "points": [
     {
-     "x": 300,
-     "y": 100
-    },
-    {
      "x": 230,
-     "y": 100
+     "y": 90
     },
     {
      "x": 230,
      "y": 370
     },
     {
-     "x": 160,
+     "x": 155,
      "y": 370
     },
     {
-     "x": 160,
-     "y": 445
-    },
-    {
      "x": 155,
-     "y": 445
-    },
-    {
-     "x": 155,
-     "y": 450
-    },
-    {
-     "x": 140,
-     "y": 450
-    },
-    {
-     "x": 140,
      "y": 445
     },
     {
@@ -3225,24 +3238,16 @@
    ],
    "points": [
     {
-     "x": 460,
-     "y": 540
+     "x": 490,
+     "y": 500
     },
     {
-     "x": 660,
-     "y": 540
+     "x": 490,
+     "y": 445
     },
     {
-     "x": 660,
-     "y": 395
-    },
-    {
-     "x": 375,
-     "y": 395
-    },
-    {
-     "x": 375,
-     "y": 450
+     "x": 370,
+     "y": 445
     }
    ],
    "color": "#cfa16b"
@@ -3259,11 +3264,11 @@
    "points": [
     {
      "x": 330,
-     "y": 375
+     "y": 370
     },
     {
      "x": 370,
-     "y": 375
+     "y": 370
     }
    ],
    "color": "#cfa16b"
@@ -3338,14 +3343,14 @@
    "points": [
     {
      "x": 220,
-     "y": 565
+     "y": 725
     },
     {
-     "x": 15,
-     "y": 565
+     "x": -5,
+     "y": 725
     },
     {
-     "x": 15,
+     "x": -5,
      "y": 880
     }
    ],
@@ -3375,45 +3380,20 @@
   {
    "a": [
     "b2",
-    "g19"
+    "j19"
    ],
    "b": [
     "b2",
-    "g23"
+    "j23"
    ],
    "points": [
     {
      "x": 210,
-     "y": 505
+     "y": 535
     },
     {
      "x": 250,
-     "y": 505
-    }
-   ],
-   "color": "#e0a24f"
-  },
-  {
-   "a": [
-    "b3",
-    "g32"
-   ],
-   "b": [
-    "b3",
-    "d30"
-   ],
-   "points": [
-    {
-     "x": 340,
-     "y": 850
-    },
-    {
-     "x": 370,
-     "y": 850
-    },
-    {
-     "x": 370,
-     "y": 810
+     "y": 535
     }
    ],
    "color": "#e0a24f"
@@ -3421,7 +3401,40 @@
   {
    "a": [
     "b2",
-    "j23"
+    "i19"
+   ],
+   "b": [
+    "b3",
+    "j32"
+   ],
+   "points": [
+    {
+     "x": 195,
+     "y": 520
+    },
+    {
+     "x": 195,
+     "y": 565
+    },
+    {
+     "x": 0,
+     "y": 565
+    },
+    {
+     "x": 0,
+     "y": 945
+    },
+    {
+     "x": 340,
+     "y": 945
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "b3",
+    "i32"
    ],
    "b": [
     "b3",
@@ -3429,12 +3442,24 @@
    ],
    "points": [
     {
-     "x": 250,
-     "y": 730
+     "x": 365,
+     "y": 880
+    },
+    {
+     "x": 365,
+     "y": 895
+    },
+    {
+     "x": 540,
+     "y": 895
+    },
+    {
+     "x": 540,
+     "y": 770
     },
     {
      "x": 320,
-     "y": 730
+     "y": 770
     }
    ],
    "color": "#e0a24f"
@@ -3445,29 +3470,29 @@
     "h19"
    ],
    "b": [
-    "conv1",
-    "H4"
+    "txs1",
+    "B4"
    ],
    "points": [
     {
-     "x": 210,
-     "y": 525
+     "x": 205,
+     "y": 510
     },
     {
-     "x": 175,
-     "y": 525
-    },
-    {
-     "x": 175,
+     "x": 205,
      "y": 535
     },
     {
-     "x": -125,
+     "x": -85,
      "y": 535
     },
     {
-     "x": -125,
-     "y": 380
+     "x": -85,
+     "y": 235
+    },
+    {
+     "x": -150,
+     "y": 235
     }
    ],
    "color": "#e0a24f"
@@ -3487,16 +3512,40 @@
      "y": 15
     },
     {
-     "x": 15,
+     "x": 105,
      "y": 15
     },
     {
-     "x": 15,
-     "y": 550
+     "x": 105,
+     "y": 165
+    },
+    {
+     "x": 85,
+     "y": 165
+    },
+    {
+     "x": 85,
+     "y": 425
+    },
+    {
+     "x": 75,
+     "y": 425
+    },
+    {
+     "x": 75,
+     "y": 520
+    },
+    {
+     "x": 195,
+     "y": 520
+    },
+    {
+     "x": 195,
+     "y": 505
     },
     {
      "x": 260,
-     "y": 550
+     "y": 505
     }
    ],
    "color": "#ff6b8a"
@@ -3534,11 +3583,11 @@
    "points": [
     {
      "x": 350,
-     "y": 535
+     "y": 515
     },
     {
      "x": 180,
-     "y": 535
+     "y": 515
     }
    ],
    "color": "#df927a"
@@ -3580,19 +3629,19 @@
     },
     {
      "x": 345,
-     "y": 370
+     "y": 375
     },
     {
-     "x": 675,
-     "y": 370
+     "x": 670,
+     "y": 375
     },
     {
-     "x": 675,
-     "y": 545
+     "x": 670,
+     "y": 525
     },
     {
      "x": 530,
-     "y": 545
+     "y": 525
     }
    ],
    "color": "#aab965"
@@ -3633,11 +3682,11 @@
      "y": 575
     },
     {
-     "x": 680,
+     "x": 740,
      "y": 575
     },
     {
-     "x": 680,
+     "x": 740,
      "y": 215
     },
     {
@@ -3658,32 +3707,28 @@
   {
    "a": [
     "b2",
-    "d39"
+    "a39"
    ],
    "b": [
     "b2",
-    "g54"
+    "j54"
    ],
    "points": [
     {
-     "x": 415,
-     "y": 450
+     "x": 410,
+     "y": 370
     },
     {
-     "x": 415,
-     "y": 375
+     "x": 675,
+     "y": 370
     },
     {
-     "x": 670,
-     "y": 375
-    },
-    {
-     "x": 670,
-     "y": 525
+     "x": 675,
+     "y": 545
     },
     {
      "x": 560,
-     "y": 525
+     "y": 545
     }
    ],
    "color": "#e2b35c"
@@ -3691,7 +3736,7 @@
   {
    "a": [
     "b2",
-    "j54"
+    "b39"
    ],
    "b": [
     "b3",
@@ -3699,12 +3744,40 @@
    ],
    "points": [
     {
-     "x": 560,
-     "y": 745
+     "x": 415,
+     "y": 430
+    },
+    {
+     "x": 415,
+     "y": 360
+    },
+    {
+     "x": 660,
+     "y": 360
+    },
+    {
+     "x": 660,
+     "y": 395
+    },
+    {
+     "x": 690,
+     "y": 395
+    },
+    {
+     "x": 690,
+     "y": 540
+    },
+    {
+     "x": 670,
+     "y": 540
+    },
+    {
+     "x": 670,
+     "y": 770
     },
     {
      "x": 620,
-     "y": 745
+     "y": 770
     }
    ],
    "color": "#e2b35c"
@@ -3712,85 +3785,27 @@
   {
    "a": [
     "b2",
-    "a39"
+    "c39"
    ],
    "b": [
-    "conv1",
-    "H1"
+    "txs1",
+    "B1"
    ],
    "points": [
     {
-     "x": 410,
-     "y": 330
+     "x": 405,
+     "y": 440
+    },
+    {
+     "x": 405,
+     "y": 230
+    },
+    {
+     "x": -180,
+     "y": 230
     }
    ],
    "color": "#e2b35c"
-  },
-  {
-   "a": [
-    "b2",
-    "d40"
-   ],
-   "b": [
-    "b2",
-    "g48"
-   ],
-   "points": [
-    {
-     "x": 425,
-     "y": 450
-    },
-    {
-     "x": 425,
-     "y": 400
-    },
-    {
-     "x": 655,
-     "y": 400
-    },
-    {
-     "x": 655,
-     "y": 535
-    },
-    {
-     "x": 505,
-     "y": 535
-    },
-    {
-     "x": 505,
-     "y": 500
-    }
-   ],
-   "color": "#68b3d1"
-  },
-  {
-   "a": [
-    "b2",
-    "j48"
-   ],
-   "b": [
-    "b3",
-    "b58"
-   ],
-   "points": [
-    {
-     "x": 500,
-     "y": 730
-    },
-    {
-     "x": 625,
-     "y": 730
-    },
-    {
-     "x": 625,
-     "y": 785
-    },
-    {
-     "x": 600,
-     "y": 785
-    }
-   ],
-   "color": "#68b3d1"
   },
   {
    "a": [
@@ -3798,13 +3813,25 @@
     "a40"
    ],
    "b": [
-    "conv1",
-    "H2"
+    "b2",
+    "j48"
    ],
    "points": [
     {
      "x": 420,
-     "y": 340
+     "y": 385
+    },
+    {
+     "x": 665,
+     "y": 385
+    },
+    {
+     "x": 665,
+     "y": 540
+    },
+    {
+     "x": 500,
+     "y": 540
     }
    ],
    "color": "#68b3d1"
@@ -3812,48 +3839,88 @@
   {
    "a": [
     "b2",
-    "d45"
+    "b40"
    ],
    "b": [
-    "b2",
-    "g49"
+    "b3",
+    "b58"
    ],
    "points": [
     {
-     "x": 490,
-     "y": 450
+     "x": 455,
+     "y": 430
     },
     {
-     "x": 490,
-     "y": 495
+     "x": 455,
+     "y": 395
     },
     {
-     "x": 510,
-     "y": 495
+     "x": 545,
+     "y": 395
+    },
+    {
+     "x": 545,
+     "y": 390
+    },
+    {
+     "x": 615,
+     "y": 390
+    },
+    {
+     "x": 615,
+     "y": 405
+    },
+    {
+     "x": 685,
+     "y": 405
+    },
+    {
+     "x": 685,
+     "y": 545
+    },
+    {
+     "x": 675,
+     "y": 545
+    },
+    {
+     "x": 675,
+     "y": 775
+    },
+    {
+     "x": 600,
+     "y": 775
     }
    ],
-   "color": "#a68bd4"
+   "color": "#68b3d1"
   },
   {
    "a": [
     "b2",
-    "j49"
+    "c40"
    ],
    "b": [
-    "b3",
-    "a55"
+    "txs1",
+    "B2"
    ],
    "points": [
     {
-     "x": 510,
-     "y": 770
+     "x": 420,
+     "y": 435
     },
     {
-     "x": 570,
-     "y": 770
+     "x": 400,
+     "y": 435
+    },
+    {
+     "x": 400,
+     "y": 225
+    },
+    {
+     "x": -170,
+     "y": 225
     }
    ],
-   "color": "#a68bd4"
+   "color": "#68b3d1"
   },
   {
    "a": [
@@ -3861,29 +3928,87 @@
     "a45"
    ],
    "b": [
-    "conv1",
-    "H3"
+    "b2",
+    "j49"
    ],
    "points": [
     {
      "x": 470,
-     "y": 385
+     "y": 400
     },
     {
-     "x": 255,
-     "y": 385
+     "x": 655,
+     "y": 400
     },
     {
-     "x": 255,
+     "x": 655,
+     "y": 535
+    },
+    {
+     "x": 510,
+     "y": 535
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "b2",
+    "b45"
+   ],
+   "b": [
+    "b3",
+    "a55"
+   ],
+   "points": [
+    {
+     "x": 475,
+     "y": 430
+    },
+    {
+     "x": 475,
      "y": 365
     },
     {
-     "x": -160,
+     "x": 680,
      "y": 365
     },
     {
+     "x": 680,
+     "y": 740
+    },
+    {
+     "x": 575,
+     "y": 740
+    },
+    {
+     "x": 575,
+     "y": 780
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "b2",
+    "c45"
+   ],
+   "b": [
+    "txs1",
+    "B3"
+   ],
+   "points": [
+    {
+     "x": 465,
+     "y": 440
+    },
+    {
+     "x": 465,
+     "y": 220
+    },
+    {
      "x": -160,
-     "y": 370
+     "y": 220
     }
    ],
    "color": "#a68bd4"
@@ -3942,14 +4067,14 @@
    "points": [
     {
      "x": 550,
-     "y": 385
+     "y": 395
     },
     {
-     "x": 665,
-     "y": 385
+     "x": 660,
+     "y": 395
     },
     {
-     "x": 665,
+     "x": 660,
      "y": 520
     }
    ],
@@ -4059,35 +4184,19 @@
    "points": [
     {
      "x": 350,
-     "y": 905
+     "y": 950
     },
     {
-     "x": 670,
-     "y": 905
+     "x": -15,
+     "y": 950
     },
     {
-     "x": 670,
-     "y": 535
-    },
-    {
-     "x": 695,
-     "y": 535
-    },
-    {
-     "x": 695,
-     "y": 405
-    },
-    {
-     "x": 625,
-     "y": 405
-    },
-    {
-     "x": 625,
-     "y": 230
+     "x": -15,
+     "y": 195
     },
     {
      "x": 440,
-     "y": 230
+     "y": 195
     }
    ],
    "color": "#dda15e"
@@ -4104,22 +4213,22 @@
    "points": [
     {
      "x": 450,
-     "y": 360
+     "y": 205
     },
     {
      "x": 110,
-     "y": 360
+     "y": 205
     },
     {
      "x": 110,
-     "y": 415
+     "y": 425
     },
     {
-     "x": 95,
-     "y": 415
+     "x": 90,
+     "y": 425
     },
     {
-     "x": 95,
+     "x": 90,
      "y": 460
     }
    ],
@@ -4137,11 +4246,19 @@
    "points": [
     {
      "x": 330,
-     "y": 595
+     "y": 605
+    },
+    {
+     "x": 5,
+     "y": 605
+    },
+    {
+     "x": 5,
+     "y": 145
     },
     {
      "x": 10,
-     "y": 595
+     "y": 145
     },
     {
      "x": 10,
@@ -4166,14 +4283,14 @@
    "points": [
     {
      "x": 480,
-     "y": 0
+     "y": 5
     },
     {
-     "x": 5,
-     "y": 0
+     "x": -10,
+     "y": 5
     },
     {
-     "x": 5,
+     "x": -10,
      "y": 520
     }
    ],
@@ -4182,145 +4299,86 @@
   {
    "a": [
     "b3",
-    "g28"
+    "b7"
    ],
    "b": [
     "b3",
-    "g20"
+    "j28"
+   ],
+   "points": [
+    {
+     "x": 70,
+     "y": 790
+    },
+    {
+     "x": 70,
+     "y": 810
+    },
+    {
+     "x": 10,
+     "y": 810
+    },
+    {
+     "x": 10,
+     "y": 900
+    },
+    {
+     "x": 300,
+     "y": 900
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "i28"
+   ],
+   "b": [
+    "b3",
+    "j20"
    ],
    "points": [
     {
      "x": 300,
-     "y": 865
+     "y": 885
     },
     {
      "x": 220,
-     "y": 865
+     "y": 885
     }
    ],
    "color": "#2fbf71"
   },
   {
    "a": [
-    "b3",
-    "d7"
+    "txs2",
+    "B5"
    ],
    "b": [
     "b3",
-    "h20"
+    "i20"
    ],
    "points": [
     {
-     "x": 65,
-     "y": 810
+     "x": -140,
+     "y": 585
     },
     {
-     "x": 65,
-     "y": 870
+     "x": -10,
+     "y": 585
     },
     {
-     "x": 95,
-     "y": 870
+     "x": -10,
+     "y": 905
     },
     {
-     "x": 95,
-     "y": 875
+     "x": 195,
+     "y": 905
     },
     {
-     "x": 220,
-     "y": 875
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "b7"
-   ],
-   "b": [
-    "conv4",
-    "H1"
-   ],
-   "points": [
-    {
-     "x": 75,
-     "y": 790
-    },
-    {
-     "x": 75,
-     "y": 610
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "g29"
-   ],
-   "b": [
-    "b3",
-    "g37"
-   ],
-   "points": [
-    {
-     "x": 310,
-     "y": 865
-    },
-    {
-     "x": 390,
-     "y": 865
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "d8"
-   ],
-   "b": [
-    "b3",
-    "g12"
-   ],
-   "points": [
-    {
-     "x": 100,
-     "y": 815
-    },
-    {
-     "x": 80,
-     "y": 815
-    },
-    {
-     "x": 80,
-     "y": 855
-    },
-    {
-     "x": 140,
-     "y": 855
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "h12"
-   ],
-   "b": [
-    "b3",
-    "h29"
-   ],
-   "points": [
-    {
-     "x": 140,
-     "y": 900
-    },
-    {
-     "x": 310,
-     "y": 900
+     "x": 195,
+     "y": 880
     }
    ],
    "color": "#2fbf71"
@@ -4331,29 +4389,104 @@
     "b8"
    ],
    "b": [
-    "conv4",
-    "H2"
+    "b3",
+    "j12"
    ],
    "points": [
     {
      "x": 100,
-     "y": 780
+     "y": 815
     },
     {
-     "x": 80,
-     "y": 780
+     "x": 75,
+     "y": 815
     },
     {
-     "x": 80,
-     "y": 755
+     "x": 75,
+     "y": 885
     },
     {
-     "x": 70,
-     "y": 755
+     "x": 140,
+     "y": 885
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "i12"
+   ],
+   "b": [
+    "b3",
+    "j29"
+   ],
+   "points": [
+    {
+     "x": 135,
+     "y": 880
     },
     {
-     "x": 70,
-     "y": 620
+     "x": 135,
+     "y": 895
+    },
+    {
+     "x": 310,
+     "y": 895
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "i29"
+   ],
+   "b": [
+    "b3",
+    "j37"
+   ],
+   "points": [
+    {
+     "x": 310,
+     "y": 885
+    },
+    {
+     "x": 390,
+     "y": 885
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "txs2",
+    "B6"
+   ],
+   "b": [
+    "b3",
+    "i37"
+   ],
+   "points": [
+    {
+     "x": -130,
+     "y": 575
+    },
+    {
+     "x": -20,
+     "y": 575
+    },
+    {
+     "x": -20,
+     "y": 955
+    },
+    {
+     "x": 385,
+     "y": 955
+    },
+    {
+     "x": 385,
+     "y": 880
     }
    ],
    "color": "#2fbf71"
@@ -4365,16 +4498,28 @@
    ],
    "b": [
     "b3",
-    "b16"
+    "j13"
    ],
    "points": [
     {
      "x": 110,
-     "y": 785
+     "y": 810
     },
     {
-     "x": 180,
-     "y": 785
+     "x": 70,
+     "y": 810
+    },
+    {
+     "x": 70,
+     "y": 870
+    },
+    {
+     "x": 145,
+     "y": 870
+    },
+    {
+     "x": 145,
+     "y": 890
     }
    ],
    "color": "#2fbf71"
@@ -4382,28 +4527,28 @@
   {
    "a": [
     "b3",
-    "g13"
+    "i13"
    ],
    "b": [
     "b3",
-    "d16"
+    "a16"
    ],
    "points": [
     {
      "x": 150,
-     "y": 850
+     "y": 855
     },
     {
-     "x": 130,
-     "y": 850
+     "x": 80,
+     "y": 855
     },
     {
-     "x": 130,
-     "y": 815
+     "x": 80,
+     "y": 775
     },
     {
      "x": 180,
-     "y": 815
+     "y": 775
     }
    ],
    "color": "#2fbf71"
@@ -4411,7 +4556,7 @@
   {
    "a": [
     "b3",
-    "a16"
+    "b16"
    ],
    "b": [
     "b3",
@@ -4419,94 +4564,15 @@
    ],
    "points": [
     {
-     "x": 180,
-     "y": 770
+     "x": 185,
+     "y": 790
+    },
+    {
+     "x": 185,
+     "y": 775
     },
     {
      "x": 350,
-     "y": 770
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "c9"
-   ],
-   "b": [
-    "conv4",
-    "H3"
-   ],
-   "points": [
-    {
-     "x": 65,
-     "y": 800
-    },
-    {
-     "x": 65,
-     "y": 650
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "g15"
-   ],
-   "b": [
-    "b3",
-    "g16"
-   ],
-   "points": [],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "g40"
-   ],
-   "b": [
-    "b3",
-    "d40"
-   ],
-   "points": [
-    {
-     "x": 420,
-     "y": 850
-    },
-    {
-     "x": 450,
-     "y": 850
-    },
-    {
-     "x": 450,
-     "y": 815
-    },
-    {
-     "x": 420,
-     "y": 815
-    }
-   ],
-   "color": "#2fbf71"
-  },
-  {
-   "a": [
-    "b3",
-    "a32"
-   ],
-   "b": [
-    "b3",
-    "a40"
-   ],
-   "points": [
-    {
-     "x": 340,
-     "y": 775
-    },
-    {
-     "x": 420,
      "y": 775
     }
    ],
@@ -4514,25 +4580,25 @@
   },
   {
    "a": [
-    "b3",
-    "d10"
+    "txs2",
+    "B7"
    ],
    "b": [
     "b3",
-    "h15"
+    "b33"
    ],
    "points": [
     {
-     "x": 120,
-     "y": 805
+     "x": -120,
+     "y": 580
     },
     {
-     "x": 210,
-     "y": 805
+     "x": 355,
+     "y": 580
     },
     {
-     "x": 210,
-     "y": 870
+     "x": 355,
+     "y": 790
     }
    ],
    "color": "#2fbf71"
@@ -4544,20 +4610,28 @@
    ],
    "b": [
     "b3",
-    "b32"
+    "j15"
    ],
    "points": [
     {
-     "x": 165,
-     "y": 790
+     "x": 120,
+     "y": 785
+    },
+    {
+     "x": 65,
+     "y": 785
+    },
+    {
+     "x": 65,
+     "y": 865
     },
     {
      "x": 165,
-     "y": 800
+     "y": 865
     },
     {
-     "x": 340,
-     "y": 800
+     "x": 165,
+     "y": 890
     }
    ],
    "color": "#2fbf71"
@@ -4565,20 +4639,144 @@
   {
    "a": [
     "b3",
-    "c10"
+    "i15"
    ],
    "b": [
-    "conv4",
-    "H4"
+    "b3",
+    "j16"
    ],
    "points": [
     {
-     "x": 130,
-     "y": 800
+     "x": 170,
+     "y": 885
     },
     {
-     "x": 130,
-     "y": 660
+     "x": 180,
+     "y": 885
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "i16"
+   ],
+   "b": [
+    "b3",
+    "a32"
+   ],
+   "points": [
+    {
+     "x": 180,
+     "y": 875
+    },
+    {
+     "x": 80,
+     "y": 875
+    },
+    {
+     "x": 80,
+     "y": 855
+    },
+    {
+     "x": 55,
+     "y": 855
+    },
+    {
+     "x": 55,
+     "y": 745
+    },
+    {
+     "x": 340,
+     "y": 745
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "b32"
+   ],
+   "b": [
+    "b3",
+    "j40"
+   ],
+   "points": [
+    {
+     "x": 345,
+     "y": 790
+    },
+    {
+     "x": 345,
+     "y": 745
+    },
+    {
+     "x": 635,
+     "y": 745
+    },
+    {
+     "x": 635,
+     "y": 885
+    },
+    {
+     "x": 420,
+     "y": 885
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "i40"
+   ],
+   "b": [
+    "b3",
+    "a40"
+   ],
+   "points": [
+    {
+     "x": 420,
+     "y": 850
+    },
+    {
+     "x": 370,
+     "y": 850
+    },
+    {
+     "x": 370,
+     "y": 775
+    },
+    {
+     "x": 420,
+     "y": 775
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "txs2",
+    "B8"
+   ],
+   "b": [
+    "b3",
+    "b40"
+   ],
+   "points": [
+    {
+     "x": -110,
+     "y": 590
+    },
+    {
+     "x": 415,
+     "y": 590
+    },
+    {
+     "x": 415,
+     "y": 790
     }
    ],
    "color": "#2fbf71"
@@ -4595,11 +4793,11 @@
    "points": [
     {
      "x": 230,
-     "y": 855
+     "y": 865
     },
     {
      "x": 380,
-     "y": 855
+     "y": 865
     }
    ],
    "color": "#2fbf71"
@@ -4616,11 +4814,11 @@
    "points": [
     {
      "x": 400,
-     "y": 875
+     "y": 855
     },
     {
      "x": 240,
-     "y": 875
+     "y": 855
     }
    ],
    "color": "#2fbf71"
@@ -4637,19 +4835,19 @@
    "points": [
     {
      "x": 250,
-     "y": 895
+     "y": 850
     },
     {
-     "x": 75,
-     "y": 895
+     "x": 210,
+     "y": 850
     },
     {
-     "x": 75,
-     "y": 795
+     "x": 210,
+     "y": 815
     },
     {
      "x": 190,
-     "y": 795
+     "y": 815
     }
    ],
    "color": "#2fbf71"
@@ -4666,27 +4864,27 @@
    "points": [
     {
      "x": 200,
-     "y": 745
+     "y": 800
     },
     {
-     "x": 50,
-     "y": 745
+     "x": 60,
+     "y": 800
     },
     {
-     "x": 50,
-     "y": 870
+     "x": 60,
+     "y": 805
     },
     {
-     "x": 40,
-     "y": 870
+     "x": 15,
+     "y": 805
     },
     {
-     "x": 40,
-     "y": 910
+     "x": 15,
+     "y": 940
     },
     {
      "x": 410,
-     "y": 910
+     "y": 940
     }
    ],
    "color": "#2fbf71"
@@ -4703,35 +4901,19 @@
    "points": [
     {
      "x": 160,
-     "y": 880
+     "y": 935
     },
     {
-     "x": 80,
-     "y": 880
+     "x": 5,
+     "y": 935
     },
     {
-     "x": 80,
-     "y": 860
-    },
-    {
-     "x": 55,
-     "y": 860
-    },
-    {
-     "x": 55,
-     "y": 750
-    },
-    {
-     "x": 80,
-     "y": 750
-    },
-    {
-     "x": 80,
-     "y": 725
+     "x": 5,
+     "y": 730
     },
     {
      "x": 430,
-     "y": 725
+     "y": 730
     }
    ],
    "color": "#2fbf71"
@@ -4748,39 +4930,27 @@
    "points": [
     {
      "x": 320,
-     "y": 905
+     "y": 870
     },
     {
-     "x": 45,
-     "y": 905
+     "x": 155,
+     "y": 870
     },
     {
-     "x": 45,
-     "y": 865
+     "x": 155,
+     "y": 860
     },
     {
      "x": 60,
-     "y": 865
+     "y": 860
     },
     {
      "x": 60,
      "y": 805
     },
     {
-     "x": 115,
+     "x": 160,
      "y": 805
-    },
-    {
-     "x": 115,
-     "y": 815
-    },
-    {
-     "x": 125,
-     "y": 815
-    },
-    {
-     "x": 125,
-     "y": 810
     }
    ],
    "color": "#2fbf71"
@@ -4829,24 +4999,20 @@
    ],
    "points": [
     {
-     "x": 485,
-     "y": 810
-    },
-    {
-     "x": 485,
-     "y": 815
+     "x": 440,
+     "y": 805
     },
     {
      "x": 640,
-     "y": 815
+     "y": 805
     },
     {
      "x": 640,
-     "y": 895
+     "y": 935
     },
     {
      "x": 260,
-     "y": 895
+     "y": 935
     }
    ],
    "color": "#59a6c1"
@@ -4896,11 +5062,11 @@
     },
     {
      "x": 645,
-     "y": 875
+     "y": 865
     },
     {
      "x": 480,
-     "y": 875
+     "y": 865
     }
    ],
    "color": "#9b6bf2"
@@ -4917,19 +5083,19 @@
    "points": [
     {
      "x": 190,
-     "y": 865
+     "y": 850
     },
     {
-     "x": 70,
-     "y": 865
+     "x": 130,
+     "y": 850
     },
     {
-     "x": 70,
-     "y": 775
+     "x": 130,
+     "y": 820
     },
     {
      "x": 250,
-     "y": 775
+     "y": 820
     }
    ],
    "color": "#9b6bf2"
@@ -4970,11 +5136,11 @@
    "points": [
     {
      "x": 240,
-     "y": 785
+     "y": 795
     },
     {
      "x": 390,
-     "y": 785
+     "y": 795
     }
    ],
    "color": "#9b6bf2"
@@ -4991,19 +5157,19 @@
    "points": [
     {
      "x": 410,
-     "y": 805
+     "y": 815
     },
     {
-     "x": 635,
-     "y": 805
+     "x": 630,
+     "y": 815
     },
     {
-     "x": 635,
-     "y": 850
+     "x": 630,
+     "y": 855
     },
     {
      "x": 510,
-     "y": 850
+     "y": 855
     }
    ],
    "color": "#8298cd"
@@ -5019,15 +5185,11 @@
    ],
    "points": [
     {
-     "x": 490,
-     "y": 820
+     "x": 450,
+     "y": 810
     },
     {
-     "x": 540,
-     "y": 820
-    },
-    {
-     "x": 540,
+     "x": 450,
      "y": 855
     },
     {
@@ -5107,30 +5269,38 @@
    "points": [
     {
      "x": 280,
-     "y": 520
+     "y": 525
     },
     {
-     "x": 75,
-     "y": 520
+     "x": 130,
+     "y": 525
     },
     {
-     "x": 75,
-     "y": 425
+     "x": 130,
+     "y": 455
     },
     {
-     "x": 85,
-     "y": 425
+     "x": 105,
+     "y": 455
     },
     {
-     "x": 85,
-     "y": 235
+     "x": 105,
+     "y": 415
     },
     {
-     "x": 185,
-     "y": 235
+     "x": 115,
+     "y": 415
     },
     {
-     "x": 185,
+     "x": 115,
+     "y": 190
+    },
+    {
+     "x": 225,
+     "y": 190
+    },
+    {
+     "x": 225,
      "y": 85
     },
     {
@@ -5152,19 +5322,19 @@
    "points": [
     {
      "x": 600,
-     "y": 880
+     "y": 875
     },
     {
      "x": 655,
-     "y": 880
+     "y": 875
     },
     {
      "x": 655,
-     "y": 590
+     "y": 585
     },
     {
      "x": 280,
-     "y": 590
+     "y": 585
     }
    ],
    "color": "#ff6b8a"
@@ -5181,11 +5351,11 @@
    "points": [
     {
      "x": 610,
-     "y": 900
+     "y": 870
     },
     {
      "x": 330,
-     "y": 900
+     "y": 870
     }
    ],
    "color": "#ff6b8a"
@@ -5202,35 +5372,19 @@
    "points": [
     {
      "x": 590,
-     "y": 870
+     "y": 850
     },
     {
      "x": 650,
-     "y": 870
+     "y": 850
     },
     {
      "x": 650,
-     "y": 775
-    },
-    {
-     "x": 580,
-     "y": 775
-    },
-    {
-     "x": 580,
-     "y": 765
-    },
-    {
-     "x": 405,
-     "y": 765
-    },
-    {
-     "x": 405,
-     "y": 805
+     "y": 800
     },
     {
      "x": 310,
-     "y": 805
+     "y": 800
     }
    ],
    "color": "#ff6b8a"
@@ -5247,22 +5401,14 @@
    "points": [
     {
      "x": 370,
-     "y": 80
+     "y": 0
     },
     {
-     "x": 180,
-     "y": 80
+     "x": -30,
+     "y": 0
     },
     {
-     "x": 180,
-     "y": 355
-    },
-    {
-     "x": 0,
-     "y": 355
-    },
-    {
-     "x": 0,
+     "x": -30,
      "y": 820
     }
    ],
@@ -5274,8 +5420,8 @@
     "3V3"
    ],
    "b": [
-    "conv1",
-    "LV"
+    "txs1",
+    "VA"
    ],
    "points": [
     {
@@ -5283,115 +5429,107 @@
      "y": 670
     },
     {
-     "x": -120,
+     "x": -245,
      "y": 670
     },
     {
-     "x": -120,
-     "y": 390
+     "x": -245,
+     "y": 295
     },
     {
-     "x": -235,
-     "y": 390
+     "x": -200,
+     "y": 295
     },
     {
-     "x": -235,
-     "y": 355
-    },
-    {
-     "x": -230,
-     "y": 355
-    },
-    {
-     "x": -230,
-     "y": 350
+     "x": -200,
+     "y": 300
     }
    ],
    "color": "#e5484d"
   },
   {
    "a": [
-    "conv1",
-    "LV"
+    "txs1",
+    "VA"
    ],
    "b": [
-    "conv2",
-    "LV"
+    "txs1",
+    "OE"
    ],
    "points": [
     {
-     "x": -260,
-     "y": 350
+     "x": -200,
+     "y": 300
     },
     {
-     "x": -260,
-     "y": 490
+     "x": -200,
+     "y": 315
+    },
+    {
+     "x": -90,
+     "y": 315
+    },
+    {
+     "x": -90,
+     "y": 300
     }
    ],
    "color": "#e5484d"
   },
   {
    "a": [
-    "conv1",
-    "LV"
+    "txs1",
+    "VA"
    ],
    "b": [
-    "conv3",
-    "LV"
+    "txs2",
+    "VA"
    ],
    "points": [
     {
-     "x": -230,
-     "y": 350
+     "x": -240,
+     "y": 300
     },
     {
-     "x": -230,
-     "y": 345
-    },
-    {
-     "x": -255,
-     "y": 345
-    },
-    {
-     "x": -255,
-     "y": 210
+     "x": -240,
+     "y": 650
     }
    ],
    "color": "#e5484d"
   },
   {
    "a": [
-    "conv2",
-    "LV"
+    "txs2",
+    "VA"
    ],
    "b": [
-    "conv4",
-    "LV"
+    "txs2",
+    "OE"
    ],
    "points": [
     {
-     "x": -230,
-     "y": 490
+     "x": -200,
+     "y": 650
     },
     {
-     "x": -230,
-     "y": 495
+     "x": -200,
+     "y": 665
     },
     {
-     "x": -260,
-     "y": 495
+     "x": -90,
+     "y": 665
     },
     {
-     "x": -260,
-     "y": 630
+     "x": -90,
+     "y": 650
     }
    ],
    "color": "#e5484d"
   },
   {
    "a": [
-    "conv1",
-    "L1"
+    "txs1",
+    "A1"
    ],
    "b": [
     "giga",
@@ -5399,11 +5537,7 @@
    ],
    "points": [
     {
-     "x": -295,
-     "y": 330
-    },
-    {
-     "x": -295,
+     "x": -180,
      "y": 460
     }
    ],
@@ -5411,8 +5545,8 @@
   },
   {
    "a": [
-    "conv1",
-    "L2"
+    "txs1",
+    "A2"
    ],
    "b": [
     "giga",
@@ -5420,11 +5554,7 @@
    ],
    "points": [
     {
-     "x": -290,
-     "y": 340
-    },
-    {
-     "x": -290,
+     "x": -170,
      "y": 470
     }
    ],
@@ -5432,8 +5562,8 @@
   },
   {
    "a": [
-    "conv1",
-    "L3"
+    "txs1",
+    "A3"
    ],
    "b": [
     "giga",
@@ -5441,11 +5571,7 @@
    ],
    "points": [
     {
-     "x": -285,
-     "y": 370
-    },
-    {
-     "x": -285,
+     "x": -160,
      "y": 480
     }
    ],
@@ -5453,8 +5579,8 @@
   },
   {
    "a": [
-    "conv1",
-    "L4"
+    "txs1",
+    "A4"
    ],
    "b": [
     "giga",
@@ -5462,11 +5588,7 @@
    ],
    "points": [
     {
-     "x": -280,
-     "y": 380
-    },
-    {
-     "x": -280,
+     "x": -150,
      "y": 490
     }
    ],
@@ -5474,8 +5596,8 @@
   },
   {
    "a": [
-    "conv2",
-    "L1"
+    "txs1",
+    "A5"
    ],
    "b": [
     "giga",
@@ -5483,11 +5605,7 @@
    ],
    "points": [
     {
-     "x": -290,
-     "y": 470
-    },
-    {
-     "x": -290,
+     "x": -140,
      "y": 500
     }
    ],
@@ -5495,8 +5613,8 @@
   },
   {
    "a": [
-    "conv2",
-    "L2"
+    "txs1",
+    "A6"
    ],
    "b": [
     "giga",
@@ -5504,11 +5622,7 @@
    ],
    "points": [
     {
-     "x": -285,
-     "y": 480
-    },
-    {
-     "x": -285,
+     "x": -130,
      "y": 510
     }
    ],
@@ -5516,8 +5630,8 @@
   },
   {
    "a": [
-    "conv2",
-    "L3"
+    "txs1",
+    "A7"
    ],
    "b": [
     "giga",
@@ -5525,11 +5639,7 @@
    ],
    "points": [
     {
-     "x": -230,
-     "y": 510
-    },
-    {
-     "x": -230,
+     "x": -120,
      "y": 520
     }
    ],
@@ -5541,17 +5651,21 @@
     "D37"
    ],
    "b": [
-    "conv3",
-    "L1"
+    "txs2",
+    "A1"
    ],
    "points": [
     {
-     "x": -275,
+     "x": -205,
      "y": 530
     },
     {
-     "x": -275,
-     "y": 190
+     "x": -205,
+     "y": 660
+    },
+    {
+     "x": -180,
+     "y": 660
     }
    ],
    "color": "#d4aa49"
@@ -5562,25 +5676,21 @@
     "D39"
    ],
    "b": [
-    "conv3",
-    "L2"
+    "txs2",
+    "A2"
    ],
    "points": [
     {
-     "x": -130,
+     "x": -210,
      "y": 540
     },
     {
-     "x": -130,
-     "y": 255
+     "x": -210,
+     "y": 670
     },
     {
-     "x": -240,
-     "y": 255
-    },
-    {
-     "x": -240,
-     "y": 200
+     "x": -170,
+     "y": 670
     }
    ],
    "color": "#de9655"
@@ -5591,17 +5701,21 @@
     "D41"
    ],
    "b": [
-    "conv3",
-    "L3"
+    "txs2",
+    "A3"
    ],
    "points": [
     {
-     "x": -265,
+     "x": -215,
      "y": 550
     },
     {
-     "x": -265,
-     "y": 230
+     "x": -215,
+     "y": 675
+    },
+    {
+     "x": -160,
+     "y": 675
     }
    ],
    "color": "#b7b758"
@@ -5612,17 +5726,21 @@
     "D43"
    ],
    "b": [
-    "conv3",
-    "L4"
+    "txs2",
+    "A4"
    ],
    "points": [
     {
-     "x": -270,
+     "x": -220,
      "y": 560
     },
     {
-     "x": -270,
-     "y": 240
+     "x": -220,
+     "y": 680
+    },
+    {
+     "x": -150,
+     "y": 680
     }
    ],
    "color": "#dfb96a"
@@ -5633,17 +5751,21 @@
     "D45"
    ],
    "b": [
-    "conv4",
-    "L1"
+    "txs2",
+    "A5"
    ],
    "points": [
     {
-     "x": -255,
+     "x": -225,
      "y": 570
     },
     {
-     "x": -255,
-     "y": 610
+     "x": -225,
+     "y": 685
+    },
+    {
+     "x": -140,
+     "y": 685
     }
    ],
    "color": "#4db58f"
@@ -5654,17 +5776,21 @@
     "D47"
    ],
    "b": [
-    "conv4",
-    "L2"
+    "txs2",
+    "A6"
    ],
    "points": [
     {
-     "x": -265,
+     "x": -230,
      "y": 580
     },
     {
-     "x": -265,
-     "y": 620
+     "x": -230,
+     "y": 690
+    },
+    {
+     "x": -130,
+     "y": 690
     }
    ],
    "color": "#53a8c2"
@@ -5675,17 +5801,21 @@
     "D49"
    ],
    "b": [
-    "conv4",
-    "L3"
+    "txs2",
+    "A7"
    ],
    "points": [
     {
-     "x": -270,
+     "x": -235,
      "y": 590
     },
     {
-     "x": -270,
-     "y": 650
+     "x": -235,
+     "y": 695
+    },
+    {
+     "x": -120,
+     "y": 695
     }
    ],
    "color": "#85a36b"
@@ -5696,17 +5826,21 @@
     "D51"
    ],
    "b": [
-    "conv4",
-    "L4"
+    "txs2",
+    "A8"
    ],
    "points": [
     {
-     "x": -275,
+     "x": -295,
      "y": 600
     },
     {
-     "x": -275,
-     "y": 660
+     "x": -295,
+     "y": 700
+    },
+    {
+     "x": -110,
+     "y": 700
     }
    ],
    "color": "#8b9acb"
