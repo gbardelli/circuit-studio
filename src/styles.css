@@ -2758,3 +2758,29 @@ body.lib-dragging * {
 .connection-tones{display:flex;gap:2px;align-items:center;flex:none}.connection-legend .connection-tones i{width:6px;height:8px;box-shadow:none;border-radius:1px}.connection-legend{gap:4px 14px;line-height:12px}.connection-legend>span{flex:none}
 .canvas-wrap.with-connections{padding-bottom:68px}.connection-guide{height:68px}.with-connections .zoom-float{bottom:80px}
 @media(max-width:700px){.canvas-wrap.with-connections{padding-bottom:76px}.connection-guide{height:76px}.connection-legend{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px}.with-connections .zoom-float{bottom:88px}}
+
+/* ── Editor de etiqueta de red (esquema) ─────────────────────────────────────── */
+.net-edit {
+  position: absolute;
+  z-index: 21;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 8px;
+  width: 210px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(21, 22, 25, 0.94);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: var(--sh-float);
+  animation: pop-in 140ms var(--ease);
+  color: var(--text-2);
+}
+.net-edit .input { height: 28px; font-size: 12.5px; }
+.net-edit .help { grid-column: 1 / -1; font-size: 11px; color: var(--text-3); }
+.canvas.schematic .net-flag,
+.canvas.schematic .net-tag { cursor: text; }
+.menu button:disabled { opacity: 0.45; pointer-events: none; }
+
+/* Coordenadas del cursor: ancho fijo para que la barra no baile. */
+.statusbar .coords { min-width: 170px; font-variant-numeric: tabular-nums; }

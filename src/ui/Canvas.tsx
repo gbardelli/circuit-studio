@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Route, Loader2, Zap, Code2, Copy, Hand, Maximize, Minus, MousePointer2, PackagePlus, Plus, RotateCw, Spline, Trash2, Undo2 } from 'lucide-react';
+import { Route, Loader2, Zap, Code2, Copy, ClipboardPaste, Hand, Maximize, Minus, MousePointer2, PackagePlus, Pencil, Plus, RotateCw, Spline, SquareDashedMousePointer, Tag, Trash2, Undo2 } from 'lucide-react';
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { snap, toLocal, toWorld, type PartData, type PinDef, type Vec, type WireData, type WireEnd } from '../core/types';
 import { formatSI } from '../core/units';
@@ -13,13 +13,13 @@ import { FrameMeter } from './FrameMeter';
 import { stackHost, withStacks } from '../parts/stack';
 import { WIRE_COLORS, distToSegment, partBounds, suggestWireColor, wirePoints, endPosition } from './geometry';
 import { ViewTabs } from './ViewTabs';
-import { useUi } from './store';
+import { focusPartName, useUi } from './store';
 import { connectionEdges, wireCurrents } from '../sim/flow';
 import { assessDamage, clearDamage, damageOf, trackDamage, type Damage } from '../sim/damage';
 import { WireShape, roundedPath, shade } from './wires';
 import { ConnectionGuide, wireCrossings } from './ConnectionGuide';
 import { advanceFlow, emptyFlowFrame, nearestWire, wireEmphasis, type FlowFrame } from './wireFeedback';
-import { buildSchematic, flagWidth, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
+import { buildSchematic, flagWidth, renameNet, withFrozenPlacement, type SchFlag, type SchNet } from './schematic';
 
 interface PinHit {
   part: string;
@@ -83,10 +83,15 @@ export function Canvas() {
   const [organizing, setOrganizing] = useState(false);
   const layoutWorker = useRef<Worker | null>(null);
   useEffect(() => () => layoutWorker.current?.terminate(), []);
-  const [menu, setMenu] = useState<{ x: number; y: number; part?: string; wire?: string } | null>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; part?: string; wire?: string; net?: number; at?: Vec } | null>(null);
+  // Etiqueta de red editándose en el sitio (esquema): doble clic sobre la banderola o el cable.
+  const [netEdit, setNetEdit] = useState<{ net: number; x: number; y: number; text: string } | null>(null);
+  const setPointer = useUi((s) => s.setPointer);
   // Selector de pin: al soltar un cable del esquema sobre el cuerpo de un símbolo.
   const [picker, setPicker] = useState<{ x: number; y: number; part: string; at: Vec } | null>(null);
   const showToast = useUi((s) => s.showToast);
+  const clipboard = useUi((s) => s.clipboard);
+  const setClipboard = useUi((s) => s.setClipboard);
   const [space, setSpace] = useState(false);
   const lastPresence = useRef(0);
   const fitted = useRef(false);
@@ -454,6 +459,7 @@ export function Canvas() {
   const onPointerMove = (e: React.PointerEvent) => {
     const w = toWorldPt(e.clientX, e.clientY);
     setCursor(w);
+    setPointer(w);
     publishPresence({ cursor: w });
     const target = e.target as Element;
     if (!drag || drag.kind === 'end') {
@@ -596,8 +602,31 @@ export function Canvas() {
       project.updateWire(wire.id, { points });
       return;
     }
+    const netAttr = sch ? target.closest('[data-net]')?.getAttribute('data-net') : null;
+    if (netAttr && !project.readOnly) {
+      startNetEdit(Number(netAttr), e.clientX, e.clientY);
+      return;
+    }
     const partId = target.closest('[data-part]')?.getAttribute('data-part');
-    if (partId && PARTS[partsById.get(partId)?.type ?? '']?.mcu) openCode(partId, 'code');
+    if (!partId) return;
+    // Doble clic = propiedades, como en KiCad o Fritzing. Una placa programable abre su código.
+    if (PARTS[partsById.get(partId)?.type ?? '']?.mcu) openCode(partId, 'code');
+    else if (!project.readOnly) focusPartName(partId);
+  };
+
+  /** Nombre que el esquema muestra para una red (explícito o automático). */
+  const netLabel = (net: number) => sch?.nets.find((n) => n.id === net)?.label ?? '';
+  const startNetEdit = (net: number, clientX: number, clientY: number) => {
+    const r = svgRef.current!.getBoundingClientRect();
+    setMenu(null);
+    setNetEdit({ net, x: Math.max(8, Math.min(clientX - r.left - 90, r.width - 220)), y: Math.max(8, clientY - r.top - 18), text: netLabel(net) });
+  };
+  const commitNetEdit = () => {
+    if (!netEdit) return;
+    const keys: string[] = [];
+    netlist.netOf.forEach((n, key) => { if (n === netEdit.net) keys.push(key); });
+    for (const [id, value] of renameNet(snapshot.parts, keys, netEdit.text)) project.setProp(id, 'nets', value);
+    setNetEdit(null);
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
@@ -607,7 +636,10 @@ export function Canvas() {
     const r = svgRef.current!.getBoundingClientRect();
     const partId = target.closest('[data-part]')?.getAttribute('data-part');
     const wireId = target.closest('[data-wire]')?.getAttribute('data-wire');
-    if (wireId) {
+    const netAttr = sch && !partId ? target.closest('[data-net]')?.getAttribute('data-net') : null;
+    if (netAttr) {
+      setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, net: Number(netAttr) });
+    } else if (wireId) {
       if (!wireSelection.includes(wireId)) select([], [wireId]);
       setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, wire: wireId });
     } else if (partId) {
@@ -615,6 +647,9 @@ export function Canvas() {
       setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, part: partId });
     } else if (draft) {
       setDraft(null);
+    } else {
+      // Clic derecho en el lienzo vacío: las acciones generales (Figma, KiCad, Altium).
+      setMenu({ x: e.clientX - r.left, y: e.clientY - r.top, at: toWorldPt(e.clientX, e.clientY) });
     }
   };
 
@@ -866,6 +901,7 @@ export function Canvas() {
         onPointerUp={onPointerUp}
         onPointerLeave={() => {
           setCursor(null);
+          setPointer(null);
           setHoverPin(null);setHoverWire(null);
           setHoverPart(null);
           project.setPresence({ cursor: null });
@@ -913,7 +949,7 @@ export function Canvas() {
           )}
 
           {/* Nombre de cada protoboard: doble clic lo edita (enfoca su campo en el inspector). */}
-          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && (p.props.label || selection.includes(p.id))).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill={p.props.label?'#d6dce4':'#7d8794'} fontStyle={p.props.label?undefined:'italic'} stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" style={{cursor:project.readOnly?undefined:'text'}} onDoubleClick={e=>{if(project.readOnly)return;e.stopPropagation();useUi.getState().select([p.id]);setTimeout(()=>{const input=document.getElementById(`board-name-${p.id}`) as HTMLInputElement|null;input?.focus();input?.select();},60);}}><title>Doble clic para cambiar el nombre</title>{String(p.props.label||'Protoboard sin nombre · doble clic para nombrarla')}</text>)}
+          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && (p.props.label || selection.includes(p.id))).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill={p.props.label?'#d6dce4':'#7d8794'} fontStyle={p.props.label?undefined:'italic'} stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" style={{cursor:project.readOnly?undefined:'text'}} onDoubleClick={e=>{if(project.readOnly)return;e.stopPropagation();focusPartName(p.id);}}><title>Doble clic para cambiar el nombre</title>{String(p.props.label||'Protoboard sin nombre · doble clic para nombrarla')}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
               <g key={w.id} opacity={wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).opacity}>
@@ -1151,9 +1187,55 @@ export function Canvas() {
       <FrameMeter/>
 
       {menu && (
-        <div className="menu" style={{ left: menu.x, top: menu.y }} onPointerDown={(e) => e.stopPropagation()} role="menu">
+        <div
+          className="menu"
+          // Dentro del lienzo: si no cabe hacia abajo o a la derecha, se abre hacia el otro lado.
+          ref={(el) => {
+            if (!el || !svgRef.current) return;
+            const r = svgRef.current.getBoundingClientRect();
+            el.style.left = `${Math.max(4, Math.min(menu.x, r.width - el.offsetWidth - 4))}px`;
+            el.style.top = `${Math.max(4, menu.y + el.offsetHeight > r.height - 4 ? menu.y - el.offsetHeight : menu.y)}px`;
+          }}
+          style={{ left: menu.x, top: menu.y }}
+          onPointerDown={(e) => e.stopPropagation()}
+          role="menu"
+        >
+          {!menu.part && !menu.wire && menu.net === undefined && (
+            <>
+              <button role="menuitem" disabled={!clipboard.length} onClick={() => {
+                const all = project.snapshot().parts;
+                const ids = clipboard.filter((id) => all.some((p) => p.id === id));
+                setMenu(null);
+                if (!ids.length) return;
+                const copied = all.filter((p) => ids.includes(p.id));
+                const at = menu.at ?? { x: 0, y: 0 };
+                const dx = sch ? 20 : snap(at.x - copied.reduce((acc, p) => acc + p.x, 0) / copied.length, 10);
+                const dy = sch ? 20 : snap(at.y - copied.reduce((acc, p) => acc + p.y, 0) / copied.length, 10);
+                select(project.duplicate(ids, dx, dy), []);
+              }}>
+                <ClipboardPaste size={14} /> Pegar <kbd>Ctrl V</kbd>
+              </button>
+              <button role="menuitem" onClick={() => { select(scene.parts.map((p) => p.id), sch ? [] : scene.wires.map((w) => w.id)); setMenu(null); }}>
+                <SquareDashedMousePointer size={14} /> Seleccionar todo <kbd>Ctrl A</kbd>
+              </button>
+              <button role="menuitem" onClick={() => { fit(); setMenu(null); }}>
+                <Maximize size={14} /> Ajustar a la vista <kbd>⇧ 1</kbd>
+              </button>
+            </>
+          )}
+          {menu.net !== undefined && (
+            <button role="menuitem" onClick={() => { const r = svgRef.current!.getBoundingClientRect(); startNetEdit(menu.net!, r.left + menu.x, r.top + menu.y); }}>
+              <Tag size={14} /> Nombrar red…
+            </button>
+          )}
           {menu.part && (
             <>
+              <button role="menuitem" onClick={() => { focusPartName(menu.part!); setMenu(null); }}>
+                <Pencil size={14} /> Cambiar nombre <kbd>F2</kbd>
+              </button>
+              <button role="menuitem" onClick={() => { setClipboard([...selection]); setMenu(null); showToast('Copiado. Ctrl V para pegar.', 'ok'); }}>
+                <Copy size={14} /> Copiar <kbd>Ctrl C</kbd>
+              </button>
               {sch && <button role="menuitem" onClick={() => {
                 const r = svgRef.current!.getBoundingClientRect();
                 openPicker(menu.part!, toWorldPt(r.left + menu.x, r.top + menu.y), r.left + menu.x, r.top + menu.y);
@@ -1177,10 +1259,36 @@ export function Canvas() {
               <Undo2 size={14} /> Quitar codos
             </button>
           )}
-          <hr />
-          <button role="menuitem" className="danger" onClick={deleteSelection}>
-            <Trash2 size={14} /> Eliminar <kbd>Supr</kbd>
-          </button>
+          {(menu.part || menu.wire) && (
+            <>
+              <hr />
+              <button role="menuitem" className="danger" onClick={deleteSelection}>
+                <Trash2 size={14} /> Eliminar <kbd>Supr</kbd>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
+      {netEdit && (
+        <div className="net-edit" style={{ left: netEdit.x, top: netEdit.y }} onPointerDown={(e) => e.stopPropagation()}>
+          <Tag size={13} aria-hidden="true" />
+          <input
+            autoFocus
+            aria-label="Nombre de la red"
+            className="input mono"
+            value={netEdit.text}
+            maxLength={32}
+            placeholder="Nombre automático"
+            onFocus={(e) => e.currentTarget.select()}
+            onChange={(e) => setNetEdit({ ...netEdit, text: e.target.value.replace(/[;=]/g, '') })}
+            onBlur={commitNetEdit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur();
+              if (e.key === 'Escape') { e.stopPropagation(); setNetEdit(null); }
+            }}
+          />
+          <span className="help">Enter guarda · vacío = automático</span>
         </div>
       )}
 
@@ -1406,6 +1514,12 @@ const NetLayer = memo(function NetLayer({ nets, selected }: { nets: SchNet[]; se
               {(net.dots ?? junctions(net.segments)).map((p, i) => (
                 <circle key={i} cx={p.x} cy={p.y} r={2.1} className="dot" fill="var(--sch-wire)" pointerEvents="none" />
               ))}
+              {net.tag && (
+                <text x={net.tag.at.x} y={net.tag.at.y - 2} className="net-tag" fontSize={5.6} fontWeight={600} fill="var(--sch-flag-ink)" stroke="#0d0f12" strokeWidth={2} paintOrder="stroke" fontFamily="Geist Mono, ui-monospace, monospace">
+                  <title>Doble clic para cambiar el nombre de la red</title>
+                  {net.tag.text}
+                </text>
+              )}
             </>
           ) : (
             net.pins.map((p, i) => <RailGlyph key={i} at={p} dir={net.dirs[i]} kind={net.kind} label={net.label} />)
@@ -1441,7 +1555,8 @@ function NetFlag({ flag }: { flag: SchFlag }) {
     ? `M${x} ${y} l4 ${-h / 2} h${w} v${h} h${-w} z`
     : `M${x} ${y} l-4 ${-h / 2} h${-w} v${h} h${w} z`;
   return (
-    <g className="net-flag" pointerEvents="none">
+    <g className="net-flag">
+      <title>Doble clic para cambiar el nombre de la red</title>
       <path d={d} fill="var(--sch-flag-fill)" stroke="var(--sch-wire)" strokeWidth={0.8} strokeLinejoin="round" className="seg" />
       <text x={right ? x + 4 + w / 2 : x - 4 - w / 2} y={y + 2} textAnchor="middle" fontSize={5.6} fontWeight={600} fill="var(--sch-flag-ink)" fontFamily="Geist, sans-serif">
         {flag.text}

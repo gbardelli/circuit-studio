@@ -33,6 +33,42 @@ export interface SchNet {
   dots?: Vec[];
   /** Etiquetas de red en las puntas de los pines (redes que no se unen con cable). */
   flags?: SchFlag[];
+  /** Etiqueta local sobre el cable de una red con nombre propio (como «label» en KiCad). */
+  tag?: { at: Vec; text: string };
+}
+
+const parseNets = (raw: unknown) =>
+  String(raw ?? '')
+    .split(';')
+    .filter((kv) => kv.includes('='))
+    .map((kv) => [kv.slice(0, kv.indexOf('=')).trim(), kv.slice(kv.indexOf('=') + 1).trim()] as [string, string]);
+
+/**
+ * Pone nombre a una red: lo guarda en `props.nets` («pin=Nombre») del primer pin de la red y lo
+ * quita del resto, para que no compitan dos nombres. Texto vacío devuelve el nombre automático.
+ * Devuelve el nuevo valor de `nets` de cada pieza que cambia.
+ */
+export function renameNet(parts: PartData[], keys: string[], name: string): Map<string, string> {
+  const text = name.replace(/[;=]/g, '').trim();
+  const byId = new Map(parts.map((p) => [p.id, p]));
+  const pinsOf = new Map<string, Set<string>>();
+  for (const k of keys) {
+    const i = k.lastIndexOf(':');
+    const part = k.slice(0, i);
+    if (!byId.has(part) || byId.get(part)!.type.startsWith('breadboard')) continue;
+    if (!pinsOf.has(part)) pinsOf.set(part, new Set());
+    pinsOf.get(part)!.add(k.slice(i + 1));
+  }
+  const out = new Map<string, string>();
+  const first = [...pinsOf.keys()][0];
+  for (const [part, pins] of pinsOf) {
+    const before = String(byId.get(part)!.props.nets ?? '');
+    const kept = parseNets(before).filter(([pin]) => !pins.has(pin));
+    if (text && part === first) kept.push([[...pins][0], text]);
+    const after = kept.map(([pin, n]) => `${pin}=${n}`).join(';');
+    if (after !== before) out.set(part, after);
+  }
+  return out;
 }
 
 export interface Schematic {
@@ -300,15 +336,17 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
   channels.push({ x0: columns[columns.length - 1]?.x1 ?? 0, x1: (columns[columns.length - 1]?.x1 ?? 0) + 80, used: [] });
 
   // ── Nombres de red: los que pone la plantilla (props.nets) o el pin que la gobierna ─────
-  const netName = (keys: string[]) => {
+  const explicitName = (keys: string[]) => {
     for (const k of keys) {
       const { part, pin } = split(k);
-      const named = String(byId.get(part)?.props.nets ?? '')
-        .split(';')
-        .map((kv) => [kv.slice(0, kv.indexOf('=')), kv.slice(kv.indexOf('=') + 1)])
-        .find(([pinId]) => pinId === pin);
+      const named = parseNets(byId.get(part)?.props.nets).find(([pinId]) => pinId === pin);
       if (named?.[1]) return named[1];
     }
+    return null;
+  };
+  const netName = (keys: string[]) => {
+    const named = explicitName(keys);
+    if (named) return named;
     const driver = keys.find((k) => roleOf(byId.get(split(k).part)!, split(k).pin) === 'out') ?? keys[0];
     const { part, pin } = split(driver);
     return `${refs.get(part)}·${pin.replace(/\.\d+$/, '')}`;
@@ -361,7 +399,9 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
     const stubs = n.pins.map((p, i) => [p, n.tips[i]]);
     const wired = flagged.has(n.id) ? null : routeInChannel(n.want, n.tips, channels, blockers);
     if (wired) {
-      nets.push({ id: n.id, kind: 'wire', pins: n.pins, dirs: n.dirs, segments: [...stubs, ...wired.segments], dots: wired.dots });
+      const segments = [...stubs, ...wired.segments];
+      const named = explicitName(n.live);
+      nets.push({ id: n.id, kind: 'wire', label: names.get(n.id), pins: n.pins, dirs: n.dirs, segments, dots: wired.dots, tag: named ? { at: tagSpot(segments), text: named } : undefined });
     } else {
       const text = names.get(n.id)!;
       nets.push({ id: n.id, kind: 'wire', label: text, pins: n.pins, dirs: n.dirs, segments: stubs, flags: n.tips.map((at, i) => ({ at, dir: n.dirs[i], text })) });
@@ -659,6 +699,24 @@ function routeInChannel(want: number[], tips: Vec[], channels: { x0: number; x1:
  * Dónde va cada símbolo: donde lo dejó alguien (sx, sy) o la colocación automática que se
  * calculó al dibujar el esquema por última vez.
  */
+/** Dónde va la etiqueta de una red cableada: sobre su tramo horizontal más largo. */
+function tagSpot(segments: Vec[][]): Vec {
+  let best: Vec = segments[0]?.[0] ?? { x: 0, y: 0 };
+  let len = -1;
+  for (const seg of segments)
+    for (let i = 0; i < seg.length - 1; i++) {
+      const a = seg[i];
+      const b = seg[i + 1];
+      if (a.y !== b.y) continue;
+      const l = Math.abs(b.x - a.x);
+      if (l > len) {
+        len = l;
+        best = { x: Math.min(a.x, b.x) + 3, y: a.y };
+      }
+    }
+  return best;
+}
+
 export function schematicPlacement(all: PartData[]): Map<string, Vec> {
   const out = new Map<string, Vec>();
   for (const p of all) {
