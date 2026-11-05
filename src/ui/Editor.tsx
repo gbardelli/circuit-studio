@@ -28,6 +28,7 @@ const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.B
 export function Editor({ room, template }: { room: string; template: string | null }) {
   const [ctx, setCtx] = useState<EditorCtx | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [replacing, setReplacing] = useState<{ name: string; readOnly: boolean; run: () => void } | null>(null);
   useStartupTask('project', !ctx && !error);
   // El proyecto (WebSocket + IndexedDB) nace y muere con el efecto: seguro ante StrictMode y recarga en caliente.
   useEffect(() => {
@@ -62,22 +63,13 @@ export function Editor({ room, template }: { room: string; template: string | nu
       if (!synced || seeded) return;
       seeded = true;
       // «&replace=1» cambia el contenido de un circuito existente por la plantilla; queda en el
-      // historial de versiones y Ctrl+Z lo deshace.
-      // Es destructivo y llega por un enlace: siempre se confirma antes, y solo quien puede editar.
+      // historial de versiones y Ctrl+Z lo deshace. Es destructivo y llega por un enlace: se pide
+      // confirmación en un diálogo de la app, y solo quien puede editar.
       const wantsReplace = new URLSearchParams(location.search).get('replace') === '1' && !!t && project.parts.size > 0;
-      if (wantsReplace && project.readOnly) window.alert('No se puede reemplazar: con esta cuenta el circuito es solo de lectura. Inicia sesión con la cuenta propietaria o una con permiso de edición.');
-      const replace =
-        wantsReplace &&
-        !project.readOnly &&
-        window.confirm(`¿Reemplazar todo el contenido de este circuito por «${t!.name}»?\n\nPodrás recuperarlo desde Historial.`);
-      if (t && !project.readOnly && (project.parts.size === 0 || replace)) {
-        const fresh = project.parts.size === 0;
-        if (!fresh) {
-          const snap = project.snapshot();
-          project.deleteItems(snap.parts.map((q) => q.id), snap.wires.map((w) => w.id));
-        }
+      if (wantsReplace) setReplacing({ name: t!.name, readOnly: project.readOnly, run: () => replaceWith(project, t!) });
+      if (t && !project.readOnly && project.parts.size === 0) {
         applyTemplate(project, t);
-        if (fresh) project.undo.clear();
+        project.undo.clear();
       }
       if (template) history.replaceState(null, '', `?p=${room}`);
     };
@@ -115,8 +107,32 @@ export function Editor({ room, template }: { room: string; template: string | nu
   return (
     <EditorContext.Provider value={ctx}>
       <EditorShell />
+      {replacing && (
+        <div className="splash" role="dialog" aria-modal="true" aria-label="Reemplazar circuito" style={{ position: 'fixed', inset: 0, zIndex: 1000, background: 'rgba(0,0,0,.55)' }}>
+          <div className="gate">
+            <h1>{replacing.readOnly ? 'No se puede reemplazar' : 'Reemplazar el circuito'}</h1>
+            <p>
+              {replacing.readOnly
+                ? 'Con esta cuenta el circuito es solo de lectura. Inicia sesión con la cuenta propietaria o una con permiso de edición.'
+                : `Todo el contenido de este circuito se cambiará por «${replacing.name}». Podrás recuperar la versión actual desde Historial.`}
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+              <button className="btn" onClick={() => setReplacing(null)}>{replacing.readOnly ? 'Cerrar' : 'Cancelar'}</button>
+              {!replacing.readOnly && (
+                <button className="btn primary" onClick={() => { replacing.run(); setReplacing(null); }}>Reemplazar</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </EditorContext.Provider>
   );
+}
+
+function replaceWith(project: Project, t: NonNullable<ReturnType<typeof findTemplate>>) {
+  const snap = project.snapshot();
+  project.deleteItems(snap.parts.map((q) => q.id), snap.wires.map((w) => w.id));
+  applyTemplate(project, t);
 }
 
 export function EditorShell() {
