@@ -63,13 +63,13 @@ export function Editor({ room, template }: { room: string; template: string | nu
       seeded = true;
       // «&replace=1» cambia el contenido de un circuito existente por la plantilla; queda en el
       // historial de versiones y Ctrl+Z lo deshace.
-      // Es destructivo y llega por un enlace: siempre se confirma antes (y solo el propietario).
+      // Es destructivo y llega por un enlace: siempre se confirma antes, y solo quien puede editar.
+      const wantsReplace = new URLSearchParams(location.search).get('replace') === '1' && !!t && project.parts.size > 0;
+      if (wantsReplace && project.readOnly) window.alert('No se puede reemplazar: con esta cuenta el circuito es solo de lectura. Inicia sesión con la cuenta propietaria o una con permiso de edición.');
       const replace =
-        new URLSearchParams(location.search).get('replace') === '1' &&
-        project.parts.size > 0 &&
-        project.role === 'owner' &&
-        !!t &&
-        window.confirm(`¿Reemplazar todo el contenido de este circuito por «${t.name}»?\n\nPodrás recuperarlo desde Historial.`);
+        wantsReplace &&
+        !project.readOnly &&
+        window.confirm(`¿Reemplazar todo el contenido de este circuito por «${t!.name}»?\n\nPodrás recuperarlo desde Historial.`);
       if (t && !project.readOnly && (project.parts.size === 0 || replace)) {
         const fresh = project.parts.size === 0;
         if (!fresh) {
