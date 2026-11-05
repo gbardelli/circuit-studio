@@ -6,11 +6,13 @@ import { writeFileSync } from 'node:fs';
 import { compileSketch } from '../server/compile';
 import { TEMPLATES } from '../src/collab/templates';
 import { elevatorTemplate } from '../src/collab/elevator';
+import { elevatorClassTemplate } from '../src/collab/elevatorClass';
+import { GIGA_PIN_TEST } from '../src/collab/gigaPinTest';
 import { PARTS } from '../src/parts';
 
 const out: Record<string, string> = {};
-// El ascensor del curso no está en la galería, pero sus proyectos también arrancan sin servidor.
-for (const t of [...TEMPLATES, elevatorTemplate()]) {
+// Los ascensores y la prueba de pines del GIGA no están en la galería, pero sus proyectos también arrancan sin servidor.
+for (const t of [...TEMPLATES, elevatorTemplate(), elevatorClassTemplate(), GIGA_PIN_TEST]) {
   if (!t.sketch) continue;
   const mcu = t.parts.find((p) => PARTS[p.type].mcu);
   if (!mcu) continue;

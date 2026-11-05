@@ -1,8 +1,7 @@
 # Ascensor con los integrados de clase (LS + HC) y GIGA como pantalla
 
-Plantilla **«Ascensor con integrados de clase + GIGA (pantalla)»** (Plantillas → Lógica secuencial).
-Código: `src/collab/elevatorClass.ts`; sketch: `src/collab/elevatorClassSketch.ts`; la galería lee
-`src/collab/fixtures/elevator-class.json` (regenéralo con `npx tsx scripts/build-elevator-class.ts`).
+Montaje **«Ascensor con integrados de clase + GIGA (pantalla)»**; no está en la galería de Plantillas.
+Código: `src/collab/elevatorClass.ts` (`elevatorClassTemplate()`); sketch: `src/collab/elevatorClassSketch.ts`.
 
 La lógica va a **5 V** y es de los integrados del kit. El GIGA (3,3 V) solo **lee** tres cosas por
 dos adaptadores BOB-12009 y las dibuja en su pantalla; no mueve ninguna línea del circuito.

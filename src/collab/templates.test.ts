@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { SimEngine } from '../sim/engine';
 import { templateSnapshot } from './applyTemplate';
+import { GIGA_PIN_TEST } from './gigaPinTest';
 import { TEMPLATES } from './templates';
 
-const byId = (id: string) => TEMPLATES.find((t) => t.id === id)!;
+const byId = (id: string) => (id === GIGA_PIN_TEST.id ? GIGA_PIN_TEST : TEMPLATES.find((t) => t.id === id)!);
 
 function run(id: string) {
   const engine = new SimEngine();

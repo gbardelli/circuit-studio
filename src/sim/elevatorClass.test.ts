@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { TEMPLATES } from '../collab/templates';
 import { elevatorClassTemplate } from '../collab/elevatorClass';
 import { templateSnapshot } from '../collab/applyTemplate';
 import { compileSketch } from '../../server/compile';
@@ -194,10 +193,4 @@ describe('ascensor de clase (LS75 / LS85 / LS48 + HC, 5 V)', () => {
     expect(scene()).toContain('BAJANDO');
     h.engine.stop();
   }, 120_000);
-
-  it('la plantilla de la galería es el montaje actual (regenera con scripts/build-elevator-class.ts)', () => {
-    const listed = TEMPLATES.find((t) => t.id === 'elevator-class');
-    expect(listed).toBeDefined();
-    expect(JSON.parse(JSON.stringify(listed))).toEqual(JSON.parse(JSON.stringify(elevatorClassTemplate())));
-  });
 });
