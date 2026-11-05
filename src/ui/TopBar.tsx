@@ -206,14 +206,55 @@ const SHORTCUTS: [string, string[]][] = [
   ['Cable desde un pin', ['Clic']],
   ['Doblar el cable', ['Clic', 'lienzo']],
   ['Cable recto', ['⇧']],
+  ['Selección por rectángulo', ['Arrastrar']],
   ['Rotar', ['R']],
+  ['Voltear', ['F']],
+  ['Cambiar nombre', ['F2']],
+  ['Copiar · Pegar', ['Ctrl', 'C', 'V']],
   ['Duplicar', ['Ctrl', 'D']],
+  ['Seleccionar todo', ['Ctrl', 'A']],
   ['Eliminar', ['Supr']],
+  ['Deseleccionar', ['Esc']],
   ['Deshacer lo tuyo', ['Ctrl', 'Z']],
+  ['Rehacer', ['Ctrl', 'Y']],
   ['Mover la vista', ['Espacio']],
   ['Zoom', ['Rueda']],
+  ['Ajustar a la vista', ['⇧', '1']],
+  ['Menú de acciones', ['Clic derecho']],
   ['Buscar componente', ['/']],
 ];
+
+/** Paso de los orificios de la protoboard: 10 unidades del lienzo = 2,54 mm (0,1"). */
+const MM_PER_UNIT = 0.254;
+
+/** Coordenadas del cursor, zoom y selección: la barra de estado de cualquier CAD. */
+function CanvasReadout() {
+  const pointer = useUi((s) => s.pointer);
+  const zoom = useUi((s) => s.viewport.zoom);
+  const parts = useUi((s) => s.selection.length);
+  const wires = useUi((s) => s.wireSelection.length);
+  const view = useUi((s) => s.view);
+  if (view === 'design') return null;
+  const sel = parts + wires;
+  const fmt = (v: number) => (v * MM_PER_UNIT).toFixed(2).replace('.', ',');
+  return (
+    <>
+      {sel > 0 && (
+        <span className="item">
+          {[
+            parts > 0 && (parts === 1 ? '1 pieza seleccionada' : `${parts} piezas seleccionadas`),
+            wires > 0 && (wires === 1 ? '1 cable seleccionado' : `${wires} cables seleccionados`),
+          ].filter(Boolean).join(' · ')}
+        </span>
+      )}
+      <span className="item mono coords" title="Posición del cursor (rejilla de 2,54 mm)">
+        X {pointer ? fmt(pointer.x) : '—'} · Y {pointer ? fmt(pointer.y) : '—'} mm
+      </span>
+      <span className="item mono" title="Rejilla">Rejilla 2,54 mm</span>
+      <span className="item mono" title="Zoom">{Math.round(zoom * 50)} %</span>
+    </>
+  );
+}
 
 export function StatusBar() {
   const snapshot = useSnapshot();
@@ -240,6 +281,7 @@ export function StatusBar() {
         </span>
       )}
       <span className="grow" />
+      <CanvasReadout />
       <PopoverPanel label="Atajos de teclado" className="ui-shortcuts" side="top" open={keys} onOpenChange={setKeys} trigger={<button className="btn ghost sm"><Keyboard size={13}/>Atajos</button>}>
         <div className="shortcuts">{SHORTCUTS.map(([label,combo])=><FragmentRow key={label} label={label} combo={combo}/>)}</div>
       </PopoverPanel>

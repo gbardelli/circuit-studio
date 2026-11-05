@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildNetlist, pinKey } from '../core/netlist';
 import type { CircuitSnapshot, PartData } from '../core/types';
 import { PARTS } from '../parts';
-import { buildSchematic } from './schematic';
+import { buildSchematic, renameNet } from './schematic';
 import { scorePart } from '../parts/search';
 
 const part = (id: string, type: string, x = 0): PartData => ({ id, type, x, y: 0, rot: 0, props: { ...PARTS[type].defaults } });
@@ -44,5 +44,24 @@ describe('component search', () => {
   it('accepts an abbreviated component name without matching arbitrary distant letters', () => {
     expect(scorePart(PARTS.servo, 'srvo')).toBeGreaterThan(0);
     expect(scorePart(PARTS.servo, 'zzq')).toBe(0);
+  });
+});
+
+describe('renameNet', () => {
+  const r1: PartData = { id: 'r1', type: 'resistor', x: 0, y: 0, rot: 0, props: { nets: 'a=VIEJO;b=OTRA' } };
+  const r2: PartData = { id: 'r2', type: 'resistor', x: 0, y: 0, rot: 0, props: { nets: 'a=DUPLICADO' } };
+  const board: PartData = { id: 'bb', type: 'breadboard-400', x: 0, y: 0, rot: 0, props: {} };
+  const keys = ['bb:A1', 'r1:a', 'r2:a'];
+
+  it('guarda un solo nombre por red y conserva los de otras redes', () => {
+    const out = renameNet([board, r1, r2], keys, 'CUENTA_0');
+    expect(out.get('r1')).toBe('b=OTRA;a=CUENTA_0');
+    expect(out.get('r2')).toBe('');
+    expect(out.has('bb')).toBe(false);
+  });
+
+  it('vacío vuelve al nombre automático y limpia separadores', () => {
+    expect(renameNet([r1], ['r1:a'], '  ').get('r1')).toBe('b=OTRA');
+    expect(renameNet([r1], ['r1:a'], 'A;B=C').get('r1')).toBe('b=OTRA;a=ABC');
   });
 });

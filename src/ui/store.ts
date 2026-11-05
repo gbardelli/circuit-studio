@@ -77,6 +77,23 @@ export interface UiState {
   openCode(partId: string | null, tab?: 'code' | 'serial' | null): void;
   showToast(text: string | null, tone?: Toast['tone']): void;
   setTool(tool: Tool): void;
+  /** Piezas copiadas con Ctrl C (ids del circuito). */
+  clipboard: string[];
+  setClipboard(ids: string[]): void;
+  /** Posición del cursor en el lienzo (unidades del mundo) para la barra de estado. */
+  pointer: { x: number; y: number } | null;
+  setPointer(p: { x: number; y: number } | null): void;
+}
+
+/** Selecciona una pieza y lleva el foco a su campo «Nombre» del inspector, como F2 en los CAD. */
+export function focusPartName(id: string) {
+  useUi.getState().select([id], []);
+  const tryFocus = (left: number) => {
+    const input = document.getElementById(`part-name-${id}`) as HTMLInputElement | null;
+    if (input) { input.focus(); input.select(); }
+    else if (left > 0) setTimeout(() => tryFocus(left - 1), 40);
+  };
+  setTimeout(() => tryFocus(8), 30);
 }
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
@@ -121,6 +138,10 @@ export const useUi = create<UiState>((set) => ({
   bottomTab: null,
   toast: null,
   tool: 'select',
+  clipboard: [],
+  setClipboard: (clipboard) => set({ clipboard }),
+  pointer: null,
+  setPointer: (pointer) => set({ pointer }),
   showFlow: true,
   setShowFlow: (showFlow) => set({ showFlow }),
   view: 'board',

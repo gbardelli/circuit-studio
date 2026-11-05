@@ -252,7 +252,7 @@ function PartInspector({ part }: { part: PartData }) {
           </div>
         </div>
         {simRunning && damageOf(part.id) && <DamageNote damage={damageOf(part.id)!} />}
-        {part.type.startsWith('breadboard')&&<div className="insp-section"><label className="label" htmlFor={`board-name-${part.id}`}>Nombre de la protoboard</label><input className="identity-label-input" id={`board-name-${part.id}`} value={String(part.props.label??'')} maxLength={80} placeholder={def.name} onChange={event=>project.setProp(part.id,'label',event.target.value)}/></div>}
+        <PartNameField part={part} placeholder={def.partNumber ?? def.name} board={part.type.startsWith('breadboard')} readOnly={project.readOnly} onChange={(value) => project.setProp(part.id, 'label', value)} />
         {peers.length > 0 && (
           <div className="insp-section" style={{ paddingTop: 8, paddingBottom: 8 }}>
             <span className="peer-note" style={{ margin: 0 }}>
@@ -314,6 +314,40 @@ function PartInspector({ part }: { part: PartData }) {
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * Nombre de la pieza, editable en el sitio. En el esquema, si empieza por una referencia
+ * (U3, R1, D2…) esa es la que se usa como designador, igual que en KiCad o Altium.
+ */
+function PartNameField({ part, placeholder, board, readOnly, onChange }: { part: PartData; placeholder: string; board: boolean; readOnly: boolean; onChange: (value: string) => void }) {
+  const saved = String(part.props.label ?? '');
+  const [text, setText] = useState(saved);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(saved); }, [saved, focused]);
+  const commit = () => { if (text.trim() !== saved) onChange(text.trim()); };
+  const id = `part-name-${part.id}`;
+  return (
+    <div className="insp-section">
+      <label className="label" htmlFor={id}>{board ? 'Nombre de la protoboard' : 'Nombre o referencia'}</label>
+      <input
+        className="identity-label-input"
+        id={id}
+        value={text}
+        maxLength={80}
+        placeholder={placeholder}
+        readOnly={readOnly}
+        onFocus={() => setFocused(true)}
+        onBlur={() => { setFocused(false); commit(); }}
+        onChange={(event) => setText(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter') event.currentTarget.blur();
+          if (event.key === 'Escape') { setText(saved); setTimeout(() => (document.getElementById(id) as HTMLInputElement | null)?.blur()); }
+        }}
+      />
+      {!board && <p className="identity-field-hint">Empieza por la referencia (U3, R1, D2…) para usarla en el esquema. Doble clic en la pieza o F2 para editarlo.</p>}
+    </div>
   );
 }
 

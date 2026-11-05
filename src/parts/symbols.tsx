@@ -289,6 +289,10 @@ function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
     Render: ({ part }) => {
       const { left, right, names, width, height } = shape(part.props);
       const num = new Map(String(part.props.__num ?? '').split(',').filter(Boolean).map((kv) => kv.split('=') as [string, string]));
+      // Designador a la izquierda y valor a la derecha; si no caben en una línea, el valor baja
+      // bajo el designador (como en KiCad) en vez de pisarlo.
+      const ref = String(part.props.__ref ?? '');
+      const fits = ref.length * 4.3 + title.length * 3.3 + 8 <= width;
       const side = (list: string[], x: number, toward: number, anchor: 'start' | 'end') =>
         list.map(
           (id, i) =>
@@ -309,12 +313,12 @@ function boxSymbol(allPins: (props: Props) => PinDef[], title: string): Symbol {
       return (
         <g>
           <rect x={10} y={0} width={width} height={height} rx={1.5} fill="var(--sch-fill, rgba(255,255,255,0.025))" stroke={INK} strokeWidth={SW} />
-          {part.props.__ref ? (
-            <text x={10} y={-4} fontSize="6.6" fontWeight={600} fill={INK} fontFamily={FONT}>
-              {String(part.props.__ref)}
+          {ref ? (
+            <text x={10} y={fits ? -4 : -11.5} fontSize="6.6" fontWeight={600} fill={INK} fontFamily={FONT}>
+              {ref}
             </text>
           ) : null}
-          <text x={width + 10} y={-4} textAnchor="end" fontSize="6" fill={SOFT} fontFamily={FONT}>
+          <text x={fits || !ref ? width + 10 : 10} y={-4} textAnchor={fits || !ref ? 'end' : 'start'} fontSize="6" fill={SOFT} fontFamily={FONT}>
             {title}
           </text>
           {side(left, 0, 10, 'start')}

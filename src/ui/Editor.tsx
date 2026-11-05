@@ -12,7 +12,7 @@ import { EditorContext, useEditor, useSnapshot, type EditorCtx } from './context
 import { Inspector } from './Inspector';
 import { Library, LibDragFloat } from './Library';
 import { StatusBar, TopBar } from './TopBar';
-import { useUi } from './store';
+import { focusPartName, useUi } from './store';
 import { DesignCanvas } from './design/DesignCanvas';
 import { rememberProject } from './Home';
 import { CLOUD, api, type ProjectDetail } from '../cloud';
@@ -214,6 +214,33 @@ export function EditorShell() {
       } else if (mod && key === 'd') {
         e.preventDefault();
         if (ui.selection.length) ui.select(project.duplicate(ui.selection, 20, 20), []);
+      } else if (mod && key === 'c' && ui.selection.length) {
+        e.preventDefault();
+        ui.setClipboard([...ui.selection]);
+        ui.showToast(ui.selection.length === 1 ? 'Pieza copiada. Ctrl V para pegarla.' : `${ui.selection.length} piezas copiadas. Ctrl V para pegarlas.`, 'ok');
+      } else if (mod && key === 'v' && ui.clipboard.length) {
+        e.preventDefault();
+        if (project.readOnly) return;
+        const all = project.snapshot().parts;
+        const ids = ui.clipboard.filter((id) => all.some((p) => p.id === id));
+        if (!ids.length) { ui.showToast('Las piezas copiadas ya no están en el circuito.'); return; }
+        // Pegar bajo el cursor (protoboard) o desplazado, como en Figma o KiCad.
+        let dx = 20, dy = 20;
+        const at = ui.pointer;
+        if (at && ui.view === 'board') {
+          const copied = all.filter((p) => ids.includes(p.id));
+          const cx = copied.reduce((s, p) => s + p.x, 0) / copied.length;
+          const cy = copied.reduce((s, p) => s + p.y, 0) / copied.length;
+          dx = Math.round((at.x - cx) / 10) * 10;
+          dy = Math.round((at.y - cy) / 10) * 10;
+          if (dx === 0 && dy === 0) { dx = 20; dy = 20; }
+        }
+        ui.select(project.duplicate(ids, dx, dy), []);
+      } else if (key === 'f2' && ui.selection.length === 1) {
+        e.preventDefault();
+        focusPartName(ui.selection[0]);
+      } else if (key === 'escape' && (ui.selection.length || ui.wireSelection.length) && !ui.placing) {
+        ui.select([], []);
       } else if (mod && key === 'a') {
         e.preventDefault();
         const snap = project.snapshot();
