@@ -90,4 +90,15 @@ describe('plantillas', () => {
     for (let k = 1; k < order.length; k++) expect((order[k] - order[k - 1] + 10) % 10, `${order}`).toBe(1);
     engine.stop();
   });
+
+  it('la prueba de pines del GIGA mide 3,3 V en el pin en alto y 5 V en el pin de 5V', () => {
+    const engine = run('giga-pin-test');
+    engine.tick(0.5);
+    const pin = Number(engine.getVisual('pin')?.v ?? NaN);
+    const ref = Number(engine.getVisual('ref')?.v ?? NaN);
+    expect(ref).toBeGreaterThan(4.8);
+    expect(ref).toBeLessThan(5.2);
+    expect(pin).toBeLessThan(3.6);
+    engine.stop();
+  });
 });
