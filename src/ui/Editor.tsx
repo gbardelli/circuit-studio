@@ -61,9 +61,17 @@ export function Editor({ room, template }: { room: string; template: string | nu
       const t = findTemplate(template);
       if (!synced || seeded) return;
       seeded = true;
-      if (t && project.parts.size === 0 && !project.readOnly) {
+      // «&replace=1» cambia el contenido de un circuito existente por la plantilla; queda en el
+      // historial de versiones y Ctrl+Z lo deshace.
+      const replace = new URLSearchParams(location.search).get('replace') === '1';
+      if (t && !project.readOnly && (project.parts.size === 0 || replace)) {
+        const fresh = project.parts.size === 0;
+        if (!fresh) {
+          const snap = project.snapshot();
+          project.deleteItems(snap.parts.map((q) => q.id), snap.wires.map((w) => w.id));
+        }
         applyTemplate(project, t);
-        project.undo.clear();
+        if (fresh) project.undo.clear();
       }
       if (template) history.replaceState(null, '', `?p=${room}`);
     };
