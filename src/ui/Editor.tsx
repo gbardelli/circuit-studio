@@ -65,7 +65,8 @@ export function Editor({ room, template }: { room: string; template: string | nu
       // «&replace=1» cambia el contenido de un circuito existente por la plantilla; queda en el
       // historial de versiones y Ctrl+Z lo deshace. Es destructivo y llega por un enlace: se pide
       // confirmación en un diálogo de la app, y solo quien puede editar.
-      const wantsReplace = new URLSearchParams(location.search).get('replace') === '1' && !!t && project.parts.size > 0;
+      // Dentro de un iframe ajeno no se ofrece (evita que otra página haga pulsar «Reemplazar»).
+      const wantsReplace = new URLSearchParams(location.search).get('replace') === '1' && !!t && project.parts.size > 0 && window.top === window.self;
       if (wantsReplace) setReplacing({ name: t!.name, readOnly: project.readOnly, run: () => replaceWith(project, t!) });
       if (t && !project.readOnly && project.parts.size === 0) {
         applyTemplate(project, t);
