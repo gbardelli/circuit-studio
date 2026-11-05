@@ -1,14 +1,17 @@
-// Ascensor de cuatro pisos con los integrados del kit de clase y el Arduino GIGA solo como pantalla.
+// Ascensor de cuatro pisos con los integrados del kit de clase y el Arduino GIGA como innovación.
 //
 // Lógica a 5 V con: 74LS75 ×2 (memoria del destino y del piso actual), 74LS85 (comparador),
 // 74LS48 ×2 (displays) y compuertas 74HC (00, 04, 08, 32) más un 74HC74 (OCUPADO / VÁLIDO) y un
-// NE555 de reloj. El GIGA (3,3 V) no decide nada: lee el destino, el piso actual y OCUPADO a través
-// de dos adaptadores de nivel BOB-12009 (LV = 3V3 del GIGA, HV = 5 V) y lo dibuja en su pantalla.
+// NE555 de reloj. El GIGA (3,3 V) no decide nada: por cuatro adaptadores BOB-12009 (LV = 3V3 del
+// GIGA, HV = 5 V) lee destino, piso actual y OCUPADO, pulsa las líneas de llamada desde su pantalla
+// táctil y, en modo AUTO, mueve la cabina activando los sensores de planta (3 s por piso).
 //
 //   1 · Pulsadores y prioridad    PP1–PP4 · U20 74HC08 · U2 74HC00 · U3 74HC04 · U19 74LS48 + display (piso actual)
 //   2 · Control y destino         RESET · U4 NE555 · U5 74HC74 · U6 74HC08 · U7 74HC32 · U8 74LS75 · U14 74LS48 + display (destino)
-//   3 · Sensores y comparación    SP1–SP4 · U9 74HC00 · U10 74HC04 · U13 74HC08 · U11 74LS75 · U12 74LS85
+//   3 · Sensores y comparación    SP1–SP4 · U9 74HC00 · U10 74HC04 · U13 74HC08 · U21 74HC08 · U11 74LS75 · U12 74LS85
 //
+// Pulsadores y sensores pasan por codificadores con prioridad 4 > 3 > 2 > 1: con dos activos a la
+// vez gana el más alto y el número nunca pasa de 4.
 // Los 74LS75 son latches transparentes, no registros de flanco:
 //  · U8 (destino) abre mientras ACEPTAR = 1 y el reloj está en bajo; se cierra en el mismo flanco de
 //    subida en que el 74HC74 pone OCUPADO a 1.
@@ -31,6 +34,8 @@ export const CLASS_GIGA_PINS = {
   dest: ['D23', 'D25', 'D27'], // U8 1Q–3Q
   busy: 'D29', // U5 1Q
   floor: ['D31', 'D33', 'D35'], // U11 1Q–3Q
+  call: ['D37', 'D39', 'D41', 'D43'], // llamadas táctiles → líneas PP1–PP4 (drenador abierto)
+  sensor: ['D45', 'D47', 'D49', 'D51'], // motor de la cabina → sensores SP1–SP4 (drenador abierto)
 };
 
 const NET_NAMES: Record<string, string> = {
@@ -39,7 +44,8 @@ const NET_NAMES: Record<string, string> = {
   u12: 'OAGTB=PISO>DEST;OALTB=PISO<DEST;OAEQB=DEST=PISO',
   u5: '1Q=OCUPADO;1QN=/OCUPADO;2Q=VÁLIDO',
   u4: 'OUT=CLK',
-  u9: '1Y=SEN0;2Y=SEN1;3Y=SEN2;4Y=SENSOR',
+  u9: '1Y=SEN2_O_SEN3;2Y=SEN_P4;4Y=SENSOR',
+  u21: '2Y=SEN0;3Y=SEN1;4Y=SEN2',
   u2: '2Y=PED2_O_PED3;3Y=SEL2;4Y=PED3_O_PED1_HABILITADO',
   u20: '2Y=SEL0;3Y=SEL1',
   u6: '4Y=ACEPTAR;1Y=MANTENER;2Y=LLEGÓ',
@@ -62,6 +68,8 @@ export function elevatorClassTemplate(): Template {
   r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · estado del ascensor' });
   r.loose('conv1', 'level-converter-4', -220, 330, { label: 'Adaptador 1 · destino y OCUPADO' });
   r.loose('conv2', 'level-converter-4', -220, 470, { label: 'Adaptador 2 · piso actual' });
+  r.loose('conv3', 'level-converter-4', -220, 190, { label: 'Adaptador 3 · llamadas táctiles' });
+  r.loose('conv4', 'level-converter-4', -220, 610, { label: 'Adaptador 4 · sensores (motor)' });
 
   const vcc = (ref: Ref) => r.rail(ref, true, WIRE.v5);
   const gnd = (ref: Ref) => r.rail(ref, false);
@@ -209,37 +217,58 @@ export function elevatorClassTemplate(): Template {
     r.fromRail(`sp${f}R`, B3, 6 + f, 'tp', 10_000);
     gnd(['sp', `${f}A`]);
   }
-  r.dip('u9', '74hc00', B3, 13, 'U9 · 74HC00 · codificador y SENSOR');
-  r.dip('u10', '74hc04', B3, 22, 'U10 · 74HC04 · retardo de los datos');
-  r.dip('u13', '74hc08', B3, 31, 'U13 · 74HC08 · SENSOR, SUBIR y BAJAR');
-  r.dip('u11', '74ls75', B3, 40, 'U11 · 74LS75 · memoria del piso actual');
-  r.dip('u12', '74ls85', B3, 51, 'U12 · 74LS85 · comparador');
-  // Salidas TTL del LS85 hacia puertas HC: pull-up de 4,7 kΩ (pines 5–7 → columnas 55–57).
-  r.fromRail('u12Rgt', B3, 55, 'tp', 4700);
-  r.fromRail('u12Req', B3, 56, 'tp', 4700);
-  r.fromRail('u12Rlt', B3, 57, 'tp', 4700);
-  for (const u of ['u9', 'u10', 'u13', 'u11', 'u12']) power(u);
-  // SEN0 = SP1 + SP3, SEN1 = SP2 + SP3, SEN2 = SP4 (U9, puertas 1–3: NAND de señales activas en bajo).
-  r.wire(['sp', '1B'], ['u9', '1A'], WIRE.sensor);
-  r.wire(['sp', '3B'], ['u9', '1B'], WIRE.sensor);
-  r.wire(['sp', '2B'], ['u9', '2A'], WIRE.sensor);
-  r.wire(['u9', '1B'], ['u9', '2B'], WIRE.sensor);
-  r.wire(['sp', '4B'], ['u9', '3A'], WIRE.sensor);
-  r.wire(['u9', '3A'], ['u9', '3B'], WIRE.sensor);
-  // SENSOR = hay algún sensor activo = NAND(SP1' · SP2', SP3' · SP4') (U13 puertas 1 y 3, U9 puerta 4).
+  r.dip('u9', '74hc00', B3, 12, 'U9 · 74HC00 · codificador de sensores y SENSOR');
+  r.dip('u10', '74hc04', B3, 20, 'U10 · 74HC04 · codificador y retardo de datos');
+  r.dip('u13', '74hc08', B3, 28, 'U13 · 74HC08 · SENSOR, SUBIR y BAJAR');
+  r.dip('u21', '74hc08', B3, 36, 'U21 · 74HC08 · prioridad de sensores');
+  r.dip('u11', '74ls75', B3, 44, 'U11 · 74LS75 · memoria del piso actual');
+  r.dip('u12', '74ls85', B3, 53, 'U12 · 74LS85 · comparador');
+  // Salidas TTL del LS85 hacia puertas HC: pull-up de 4,7 kΩ (pines 5–7 → columnas 57–59).
+  r.fromRail('u12Rgt', B3, 57, 'tp', 4700);
+  r.fromRail('u12Req', B3, 58, 'tp', 4700);
+  r.fromRail('u12Rlt', B3, 59, 'tp', 4700);
+  for (const u of ['u9', 'u10', 'u13', 'u21', 'u11', 'u12']) power(u);
+  // Codificador con prioridad 4 > 3 > 2 > 1, como el de los pulsadores: aunque haya dos sensores
+  // activos a la vez el piso nunca pasa de 4. SPn' = sensor n en bajo (activo).
+  //   SEN2 = SP4                    U9.2  = NAND(SP4', SP4')
+  //   SEN1 = (SP2 + SP3) · /SP4     U9.1  = NAND(SP2', SP3') → U21.3 = AND(·, SP4')
+  //   SEN0 = (SP3 + SP1·/SP2)·/SP4  U10.1 = SP1 → U21.1 = AND(SP1, SP2') → U10.2 → U9.3 = NAND(·, SP3') → U21.2 = AND(·, SP4')
+  // Cada línea de sensor sale una sola vez del DIP y sigue encadenada de patilla en patilla.
   r.wire(['sp', '1B'], ['u13', '1A'], WIRE.sensor);
-  r.wire(['sp', '2B'], ['u13', '1B'], WIRE.sensor);
-  r.wire(['sp', '3B'], ['u13', '3A'], WIRE.sensor);
-  r.wire(['sp', '4B'], ['u13', '3B'], WIRE.sensor);
+  r.wire(['u13', '1A'], ['u10', '1A'], WIRE.sensor);
+  r.wire(['sp', '2B'], ['u9', '1A'], WIRE.sensor);
+  r.wire(['u9', '1A'], ['u13', '1B'], WIRE.sensor);
+  r.wire(['u13', '1B'], ['u21', '1B'], WIRE.sensor);
+  r.wire(['sp', '3B'], ['u9', '1B'], WIRE.sensor);
+  r.wire(['u9', '1B'], ['u9', '3B'], WIRE.sensor);
+  r.wire(['u9', '3B'], ['u13', '3A'], WIRE.sensor);
+  r.wire(['sp', '4B'], ['u9', '2A'], WIRE.sensor);
+  r.wire(['u9', '2A'], ['u9', '2B'], WIRE.sensor);
+  r.wire(['u9', '2B'], ['u13', '3B'], WIRE.sensor);
+  r.wire(['u13', '3B'], ['u21', '2B'], WIRE.sensor);
+  r.wire(['u21', '2B'], ['u21', '3B'], WIRE.sensor);
+  // SEN0: SP1 (U10.1) · SP2' (U21.1) → U10.2 → NAND con SP3' (U9.3) → AND con SP4' (U21.2).
+  r.wire(['u10', '1Y'], ['u21', '1A'], WIRE.sensor);
+  r.wire(['u21', '1Y'], ['u10', '2A'], WIRE.sensor);
+  r.wire(['u10', '2Y'], ['u9', '3A'], WIRE.sensor);
+  r.wire(['u9', '3Y'], ['u21', '2A'], WIRE.sensor);
+  // SEN1: (SP2 + SP3) (U9.1) · SP4' (U21.3).
+  r.wire(['u9', '1Y'], ['u21', '3A'], WIRE.sensor);
+  // SENSOR = NAND(SP1'·SP2', SP3'·SP4') (U13 puertas 1 y 3, U9 puerta 4).
   r.wire(['u13', '1Y'], ['u9', '4A'], WIRE.sensor);
   r.wire(['u13', '3Y'], ['u9', '4B'], WIRE.sensor);
-  // Datos del piso actual: cada bit pasa por dos inversores (U10) → llega después que SENSOR.
-  for (const [i, gate] of [[0, '1'], [1, '2'], [2, '3']] as const) {
-    const a = i * 2 + 1;
-    r.wire(['u9', `${gate}Y`], ['u10', `${a}A`], WIRE.current);
-    r.wire(['u10', `${a}Y`], ['u10', `${a + 1}A`], WIRE.current);
-    r.wire(['u10', `${a + 1}Y`], ['u11', `${i + 1}D`], WIRE.current);
-  }
+  // Tiempo de mantenimiento del latch: SENSOR cambia tras 2 puertas; cada bit de datos, tras 4 o 5.
+  // SEN0 ya va por 5 puertas; SEN1 pasa por dos inversores (U10.3–4) y SEN2 por dos inversores
+  // (U10.5–6) y una AND usada como buffer (U21.4).
+  r.wire(['u21', '2Y'], ['u11', '1D'], WIRE.current);
+  r.wire(['u21', '3Y'], ['u10', '3A'], WIRE.current);
+  r.wire(['u10', '3Y'], ['u10', '4A'], WIRE.current);
+  r.wire(['u10', '4Y'], ['u11', '2D'], WIRE.current);
+  r.wire(['u9', '2Y'], ['u10', '5A'], WIRE.current);
+  r.wire(['u10', '5Y'], ['u10', '6A'], WIRE.current);
+  r.wire(['u10', '6Y'], ['u21', '4A'], WIRE.current);
+  r.wire(['u21', '4A'], ['u21', '4B'], WIRE.current);
+  r.wire(['u21', '4Y'], ['u11', '3D'], WIRE.current);
   gnd(['u11', '4D']);
   r.wire(['u9', '4Y'], ['u11', 'LE12'], WIRE.sensor);
   r.wire(['u11', 'LE12'], ['u11', 'LE34'], WIRE.sensor);
@@ -271,14 +300,15 @@ export function elevatorClassTemplate(): Template {
   // ── GIGA: solo lee, a través de dos adaptadores BOB-12009 ────────────────────
   // LV a 3V3 del GIGA y HV a 5 V; el GIGA nunca ve más de 3,3 V.
   const gigaNets: string[] = [];
-  const level = (id: string, hv: Ref, gndRef: Ref) => {
-    r.wire(['giga', '3V3'], [id, 'LV'], WIRE.v33);
+  // El 3V3 y la masa del GIGA llegan al adaptador 1; los demás los toman del adaptador vecino.
+  const level = (id: string, hv: Ref, gndRef: Ref, from?: string) => {
+    r.wire(from ? [from, 'LV'] : ['giga', '3V3'], [id, 'LV'], WIRE.v33);
     r.wire(hv, [id, 'HV'], WIRE.v5);
-    r.wire(['giga', 'GND.1'], [id, 'GND.L'], WIRE.gnd);
+    r.wire(from ? [from, 'GND.L'] : ['giga', 'GND.1'], [id, 'GND.L'], WIRE.gnd);
     r.wire(gndRef, [id, 'GND.H'], WIRE.gnd);
   };
   level('conv1', r.railHole(B2, 'tp', 52), r.railHole(B2, 'tn', 50));
-  level('conv2', r.railHole(B3, 'tp', 46), r.railHole(B3, 'tn', 44));
+  level('conv2', r.railHole(B3, 'tp', 46), r.railHole(B3, 'tn', 44), 'conv1');
   const read = (conv: string, ch: number, pin: string, source: Ref, name: string) => {
     gigaNets.push(`${pin}=${name}`);
     r.wire(source, [conv, `H${ch}`], WIRE.monitor);
@@ -287,6 +317,18 @@ export function elevatorClassTemplate(): Template {
   CLASS_GIGA_PINS.dest.forEach((pin, bit) => read('conv1', bit + 1, pin, ['u8', `${bit + 1}Q`], `DEST${bit}`));
   read('conv1', 4, CLASS_GIGA_PINS.busy, ['u5', '1Q'], 'OCUPADO');
   CLASS_GIGA_PINS.floor.forEach((pin, bit) => read('conv2', bit + 1, pin, ['u11', `${bit + 1}Q`], `PISO${bit}`));
+  // Llamadas táctiles y sensores que mueve el GIGA: drenador abierto a través del adaptador.
+  // El GIGA pone su pin a 0 (OUTPUT LOW) y el lado de 5 V baja igual que un pulsador; con INPUT lo suelta.
+  level('conv3', r.railHole(B1, 'tp', 47), r.railHole(B1, 'tn', 45), 'conv1');
+  level('conv4', r.railHole(B3, 'tp', 40), r.railHole(B3, 'tn', 38), 'conv2');
+  const drive = (conv: string, ch: number, pin: string, target: Ref, name: string, color: string) => {
+    gigaNets.push(`${pin}=${name}`);
+    r.wire(['giga', pin], [conv, `L${ch}`], color);
+    r.wire([conv, `H${ch}`], target, color);
+  };
+  CLASS_GIGA_PINS.call.forEach((pin, i) => drive('conv3', i + 1, pin, pp(i + 1), `LL${i + 1}`, WIRE.call));
+  const sensorTaps: Ref[] = [['u10', '1A'], ['u21', '1B'], ['u13', '3A'], ['u21', '3B']];
+  CLASS_GIGA_PINS.sensor.forEach((pin, i) => drive('conv4', i + 1, pin, sensorTaps[i], `SP${i + 1}`, WIRE.sensor));
 
   for (const p of r.parts) {
     if (p.key === 'giga') p.props = { ...p.props, nets: gigaNets.join(';') };
@@ -295,8 +337,8 @@ export function elevatorClassTemplate(): Template {
 
   cached = r.template({
     id: 'elevator-class',
-    name: 'Ascensor con integrados de clase + GIGA (pantalla)',
-    summary: 'Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con dos adaptadores de nivel, solo muestra el estado del ascensor en su pantalla.',
+    name: 'Ascensor con integrados de clase + GIGA',
+    summary: 'Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con cuatro adaptadores de nivel, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.',
     level: 'Avanzado',
     category: 'Lógica secuencial',
     sketch: ELEVATOR_CLASS_GIGA,

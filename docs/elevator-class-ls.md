@@ -1,10 +1,14 @@
 # Ascensor con los integrados de clase (LS + HC) y GIGA como pantalla
 
-Montaje **«Ascensor con integrados de clase + GIGA (pantalla)»**; no está en la galería de Plantillas.
+Montaje **«Ascensor con integrados de clase + GIGA»**; no está en la galería de Plantillas: se abre con
+`/?new=elevator-class`, que crea un circuito nuevo con este montaje (`src/collab/fixtures/elevator-class.json`,
+regenerado con `npx tsx scripts/build-elevator-class.ts`).
 Código: `src/collab/elevatorClass.ts` (`elevatorClassTemplate()`); sketch: `src/collab/elevatorClassSketch.ts`.
 
-La lógica va a **5 V** y es de los integrados del kit. El GIGA (3,3 V) solo **lee** tres cosas por
-dos adaptadores BOB-12009 y las dibuja en su pantalla; no mueve ninguna línea del circuito.
+La lógica va a **5 V** y es de los integrados del kit. El GIGA (3,3 V) es la innovación: por cuatro
+adaptadores BOB-12009 lee destino, piso actual y OCUPADO, llama al ascensor desde su pantalla táctil
+(como un pulsador más) y en modo AUTO mueve la cabina activando los sensores (3 s por piso). En
+MANUAL los sensores se mueven a mano con el DIP. Sin el GIGA el ascensor funciona igual con PP1–PP4 y el DIP.
 
 ## Qué hace cada integrado
 
@@ -13,7 +17,7 @@ dos adaptadores BOB-12009 y las dibuja en su pantalla; no mueve ninguna línea d
 | 2 | 74LS75 | U8 memoria del destino, U11 memoria del piso actual |
 | 1 | 74LS85 | U12 comparador (A = piso actual, B = destino) |
 | 2 | 74LS48 | U14 display del destino, U19 display del piso actual |
-| 2 / 2 / 3 / 1 | 74HC00 / 04 / 08 / 32 | U2 U9 / U3 U10 / U20 U6 U13 / U7 |
+| 2 / 2 / 4 / 1 | 74HC00 / 04 / 08 / 32 | U2 U9 / U3 U10 / U20 U6 U13 U21 / U7 |
 | 1 | 74HC74 | U5 OCUPADO y VÁLIDO |
 | 1 | NE555 | U4 reloj de ≈21 Hz (a 5 V un NE555 normal oscila) |
 
@@ -50,13 +54,19 @@ que nunca ve más de 3,3 V; cada canal lleva 10 kΩ a su propio riel (≤0,5 mA)
 | 1 | 1–3 | DEST0–2 (U8 1Q–3Q) | D23, D25, D27 |
 | 1 | 4 | OCUPADO (U5 1Q) | D29 |
 | 2 | 1–3 | PISO0–2 (U11 1Q–3Q) | D31, D33, D35 |
+| 3 | 1–4 | LL1–LL4 → líneas PP1–PP4 (salida, drenador abierto) | D37, D39, D41, D43 |
+| 4 | 1–4 | SP1–SP4 → sensores (salida, drenador abierto) | D45, D47, D49, D51 |
+
+Las salidas del GIGA son de drenador abierto: `OUTPUT LOW` baja la línea (el adaptador la lleva a 0
+en el lado de 5 V, igual que un pulsador) e `INPUT` la suelta. El GIGA nunca empuja tensión.
 
 El GIGA se alimenta por USB. **Nunca** conectes una salida de 5 V directo a un pin del GIGA.
 
 ## Cómo se maneja
 
 - **PP1–PP4**: pulsadores de cabina. Pulsado = 0. Con dos a la vez gana el piso más alto.
-- **SP1–SP4** (DIP): sensores de planta; solo uno activo y entre piso y piso todos apagados.
+- **SP1–SP4** (DIP, modo MANUAL): sensores de planta. Si hay varios activos gana el más alto (nunca pasa de 4).
+- **Pantalla del GIGA**: botones 1–4 para llamar al ascensor y AUTO/MANUAL arriba a la derecha.
 - **RESET**: borra OCUPADO y VÁLIDO.
 - LEDs: LS sube, LB baja, PARAR cuando piso actual = destino, OCUPADO durante el viaje.
 

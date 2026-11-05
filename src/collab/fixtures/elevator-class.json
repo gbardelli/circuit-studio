@@ -1,0 +1,5715 @@
+{
+ "id": "elevator-class",
+ "name": "Ascensor con integrados de clase + GIGA",
+ "summary": "Memorias 74LS75, comparador 74LS85, displays 74LS48 y compuertas HC a 5 V. El GIGA, con cuatro adaptadores de nivel, añade llamadas táctiles desde cada piso, mueve la cabina y muestra el estado.",
+ "level": "Avanzado",
+ "category": "Lógica secuencial",
+ "sketch": "// Ascensor de 4 pisos · innovación con Arduino GIGA R1 WiFi + GIGA Display Shield\n//\n// La lógica obligatoria la hacen los integrados de clase (74LS75, 74LS85, 74LS48 y 74HC):\n// memoria del destino, bloqueo, piso actual, comparación, LEDs LS/LB y los dos displays.\n// El GIGA no decide nada; añade:\n//  1. Llamadas desde la pantalla táctil (innovación): pulsa la línea del piso como un botón más.\n//  2. Motor de la cabina (modo AUTO): cuando los CI piden subir o bajar, apaga el sensor, espera\n//     3 s por piso y enciende el sensor del piso siguiente. En MANUAL lo haces tú con el DIP.\n//  3. Pantalla de 800 x 480: hueco con la cabina, piso actual, destino, tiempo y sentido.\n//\n// Los CI van a 5 V y el GIGA a 3,3 V: TODAS las líneas pasan por adaptadores BOB-12009.\n// Llamadas y sensores en drenador abierto: OUTPUT LOW pone la línea a 0 (como el pulsador) e\n// INPUT la suelta; el GIGA nunca empuja tensión contra un pulsador o un interruptor.\n\n#include <Arduino_GigaDisplay_GFX.h>\n#include <Arduino_GigaDisplayTouch.h>\n#include <Arduino_GigaDisplay.h>\n\nGigaDisplay_GFX display;\nArduino_GigaDisplayTouch touchPanel;\nGigaDisplayRGB rgb;\n\nconst int DEST[3]   = {23, 25, 27};      // destino guardado en U8 (74LS75)\nconst int BUSY      = 29;                // OCUPADO (U5)\nconst int FLOOR[3]  = {31, 33, 35};      // piso actual guardado en U11 (74LS75)\nconst int CALL[4]   = {37, 39, 41, 43};  // llamada de piso 1-4 (en paralelo con PP1-PP4)\nconst int SENSOR[4] = {45, 47, 49, 51};  // sensor de planta 1-4 (en paralelo con el DIP)\n\nconst unsigned long FLOOR_MS  = 3000;    // lo que tarda la cabina en recorrer un piso\nconst unsigned long SETTLE_MS = 250;     // deja que los CI lean el sensor nuevo\nconst unsigned long DOORS_MS  = 1500;    // puertas abiertas al llegar\nconst unsigned long PULSE_MS  = 250;     // pulsación de una llamada táctil\n\n#define RGB565(r, g, b) (uint16_t)((((r) & 0xF8) << 8) | (((g) & 0xFC) << 3) | ((b) >> 3))\nconst uint16_t BG = RGB565(10, 12, 15), PANEL = RGB565(21, 25, 30), CARD = RGB565(29, 34, 41);\nconst uint16_t LINE = RGB565(50, 57, 66), TEXT = RGB565(236, 239, 243), DIM = RGB565(128, 138, 150);\nconst uint16_t GREEN = RGB565(52, 199, 120), RED = RGB565(240, 84, 84), AMBER = RGB565(245, 176, 65);\nconst uint16_t BLUE = RGB565(70, 156, 255), CABIN = RGB565(226, 232, 240);\n\n// Pantalla apaisada (rotación 1): 800 x 480\nconst int SX = 36, SY = 84, SW = 150, SLOT = 92;          // hueco: 4 plantas de 92 px\nconst int CARD_X = 236, CARD_Y = 84;                       // piso actual\nconst int SIDE_X = 516, SIDE_W = 248;                      // destino y tiempo\nconst int CALL_X = 236, CALL_Y = 352, CALL_W = 119, CALL_H = 104, CALL_GAP = 12;\nconst int MODE_X = 640, MODE_Y = 14, MODE_W = 124, MODE_H = 36;\n\nbool autoMode = true;\nint floorNow = 1;        // planta de la cabina\nint dir = 0;             // +1 sube, -1 baja, 0 parada\nunsigned long segStart = 0, settleUntil = 0, doorsUntil = 0, pulseUntil[4] = {0, 0, 0, 0};\nbool wasBusy = false, wasTouching = false;\n\nint shownCab = -1000, shownFloor = -1, shownDest = -2, shownStatus = -1, shownTime = -1, shownCalls = -1, shownMode = -1;\nbool shownDoors = false;\nchar buf[16];\n\nvoid press(int pin)   { digitalWrite(pin, LOW); pinMode(pin, OUTPUT); }\nvoid release(int pin) { pinMode(pin, INPUT); }\n\nvoid label(int x, int y, int w, int h, int size, uint16_t fg, uint16_t bg, const char* s) {\n  int width = strlen(s) * 6 * size - size;\n  display.setTextSize(size);\n  display.setTextColor(fg, bg);\n  display.setCursor(x + (w - width) / 2, y + (h - 7 * size) / 2);\n  display.print(s);\n}\n\n// AUTO: solo el sensor de la planta donde está parada la cabina; entre plantas, ninguno.\nvoid driveSensors() {\n  for (int i = 0; i < 4; i++) {\n    if (autoMode && dir == 0 && floorNow == i + 1) press(SENSOR[i]);\n    else release(SENSOR[i]);\n  }\n}\n\n// Sensor más alto activo (misma prioridad que el codificador de los CI).\nint readSensors() {\n  for (int i = 3; i >= 0; i--) if (digitalRead(SENSOR[i]) == LOW) return i + 1;\n  return 0;\n}\n\n// Un número de tres bits que lleva 4 ms estable (los latches cambian de golpe).\n// Bus 0 = destino, bus 1 = piso actual.\nint busStable[2] = {0, 0}, busCandidate[2] = {0, 0};\nunsigned long busSince[2] = {0, 0};\nint readBus(const int* pins, int k) {\n  int raw = digitalRead(pins[0]) | (digitalRead(pins[1]) << 1) | (digitalRead(pins[2]) << 2);\n  unsigned long now = millis();\n  if (raw != busCandidate[k]) { busCandidate[k] = raw; busSince[k] = now; }\n  if ((unsigned long)(now - busSince[k]) >= 4) busStable[k] = busCandidate[k];\n  return busStable[k];\n}\n\n// Sentido pedido por los CI: hay destino guardado, el ascensor está ocupado y aún no llegó.\nint wanted(bool busy, int dest) {\n  if (!busy || dest < 1 || dest > 4 || dest == floorNow) return 0;\n  return dest > floorNow ? 1 : -1;\n}\n\nvoid motor(unsigned long now, bool busy, int dest, int hwFloor) {\n  if (!autoMode) { int s = readSensors(); if (s) floorNow = s; else if (hwFloor >= 1 && hwFloor <= 4) floorNow = hwFloor; dir = 0; return; }\n  if (dir != 0) {\n    if ((unsigned long)(now - segStart) >= FLOOR_MS) {   // 3 s: la cabina alcanza el piso siguiente\n      floorNow += dir; dir = 0; driveSensors();\n      settleUntil = now + SETTLE_MS; segStart = now;\n    }\n    return;\n  }\n  if ((long)(now - settleUntil) < 0) return;\n  dir = wanted(busy, dest);\n  if (dir != 0) { doorsUntil = 0; segStart = now; driveSensors(); }   // cierra puertas y sale de la planta\n}\n\n// ── Pantalla ───────────────────────────────────────────────────────────────\nvoid drawFrame() {\n  display.fillScreen(BG);\n  display.fillRect(0, 0, 800, 64, PANEL);\n  display.fillRect(0, 64, 800, 1, LINE);\n  display.setTextSize(3);\n  display.setTextColor(TEXT, PANEL);\n  display.setCursor(36, 21);\n  display.print(\"ASCENSOR\");\n  display.setTextColor(DIM, PANEL);\n  display.print(\"  4 PISOS\");\n  for (int f = 1; f <= 4; f++) {\n    snprintf(buf, sizeof buf, \"%d\", f);\n    label(4, SY + (4 - f) * SLOT, 28, SLOT, 3, DIM, BG, buf);\n  }\n  display.fillRoundRect(CARD_X, CARD_Y, 264, 230, 10, CARD);\n  label(CARD_X + 20, CARD_Y + 14, 120, 20, 2, DIM, CARD, \"PISO ACTUAL\");\n  display.fillRoundRect(SIDE_X, CARD_Y, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 14, 84, 20, 2, DIM, CARD, \"DESTINO\");\n  display.fillRoundRect(SIDE_X, CARD_Y + 120, SIDE_W, 110, 10, CARD);\n  label(SIDE_X + 18, CARD_Y + 134, 192, 20, 2, DIM, CARD, \"TIEMPO DEL VIAJE\");\n  label(CALL_X, CALL_Y - 30, 160, 20, 2, DIM, BG, \"LLAMAR AL PISO\");\n}\n\nvoid arrow(int x, int y, int status, uint16_t c) {\n  display.fillRect(x, y, 40, 44, CARD);\n  if (status == 1) { display.fillTriangle(x + 20, y, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y + 22, 14, 22, c); }\n  else if (status == 2) { display.fillTriangle(x + 20, y + 44, x, y + 22, x + 40, y + 22, c); display.fillRect(x + 13, y, 14, 22, c); }\n  else display.fillRect(x + 4, y + 19, 32, 6, c);\n}\n\nvoid drawShaft(int cab, bool doors) {\n  display.fillRoundRect(SX, SY, SW, 4 * SLOT, 8, PANEL);\n  for (int k = 1; k < 4; k++) display.fillRect(SX + 8, SY + k * SLOT, SW - 16, 1, LINE);\n  display.fillRoundRect(SX + 10, cab, SW - 20, SLOT - 12, 6, CABIN);\n  if (doors) display.fillRect(SX + SW / 2 - 16, cab + 8, 32, SLOT - 28, PANEL);\n  else display.fillRect(SX + SW / 2 - 1, cab + 8, 2, SLOT - 28, LINE);\n}\n\nvoid render(unsigned long now, bool busy, int dest, int hwFloor) {\n  bool doors = (long)(now - doorsUntil) < 0;\n  bool hasDest = dest >= 1 && dest <= 4;\n  int heading = dir != 0 ? dir : wanted(busy, dest);\n\n  long travel = dir == 0 ? 0 : (long)((now - segStart) * SLOT / FLOOR_MS);\n  if (travel > SLOT - 2) travel = SLOT - 2;\n  int cab = SY + (4 - floorNow) * SLOT + 6 - dir * travel;\n  if (cab != shownCab || doors != shownDoors) { drawShaft(cab, doors); shownCab = cab; shownDoors = doors; }\n\n  // Parado se ve el piso que guardan los CI (U11); en marcha, el que va cruzando la cabina.\n  int shown = dir == 0 ? (hwFloor >= 1 && hwFloor <= 4 ? hwFloor : floorNow) : (travel * 2 > SLOT ? floorNow + dir : floorNow);\n  if (shown != shownFloor) {\n    snprintf(buf, sizeof buf, \"%d\", shown);\n    label(CARD_X + 20, CARD_Y + 40, 150, 140, 16, TEXT, CARD, buf);\n    shownFloor = shown;\n  }\n\n  int status = heading > 0 ? 1 : heading < 0 ? 2 : doors ? 3 : busy ? 4 : 0;\n  if (status != shownStatus) {\n    const char* names[] = {\"EN ESPERA\", \"SUBIENDO\", \"BAJANDO\", \"PUERTAS\", \"ESPERANDO\"};\n    uint16_t colors[] = {DIM, GREEN, RED, BLUE, AMBER};\n    arrow(CARD_X + 196, CARD_Y + 88, status, colors[status]);\n    display.fillRect(CARD_X + 20, CARD_Y + 186, 224, 32, CARD);\n    label(CARD_X + 20, CARD_Y + 186, 224, 32, 3, colors[status], CARD, names[status]);\n    if (status == 1) rgb.on(0, 160, 60);\n    else if (status == 2) rgb.on(180, 0, 0);\n    else if (status == 3) rgb.on(0, 60, 200);\n    else if (status == 4) rgb.on(160, 100, 0);\n    else rgb.on(20, 20, 20);\n    shownStatus = status;\n  }\n\n  int d = hasDest ? dest : 0;\n  if (d != shownDest) {\n    if (hasDest) snprintf(buf, sizeof buf, \"PISO %d\", dest); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, CARD);\n    label(SIDE_X + 10, CARD_Y + 40, SIDE_W - 20, 56, 6, hasDest ? TEXT : DIM, CARD, buf);\n    shownDest = d;\n  }\n\n  // Tiempo que falta: 3 s por piso que queda por recorrer.\n  int secs = -1;\n  if (busy && hasDest) {\n    long left = (long)abs(dest - floorNow) * FLOOR_MS - (dir != 0 ? (long)(now - segStart) : 0);\n    secs = left <= 0 ? 0 : (int)((left + 999) / 1000);\n  }\n  if (secs != shownTime) {\n    if (secs >= 0) snprintf(buf, sizeof buf, \"%d s\", secs); else snprintf(buf, sizeof buf, \"--\");\n    display.fillRect(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, CARD);\n    label(SIDE_X + 10, CARD_Y + 158, SIDE_W - 20, 48, 6, secs >= 0 ? TEXT : DIM, CARD, buf);\n    shownTime = secs;\n  }\n\n  // Botones de llamada: azul mientras se pulsa, ámbar el destino en curso.\n  int calls = 0;\n  for (int f = 1; f <= 4; f++) {\n    int s = (long)(now - pulseUntil[f - 1]) < 0 ? 2 : (busy && dest == f) ? 1 : 0;\n    calls |= s << (2 * (f - 1));\n  }\n  if (calls != shownCalls) {\n    for (int f = 1; f <= 4; f++) {\n      int s = (calls >> (2 * (f - 1))) & 3;\n      if (shownCalls >= 0 && s == ((shownCalls >> (2 * (f - 1))) & 3)) continue;\n      uint16_t bg = s == 2 ? BLUE : s == 1 ? AMBER : CARD;\n      int x = CALL_X + (f - 1) * (CALL_W + CALL_GAP);\n      display.fillRoundRect(x, CALL_Y, CALL_W, CALL_H, 12, bg);\n      snprintf(buf, sizeof buf, \"%d\", f);\n      label(x, CALL_Y, CALL_W, CALL_H, 7, s ? BG : TEXT, bg, buf);\n    }\n    shownCalls = calls;\n  }\n\n  if ((autoMode ? 1 : 0) != shownMode) {\n    uint16_t c = autoMode ? GREEN : AMBER;\n    display.fillRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, PANEL);\n    display.drawRoundRect(MODE_X, MODE_Y, MODE_W, MODE_H, 18, c);\n    label(MODE_X, MODE_Y, MODE_W, MODE_H, 2, c, PANEL, autoMode ? \"AUTO\" : \"MANUAL\");\n    shownMode = autoMode ? 1 : 0;\n  }\n}\n\nvoid touch(int x, int y, unsigned long now) {\n  if (y >= MODE_Y && y < MODE_Y + MODE_H && x >= MODE_X && x < MODE_X + MODE_W) {  // AUTO / MANUAL\n    autoMode = !autoMode;\n    dir = 0;\n    driveSensors();\n    return;\n  }\n  if (y >= CALL_Y && y < CALL_Y + CALL_H && x >= CALL_X) {  // llamada de piso\n    int f = (x - CALL_X) / (CALL_W + CALL_GAP);\n    if (f > 3 || (x - CALL_X) % (CALL_W + CALL_GAP) >= CALL_W) return;\n    press(CALL[f]);\n    pulseUntil[f] = now + PULSE_MS;\n  }\n}\n\n// El panel entrega coordenadas en vertical (480 x 800); con la rotación 1 se giran a la\n// pantalla. Si en tu shield el toque sale reflejado, cambia aquí el sentido de los ejes.\nvoid readTouch(unsigned long now) {\n  GDTpoint_t points[5];\n  bool touching = touchPanel.getTouchPoints(points) > 0;\n  if (touching && !wasTouching) touch(points[0].y, 479 - points[0].x, now);\n  wasTouching = touching;\n}\n\nvoid setup() {\n  for (int i = 0; i < 4; i++) { release(CALL[i]); release(SENSOR[i]); }\n  for (int i = 0; i < 3; i++) { pinMode(DEST[i], INPUT); pinMode(FLOOR[i], INPUT); }\n  pinMode(BUSY, INPUT);\n  display.begin();\n  display.setRotation(1);\n  touchPanel.begin();\n  rgb.begin();\n  driveSensors();                       // la cabina empieza en el piso 1\n  settleUntil = millis() + SETTLE_MS;\n  drawFrame();\n}\n\nvoid loop() {\n  unsigned long now = millis();\n  for (int i = 0; i < 4; i++) if (pulseUntil[i] && (long)(now - pulseUntil[i]) >= 0) { release(CALL[i]); pulseUntil[i] = 0; }\n  readTouch(now);\n\n  bool busy = digitalRead(BUSY);\n  int dest = readBus(DEST, 0);\n  int hwFloor = readBus(FLOOR, 1);\n  if (wasBusy && !busy) doorsUntil = now + DOORS_MS;   // llegó: abre puertas\n  wasBusy = busy;\n\n  motor(now, busy, dest, hwFloor);\n  render(now, busy, dest, hwFloor);\n}\n",
+ "parts": [
+  {
+   "key": "b1",
+   "type": "breadboard-full",
+   "x": 0,
+   "y": 0,
+   "props": {
+    "label": "1 · Pulsadores, prioridad y piso actual",
+    "topVoltage": 5,
+    "bottomVoltage": 5
+   }
+  },
+  {
+   "key": "b2",
+   "type": "breadboard-full",
+   "x": 0,
+   "y": 360,
+   "props": {
+    "label": "2 · Control, destino y su display",
+    "topVoltage": 5,
+    "bottomVoltage": 5
+   }
+  },
+  {
+   "key": "b3",
+   "type": "breadboard-full",
+   "x": 0,
+   "y": 720,
+   "props": {
+    "label": "3 · Sensores, piso actual y comparación",
+    "topVoltage": 5,
+    "bottomVoltage": 5
+   }
+  },
+  {
+   "key": "giga",
+   "type": "arduino-giga",
+   "x": -700,
+   "y": 440,
+   "props": {
+    "label": "Arduino GIGA R1 WiFi · pantalla",
+    "nets": "D23=DEST0;D25=DEST1;D27=DEST2;D29=OCUPADO;D31=PISO0;D33=PISO1;D35=PISO2;D37=LL1;D39=LL2;D41=LL3;D43=LL4;D45=SP1;D47=SP2;D49=SP3;D51=SP4"
+   },
+   "rot": 0
+  },
+  {
+   "key": "screen",
+   "type": "giga-display-shield",
+   "x": -691,
+   "y": 429,
+   "props": {
+    "label": "GIGA Display Shield · estado del ascensor"
+   },
+   "rot": 0
+  },
+  {
+   "key": "conv1",
+   "type": "level-converter-4",
+   "x": -220,
+   "y": 330,
+   "props": {
+    "label": "Adaptador 1 · destino y OCUPADO"
+   },
+   "rot": 0
+  },
+  {
+   "key": "conv2",
+   "type": "level-converter-4",
+   "x": -220,
+   "y": 470,
+   "props": {
+    "label": "Adaptador 2 · piso actual"
+   },
+   "rot": 0
+  },
+  {
+   "key": "conv3",
+   "type": "level-converter-4",
+   "x": -220,
+   "y": 190,
+   "props": {
+    "label": "Adaptador 3 · llamadas táctiles"
+   },
+   "rot": 0
+  },
+  {
+   "key": "conv4",
+   "type": "level-converter-4",
+   "x": -220,
+   "y": 610,
+   "props": {
+    "label": "Adaptador 4 · sensores (motor)"
+   },
+   "rot": 0
+  },
+  {
+   "key": "supply",
+   "type": "bench-supply",
+   "x": -520,
+   "y": 120,
+   "props": {
+    "voltage": 5,
+    "current": 1,
+    "label": "Fuente de protoboard · 5 V"
+   },
+   "rot": 0
+  },
+  {
+   "key": "pp1",
+   "type": "pushbutton",
+   "x": 70,
+   "y": 100,
+   "props": {
+    "cap": "blue",
+    "label": "PP1 · piso 1"
+   },
+   "rot": 0
+  },
+  {
+   "key": "pp1R",
+   "type": "resistor",
+   "x": 90,
+   "y": 20,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "pp2",
+   "type": "pushbutton",
+   "x": 110,
+   "y": 100,
+   "props": {
+    "cap": "blue",
+    "label": "PP2 · piso 2"
+   },
+   "rot": 0
+  },
+  {
+   "key": "pp2R",
+   "type": "resistor",
+   "x": 130,
+   "y": 20,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "pp3",
+   "type": "pushbutton",
+   "x": 150,
+   "y": 100,
+   "props": {
+    "cap": "blue",
+    "label": "PP3 · piso 3"
+   },
+   "rot": 0
+  },
+  {
+   "key": "pp3R",
+   "type": "resistor",
+   "x": 170,
+   "y": 20,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "pp4",
+   "type": "pushbutton",
+   "x": 190,
+   "y": 100,
+   "props": {
+    "cap": "blue",
+    "label": "PP4 · piso 4"
+   },
+   "rot": 0
+  },
+  {
+   "key": "pp4R",
+   "type": "resistor",
+   "x": 210,
+   "y": 20,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "u20",
+   "type": "74hc08",
+   "x": 240,
+   "y": 100,
+   "props": {
+    "label": "U20 · 74HC08 · prioridad de llamadas",
+    "nets": "2Y=SEL0;3Y=SEL1"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u2",
+   "type": "74hc00",
+   "x": 390,
+   "y": 130,
+   "props": {
+    "label": "U2 · 74HC00 · codificador de destino",
+    "nets": "2Y=PED2_O_PED3;3Y=SEL2;4Y=PED3_O_PED1_HABILITADO"
+   },
+   "rot": 180
+  },
+  {
+   "key": "u3",
+   "type": "74hc04",
+   "x": 420,
+   "y": 100,
+   "props": {
+    "label": "U3 · 74HC04 · inversores"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u19",
+   "type": "74ls48",
+   "x": 510,
+   "y": 100,
+   "props": {
+    "label": "U19 · 74LS48 · piso actual"
+   },
+   "rot": 0
+  },
+  {
+   "key": "seg3",
+   "type": "seven-segment",
+   "x": 600,
+   "y": 80,
+   "props": {
+    "label": "Display · piso actual"
+   },
+   "rot": 0
+  },
+  {
+   "key": "reset",
+   "type": "pushbutton",
+   "x": 50,
+   "y": 460,
+   "props": {
+    "cap": "red",
+    "label": "RESET general"
+   },
+   "rot": 0
+  },
+  {
+   "key": "resetR",
+   "type": "resistor",
+   "x": 70,
+   "y": 380,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "u4",
+   "type": "ne555",
+   "x": 90,
+   "y": 460,
+   "props": {
+    "label": "U4 · NE555 · reloj de 21 Hz",
+    "nets": "OUT=CLK"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u4R1",
+   "type": "resistor",
+   "x": 100,
+   "y": 380,
+   "props": {
+    "resistance": 1000
+   },
+   "rot": 90
+  },
+  {
+   "key": "u4R2",
+   "type": "resistor",
+   "x": 100,
+   "y": 440,
+   "props": {
+    "resistance": 33000
+   },
+   "rot": 0
+  },
+  {
+   "key": "u4C",
+   "type": "capacitor",
+   "x": 130,
+   "y": 450,
+   "props": {
+    "capacitance": 0.000001
+   },
+   "rot": 0
+  },
+  {
+   "key": "u5",
+   "type": "74hc74",
+   "x": 170,
+   "y": 460,
+   "props": {
+    "label": "U5 · 74HC74 · OCUPADO y VÁLIDO",
+    "nets": "1Q=OCUPADO;1QN=/OCUPADO;2Q=VÁLIDO"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u6",
+   "type": "74hc08",
+   "x": 250,
+   "y": 460,
+   "props": {
+    "label": "U6 · 74HC08 · ACEPTAR, MANTENER, LLEGÓ y LE",
+    "nets": "4Y=ACEPTAR;1Y=MANTENER;2Y=LLEGÓ"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u7",
+   "type": "74hc32",
+   "x": 330,
+   "y": 460,
+   "props": {
+    "label": "U7 · 74HC32 · próximo estado",
+    "nets": "1Y=OCUPADO_SIG;4Y=VÁLIDO_SIG;3Y=SOLICITUD"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u8",
+   "type": "74ls75",
+   "x": 410,
+   "y": 460,
+   "props": {
+    "label": "U8 · 74LS75 · memoria del destino",
+    "nets": "1Q=DEST0;2Q=DEST1;3Q=DEST2"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u14",
+   "type": "74ls48",
+   "x": 500,
+   "y": 460,
+   "props": {
+    "label": "U14 · 74LS48 · destino"
+   },
+   "rot": 0
+  },
+  {
+   "key": "seg",
+   "type": "seven-segment",
+   "x": 600,
+   "y": 440,
+   "props": {
+    "label": "Display · destino seleccionado"
+   },
+   "rot": 0
+  },
+  {
+   "key": "ls",
+   "type": "led",
+   "x": 30,
+   "y": 450,
+   "props": {
+    "color": "green",
+    "label": "LS · subiendo"
+   },
+   "rot": 0
+  },
+  {
+   "key": "lsR",
+   "type": "resistor",
+   "x": 40,
+   "y": 430,
+   "props": {
+    "resistance": 1000
+   },
+   "rot": 0
+  },
+  {
+   "key": "lb",
+   "type": "led",
+   "x": 30,
+   "y": 510,
+   "props": {
+    "color": "red",
+    "label": "LB · bajando"
+   },
+   "rot": 0
+  },
+  {
+   "key": "lbR",
+   "type": "resistor",
+   "x": 40,
+   "y": 520,
+   "props": {
+    "resistance": 1000
+   },
+   "rot": 0
+  },
+  {
+   "key": "sp",
+   "type": "dip-switch-4",
+   "x": 90,
+   "y": 820,
+   "props": {
+    "s1": false,
+    "s2": false,
+    "s3": false,
+    "s4": false,
+    "label": "SP1–SP4 · sensores de planta"
+   },
+   "rot": 0
+  },
+  {
+   "key": "sp1R",
+   "type": "resistor",
+   "x": 90,
+   "y": 740,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "sp2R",
+   "type": "resistor",
+   "x": 100,
+   "y": 740,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "sp3R",
+   "type": "resistor",
+   "x": 110,
+   "y": 740,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "sp4R",
+   "type": "resistor",
+   "x": 120,
+   "y": 740,
+   "props": {
+    "resistance": 10000
+   },
+   "rot": 90
+  },
+  {
+   "key": "u9",
+   "type": "74hc00",
+   "x": 140,
+   "y": 820,
+   "props": {
+    "label": "U9 · 74HC00 · codificador de sensores y SENSOR",
+    "nets": "1Y=SEN2_O_SEN3;2Y=SEN_P4;4Y=SENSOR"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u10",
+   "type": "74hc04",
+   "x": 220,
+   "y": 820,
+   "props": {
+    "label": "U10 · 74HC04 · codificador y retardo de datos"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u13",
+   "type": "74hc08",
+   "x": 300,
+   "y": 820,
+   "props": {
+    "label": "U13 · 74HC08 · SENSOR, SUBIR y BAJAR",
+    "nets": "2Y=SUBIR;4Y=BAJAR"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u21",
+   "type": "74hc08",
+   "x": 380,
+   "y": 820,
+   "props": {
+    "label": "U21 · 74HC08 · prioridad de sensores",
+    "nets": "2Y=SEN0;3Y=SEN1;4Y=SEN2"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u11",
+   "type": "74ls75",
+   "x": 460,
+   "y": 820,
+   "props": {
+    "label": "U11 · 74LS75 · memoria del piso actual",
+    "nets": "1Q=PISO0;2Q=PISO1;3Q=PISO2"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u12",
+   "type": "74ls85",
+   "x": 550,
+   "y": 820,
+   "props": {
+    "label": "U12 · 74LS85 · comparador",
+    "nets": "OAGTB=PISO>DEST;OALTB=PISO<DEST;OAEQB=DEST=PISO"
+   },
+   "rot": 0
+  },
+  {
+   "key": "u12Rgt",
+   "type": "resistor",
+   "x": 590,
+   "y": 740,
+   "props": {
+    "resistance": 4700
+   },
+   "rot": 90
+  },
+  {
+   "key": "u12Req",
+   "type": "resistor",
+   "x": 600,
+   "y": 740,
+   "props": {
+    "resistance": 4700
+   },
+   "rot": 90
+  },
+  {
+   "key": "u12Rlt",
+   "type": "resistor",
+   "x": 610,
+   "y": 740,
+   "props": {
+    "resistance": 4700
+   },
+   "rot": 90
+  },
+  {
+   "key": "stop",
+   "type": "led",
+   "x": 30,
+   "y": 810,
+   "props": {
+    "color": "yellow",
+    "label": "PARAR · pisos iguales"
+   },
+   "rot": 0
+  },
+  {
+   "key": "stopR",
+   "type": "resistor",
+   "x": 40,
+   "y": 740,
+   "props": {
+    "resistance": 1000
+   },
+   "rot": 90
+  },
+  {
+   "key": "busy",
+   "type": "led",
+   "x": 30,
+   "y": 870,
+   "props": {
+    "color": "blue",
+    "label": "OCUPADO · viaje en curso"
+   },
+   "rot": 0
+  },
+  {
+   "key": "busyR",
+   "type": "resistor",
+   "x": 40,
+   "y": 880,
+   "props": {
+    "resistance": 1000
+   },
+   "rot": 0
+  }
+ ],
+ "wires": [
+  {
+   "a": [
+    "b1",
+    "tp1"
+   ],
+   "b": [
+    "b1",
+    "bp1"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "bp3"
+   ],
+   "b": [
+    "b2",
+    "tp3"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "tp1"
+   ],
+   "b": [
+    "b2",
+    "bp1"
+   ],
+   "points": [
+    {
+     "x": 20,
+     "y": 380
+    },
+    {
+     "x": 20,
+     "y": 560
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "bp3"
+   ],
+   "b": [
+    "b3",
+    "tp3"
+   ],
+   "points": [
+    {
+     "x": 55,
+     "y": 560
+    },
+    {
+     "x": 55,
+     "y": 740
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "tp1"
+   ],
+   "b": [
+    "b3",
+    "bp1"
+   ],
+   "points": [
+    {
+     "x": 20,
+     "y": 740
+    },
+    {
+     "x": 20,
+     "y": 920
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "supply",
+    "+"
+   ],
+   "b": [
+    "b1",
+    "tp5"
+   ],
+   "points": [
+    {
+     "x": -400,
+     "y": 135
+    },
+    {
+     "x": 0,
+     "y": 135
+    },
+    {
+     "x": 0,
+     "y": 25
+    },
+    {
+     "x": 70,
+     "y": 25
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "a22"
+   ],
+   "b": [
+    "b1",
+    "tp22"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "j37"
+   ],
+   "b": [
+    "b1",
+    "bp37"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "a40"
+   ],
+   "b": [
+    "b1",
+    "tp40"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "a49"
+   ],
+   "b": [
+    "b1",
+    "tp49"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "j51"
+   ],
+   "b": [
+    "b1",
+    "bp51"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "j52"
+   ],
+   "b": [
+    "b1",
+    "bp52"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "j53"
+   ],
+   "b": [
+    "b1",
+    "bp53"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a7"
+   ],
+   "b": [
+    "b2",
+    "tp7"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "j10"
+   ],
+   "b": [
+    "b2",
+    "bp10"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a15"
+   ],
+   "b": [
+    "b2",
+    "tp15"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a23"
+   ],
+   "b": [
+    "b2",
+    "tp23"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a31"
+   ],
+   "b": [
+    "b2",
+    "tp31"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "j43"
+   ],
+   "b": [
+    "b2",
+    "bp43"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "j18"
+   ],
+   "b": [
+    "b2",
+    "bp19"
+   ],
+   "points": [
+    {
+     "x": 200,
+     "y": 560
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a19"
+   ],
+   "b": [
+    "b2",
+    "tp19"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a48"
+   ],
+   "b": [
+    "b2",
+    "tp49"
+   ],
+   "points": [
+    {
+     "x": 500,
+     "y": 380
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "j50"
+   ],
+   "b": [
+    "b2",
+    "bp50"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "a6"
+   ],
+   "b": [
+    "b2",
+    "tp4"
+   ],
+   "points": [
+    {
+     "x": 80,
+     "y": 380
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "j6"
+   ],
+   "b": [
+    "b2",
+    "bp7"
+   ],
+   "points": [
+    {
+     "x": 80,
+     "y": 560
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "a12"
+   ],
+   "b": [
+    "b3",
+    "tp13"
+   ],
+   "points": [
+    {
+     "x": 140,
+     "y": 740
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "a20"
+   ],
+   "b": [
+    "b3",
+    "tp20"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "a28"
+   ],
+   "b": [
+    "b3",
+    "tp28"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "a36"
+   ],
+   "b": [
+    "b3",
+    "tp37"
+   ],
+   "points": [
+    {
+     "x": 380,
+     "y": 740
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "j48"
+   ],
+   "b": [
+    "b3",
+    "bp49"
+   ],
+   "points": [
+    {
+     "x": 500,
+     "y": 920
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "a53"
+   ],
+   "b": [
+    "b3",
+    "tp53"
+   ],
+   "points": [
+    {
+     "x": 545,
+     "y": 780
+    },
+    {
+     "x": 545,
+     "y": 740
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "j55"
+   ],
+   "b": [
+    "b3",
+    "bp55"
+   ],
+   "points": [],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "j6"
+   ],
+   "b": [
+    "b3",
+    "bp7"
+   ],
+   "points": [
+    {
+     "x": 80,
+     "y": 920
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b2",
+    "tp52"
+   ],
+   "b": [
+    "conv1",
+    "HV"
+   ],
+   "points": [
+    {
+     "x": 540,
+     "y": 350
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "tp46"
+   ],
+   "b": [
+    "conv2",
+    "HV"
+   ],
+   "points": [
+    {
+     "x": 480,
+     "y": 600
+    },
+    {
+     "x": -115,
+     "y": 600
+    },
+    {
+     "x": -115,
+     "y": 490
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "tp47"
+   ],
+   "b": [
+    "conv3",
+    "HV"
+   ],
+   "points": [
+    {
+     "x": 490,
+     "y": 5
+    },
+    {
+     "x": -135,
+     "y": 5
+    },
+    {
+     "x": -135,
+     "y": 210
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b3",
+    "tp40"
+   ],
+   "b": [
+    "conv4",
+    "HV"
+   ],
+   "points": [
+    {
+     "x": 420,
+     "y": 630
+    }
+   ],
+   "color": "#f2862e"
+  },
+  {
+   "a": [
+    "b1",
+    "a24"
+   ],
+   "b": [
+    "b1",
+    "a23"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "g52"
+   ],
+   "b": [
+    "b2",
+    "g53"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "g7"
+   ],
+   "b": [
+    "b3",
+    "g8"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "h8"
+   ],
+   "b": [
+    "b3",
+    "h9"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "g9"
+   ],
+   "b": [
+    "b3",
+    "g10"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "g53"
+   ],
+   "b": [
+    "b3",
+    "g54"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "g56"
+   ],
+   "b": [
+    "b1",
+    "g54"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "h55"
+   ],
+   "b": [
+    "b2",
+    "h53"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "h54"
+   ],
+   "b": [
+    "b3",
+    "h56"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn5"
+   ],
+   "b": [
+    "b1",
+    "a5"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn9"
+   ],
+   "b": [
+    "b1",
+    "a9"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn13"
+   ],
+   "b": [
+    "b1",
+    "a13"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn17"
+   ],
+   "b": [
+    "b1",
+    "a17"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn31"
+   ],
+   "b": [
+    "b1",
+    "a31"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn3"
+   ],
+   "b": [
+    "b2",
+    "a3"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn43"
+   ],
+   "b": [
+    "b2",
+    "a43"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "h50"
+   ],
+   "b": [
+    "b3",
+    "h53"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn23"
+   ],
+   "b": [
+    "b1",
+    "b23"
+   ],
+   "points": [
+    {
+     "x": 245,
+     "y": 30
+    },
+    {
+     "x": 245,
+     "y": 70
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "tn59"
+   ],
+   "b": [
+    "b1",
+    "a60"
+   ],
+   "points": [
+    {
+     "x": 620,
+     "y": 30
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn5"
+   ],
+   "b": [
+    "b1",
+    "j5"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn28"
+   ],
+   "b": [
+    "b1",
+    "j28"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn46"
+   ],
+   "b": [
+    "b1",
+    "j46"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn56"
+   ],
+   "b": [
+    "b1",
+    "j56"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn59"
+   ],
+   "b": [
+    "b2",
+    "a60"
+   ],
+   "points": [
+    {
+     "x": 620,
+     "y": 390
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn3"
+   ],
+   "b": [
+    "b2",
+    "j3"
+   ],
+   "points": [
+    {
+     "x": 45,
+     "y": 570
+    },
+    {
+     "x": 45,
+     "y": 530
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn7"
+   ],
+   "b": [
+    "b2",
+    "j7"
+   ],
+   "points": [
+    {
+     "x": 95,
+     "y": 570
+    },
+    {
+     "x": 95,
+     "y": 530
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn21"
+   ],
+   "b": [
+    "b2",
+    "j21"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn29"
+   ],
+   "b": [
+    "b2",
+    "j29"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn37"
+   ],
+   "b": [
+    "b2",
+    "j37"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn45"
+   ],
+   "b": [
+    "b2",
+    "j45"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn55"
+   ],
+   "b": [
+    "b2",
+    "j55"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "tn47"
+   ],
+   "b": [
+    "b3",
+    "a48"
+   ],
+   "points": [
+    {
+     "x": 500,
+     "y": 750
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "tn53"
+   ],
+   "b": [
+    "b3",
+    "a54"
+   ],
+   "points": [
+    {
+     "x": 560,
+     "y": 750
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn7"
+   ],
+   "b": [
+    "b3",
+    "j7"
+   ],
+   "points": [
+    {
+     "x": 95,
+     "y": 930
+    },
+    {
+     "x": 95,
+     "y": 890
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn26"
+   ],
+   "b": [
+    "b3",
+    "j26"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn34"
+   ],
+   "b": [
+    "b3",
+    "j34"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn50"
+   ],
+   "b": [
+    "b3",
+    "j50"
+   ],
+   "points": [],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "g60"
+   ],
+   "b": [
+    "b3",
+    "g56"
+   ],
+   "points": [
+    {
+     "x": 620,
+     "y": 855
+    },
+    {
+     "x": 580,
+     "y": 855
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn17"
+   ],
+   "b": [
+    "b3",
+    "j18"
+   ],
+   "points": [
+    {
+     "x": 200,
+     "y": 930
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "bn41"
+   ],
+   "b": [
+    "b3",
+    "j42"
+   ],
+   "points": [
+    {
+     "x": 440,
+     "y": 930
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "tn11"
+   ],
+   "b": [
+    "b2",
+    "e11"
+   ],
+   "points": [
+    {
+     "x": 150,
+     "y": 390
+    },
+    {
+     "x": 150,
+     "y": 455
+    },
+    {
+     "x": 130,
+     "y": 455
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b3",
+    "d48"
+   ],
+   "b": [
+    "b3",
+    "g50"
+   ],
+   "points": [
+    {
+     "x": 630,
+     "y": 810
+    },
+    {
+     "x": 630,
+     "y": 865
+    },
+    {
+     "x": 520,
+     "y": 865
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "giga",
+    "GND.5"
+   ],
+   "b": [
+    "conv4",
+    "GND.L"
+   ],
+   "points": [
+    {
+     "x": -295,
+     "y": 630
+    },
+    {
+     "x": -295,
+     "y": 640
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "conv1",
+    "GND.L"
+   ],
+   "b": [
+    "conv2",
+    "GND.L"
+   ],
+   "points": [
+    {
+     "x": -255,
+     "y": 360
+    },
+    {
+     "x": -255,
+     "y": 500
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "conv1",
+    "GND.H"
+   ],
+   "b": [
+    "conv3",
+    "GND.H"
+   ],
+   "points": [
+    {
+     "x": -135,
+     "y": 360
+    },
+    {
+     "x": -135,
+     "y": 220
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "conv2",
+    "GND.H"
+   ],
+   "b": [
+    "conv4",
+    "GND.H"
+   ],
+   "points": [
+    {
+     "x": -135,
+     "y": 500
+    },
+    {
+     "x": -135,
+     "y": 640
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn1"
+   ],
+   "b": [
+    "b2",
+    "tn1"
+   ],
+   "points": [
+    {
+     "x": 35,
+     "y": 210
+    },
+    {
+     "x": 35,
+     "y": 390
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b2",
+    "bn1"
+   ],
+   "b": [
+    "b3",
+    "tn1"
+   ],
+   "points": [
+    {
+     "x": 25,
+     "y": 570
+    },
+    {
+     "x": 25,
+     "y": 750
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "bn2"
+   ],
+   "b": [
+    "conv3",
+    "GND.L"
+   ],
+   "points": [
+    {
+     "x": 40,
+     "y": 250
+    },
+    {
+     "x": -235,
+     "y": 250
+    },
+    {
+     "x": -235,
+     "y": 220
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "supply",
+    "-"
+   ],
+   "b": [
+    "giga",
+    "GND.1"
+   ],
+   "points": [
+    {
+     "x": -480,
+     "y": 425
+    },
+    {
+     "x": -600,
+     "y": 425
+    }
+   ],
+   "color": "#26272b"
+  },
+  {
+   "a": [
+    "b1",
+    "g11"
+   ],
+   "b": [
+    "b1",
+    "g23"
+   ],
+   "points": [
+    {
+     "x": 130,
+     "y": 135
+    },
+    {
+     "x": 250,
+     "y": 135
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "d34"
+   ],
+   "b": [
+    "b1",
+    "h23"
+   ],
+   "points": [
+    {
+     "x": 360,
+     "y": 95
+    },
+    {
+     "x": 315,
+     "y": 95
+    },
+    {
+     "x": 315,
+     "y": 135
+    },
+    {
+     "x": 255,
+     "y": 135
+    },
+    {
+     "x": 255,
+     "y": 150
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "j11"
+   ],
+   "b": [
+    "conv3",
+    "H2"
+   ],
+   "points": [
+    {
+     "x": 130,
+     "y": 195
+    },
+    {
+     "x": -160,
+     "y": 195
+    },
+    {
+     "x": -160,
+     "y": 200
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "d33"
+   ],
+   "b": [
+    "b1",
+    "g36"
+   ],
+   "points": [
+    {
+     "x": 350,
+     "y": 100
+    },
+    {
+     "x": 400,
+     "y": 100
+    },
+    {
+     "x": 400,
+     "y": 140
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "b15"
+   ],
+   "b": [
+    "b1",
+    "b33"
+   ],
+   "points": [
+    {
+     "x": 170,
+     "y": 75
+    },
+    {
+     "x": 350,
+     "y": 75
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "j15"
+   ],
+   "b": [
+    "conv3",
+    "H3"
+   ],
+   "points": [
+    {
+     "x": 170,
+     "y": 230
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g32"
+   ],
+   "b": [
+    "b1",
+    "g33"
+   ],
+   "points": [],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g26"
+   ],
+   "b": [
+    "b1",
+    "d26"
+   ],
+   "points": [
+    {
+     "x": 310,
+     "y": 140
+    },
+    {
+     "x": 310,
+     "y": 95
+    },
+    {
+     "x": 280,
+     "y": 95
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "h32"
+   ],
+   "b": [
+    "b1",
+    "h26"
+   ],
+   "points": [],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "i19"
+   ],
+   "b": [
+    "b1",
+    "i26"
+   ],
+   "points": [],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "j19"
+   ],
+   "b": [
+    "conv3",
+    "H4"
+   ],
+   "points": [
+    {
+     "x": 210,
+     "y": 240
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "j7"
+   ],
+   "b": [
+    "conv3",
+    "H1"
+   ],
+   "points": [
+    {
+     "x": 90,
+     "y": 190
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g7"
+   ],
+   "b": [
+    "b1",
+    "g40"
+   ],
+   "points": [
+    {
+     "x": 95,
+     "y": 140
+    },
+    {
+     "x": 95,
+     "y": 180
+    },
+    {
+     "x": 420,
+     "y": 180
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g41"
+   ],
+   "b": [
+    "b1",
+    "g22"
+   ],
+   "points": [
+    {
+     "x": 430,
+     "y": 175
+    },
+    {
+     "x": 240,
+     "y": 175
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g24"
+   ],
+   "b": [
+    "b1",
+    "d43"
+   ],
+   "points": [
+    {
+     "x": 260,
+     "y": 155
+    },
+    {
+     "x": 410,
+     "y": 155
+    },
+    {
+     "x": 410,
+     "y": 95
+    },
+    {
+     "x": 450,
+     "y": 95
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "d44"
+   ],
+   "b": [
+    "b1",
+    "g35"
+   ],
+   "points": [
+    {
+     "x": 460,
+     "y": 100
+    },
+    {
+     "x": 405,
+     "y": 100
+    },
+    {
+     "x": 405,
+     "y": 135
+    },
+    {
+     "x": 370,
+     "y": 135
+    }
+   ],
+   "color": "#3e7bfa"
+  },
+  {
+   "a": [
+    "b1",
+    "g34"
+   ],
+   "b": [
+    "b1",
+    "g25"
+   ],
+   "points": [
+    {
+     "x": 360,
+     "y": 145
+    },
+    {
+     "x": 270,
+     "y": 145
+    }
+   ],
+   "color": "#6ba8a5"
+  },
+  {
+   "a": [
+    "b1",
+    "a32"
+   ],
+   "b": [
+    "b1",
+    "a27"
+   ],
+   "points": [
+    {
+     "x": 340,
+     "y": 55
+    },
+    {
+     "x": 290,
+     "y": 55
+    }
+   ],
+   "color": "#b3a16f"
+  },
+  {
+   "a": [
+    "b3",
+    "b44"
+   ],
+   "b": [
+    "b3",
+    "b59"
+   ],
+   "points": [
+    {
+     "x": 460,
+     "y": 795
+    },
+    {
+     "x": 610,
+     "y": 795
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
+    "b1",
+    "j55"
+   ],
+   "b": [
+    "b3",
+    "c59"
+   ],
+   "points": [
+    {
+     "x": 570,
+     "y": 380
+    },
+    {
+     "x": 655,
+     "y": 380
+    },
+    {
+     "x": 655,
+     "y": 400
+    },
+    {
+     "x": 690,
+     "y": 400
+    },
+    {
+     "x": 690,
+     "y": 540
+    },
+    {
+     "x": 665,
+     "y": 540
+    },
+    {
+     "x": 665,
+     "y": 800
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
+    "b3",
+    "a44"
+   ],
+   "b": [
+    "conv2",
+    "H1"
+   ],
+   "points": [
+    {
+     "x": 460,
+     "y": 605
+    },
+    {
+     "x": -110,
+     "y": 605
+    },
+    {
+     "x": -110,
+     "y": 470
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
+    "b3",
+    "b45"
+   ],
+   "b": [
+    "b3",
+    "b57"
+   ],
+   "points": [
+    {
+     "x": 470,
+     "y": 785
+    },
+    {
+     "x": 590,
+     "y": 785
+    }
+   ],
+   "color": "#759fd5"
+  },
+  {
+   "a": [
+    "b3",
+    "a45"
+   ],
+   "b": [
+    "b1",
+    "j49"
+   ],
+   "points": [
+    {
+     "x": 470,
+     "y": 585
+    },
+    {
+     "x": 675,
+     "y": 585
+    },
+    {
+     "x": 675,
+     "y": 545
+    },
+    {
+     "x": 685,
+     "y": 545
+    },
+    {
+     "x": 685,
+     "y": 395
+    },
+    {
+     "x": 660,
+     "y": 395
+    },
+    {
+     "x": 660,
+     "y": 225
+    },
+    {
+     "x": 510,
+     "y": 225
+    }
+   ],
+   "color": "#759fd5"
+  },
+  {
+   "a": [
+    "b3",
+    "c45"
+   ],
+   "b": [
+    "conv2",
+    "H2"
+   ],
+   "points": [
+    {
+     "x": 465,
+     "y": 800
+    },
+    {
+     "x": 465,
+     "y": 580
+    },
+    {
+     "x": -105,
+     "y": 580
+    },
+    {
+     "x": -105,
+     "y": 480
+    }
+   ],
+   "color": "#759fd5"
+  },
+  {
+   "a": [
+    "b3",
+    "a50"
+   ],
+   "b": [
+    "b3",
+    "a56"
+   ],
+   "points": [
+    {
+     "x": 520,
+     "y": 775
+    },
+    {
+     "x": 580,
+     "y": 775
+    }
+   ],
+   "color": "#c38bac"
+  },
+  {
+   "a": [
+    "b3",
+    "b50"
+   ],
+   "b": [
+    "b1",
+    "j50"
+   ],
+   "points": [
+    {
+     "x": 525,
+     "y": 790
+    },
+    {
+     "x": 525,
+     "y": 580
+    },
+    {
+     "x": 740,
+     "y": 580
+    },
+    {
+     "x": 740,
+     "y": 220
+    },
+    {
+     "x": 520,
+     "y": 220
+    }
+   ],
+   "color": "#c38bac"
+  },
+  {
+   "a": [
+    "b3",
+    "c50"
+   ],
+   "b": [
+    "conv2",
+    "H3"
+   ],
+   "points": [
+    {
+     "x": 475,
+     "y": 800
+    },
+    {
+     "x": 475,
+     "y": 615
+    },
+    {
+     "x": -130,
+     "y": 615
+    },
+    {
+     "x": -130,
+     "y": 545
+    },
+    {
+     "x": -160,
+     "y": 545
+    },
+    {
+     "x": -160,
+     "y": 510
+    }
+   ],
+   "color": "#c38bac"
+  },
+  {
+   "a": [
+    "b1",
+    "a52"
+   ],
+   "b": [
+    "b1",
+    "a61"
+   ],
+   "points": [
+    {
+     "x": 540,
+     "y": 50
+    },
+    {
+     "x": 630,
+     "y": 50
+    }
+   ],
+   "color": "#db873e"
+  },
+  {
+   "a": [
+    "b1",
+    "a53"
+   ],
+   "b": [
+    "b1",
+    "a62"
+   ],
+   "points": [
+    {
+     "x": 550,
+     "y": 65
+    },
+    {
+     "x": 640,
+     "y": 65
+    }
+   ],
+   "color": "#d0ad48"
+  },
+  {
+   "a": [
+    "b1",
+    "d54"
+   ],
+   "b": [
+    "b1",
+    "i61"
+   ],
+   "points": [
+    {
+     "x": 560,
+     "y": 40
+    },
+    {
+     "x": 655,
+     "y": 40
+    },
+    {
+     "x": 655,
+     "y": 160
+    }
+   ],
+   "color": "#78a85b"
+  },
+  {
+   "a": [
+    "b1",
+    "d55"
+   ],
+   "b": [
+    "b1",
+    "i59"
+   ],
+   "points": [
+    {
+     "x": 570,
+     "y": 95
+    },
+    {
+     "x": 495,
+     "y": 95
+    },
+    {
+     "x": 495,
+     "y": 155
+    },
+    {
+     "x": 610,
+     "y": 155
+    }
+   ],
+   "color": "#43a99d"
+  },
+  {
+   "a": [
+    "b1",
+    "d56"
+   ],
+   "b": [
+    "b1",
+    "i58"
+   ],
+   "points": [
+    {
+     "x": 580,
+     "y": 100
+    },
+    {
+     "x": 500,
+     "y": 100
+    },
+    {
+     "x": 500,
+     "y": 160
+    }
+   ],
+   "color": "#619bd1"
+  },
+  {
+   "a": [
+    "b1",
+    "a50"
+   ],
+   "b": [
+    "b1",
+    "a59"
+   ],
+   "points": [
+    {
+     "x": 520,
+     "y": 45
+    },
+    {
+     "x": 610,
+     "y": 45
+    }
+   ],
+   "color": "#a488cb"
+  },
+  {
+   "a": [
+    "b1",
+    "a51"
+   ],
+   "b": [
+    "b1",
+    "a58"
+   ],
+   "points": [
+    {
+     "x": 530,
+     "y": 55
+    },
+    {
+     "x": 600,
+     "y": 55
+    }
+   ],
+   "color": "#d77da0"
+  },
+  {
+   "a": [
+    "b2",
+    "e12"
+   ],
+   "b": [
+    "b2",
+    "d9"
+   ],
+   "points": [
+    {
+     "x": 140,
+     "y": 450
+    }
+   ],
+   "color": "#45d0c0"
+  },
+  {
+   "a": [
+    "b2",
+    "b9"
+   ],
+   "b": [
+    "b2",
+    "g8"
+   ],
+   "points": [
+    {
+     "x": 80,
+     "y": 430
+    },
+    {
+     "x": 80,
+     "y": 500
+    }
+   ],
+   "color": "#45d0c0"
+  },
+  {
+   "a": [
+    "b2",
+    "g17"
+   ],
+   "b": [
+    "b2",
+    "d18"
+   ],
+   "points": [
+    {
+     "x": 190,
+     "y": 490
+    },
+    {
+     "x": 160,
+     "y": 490
+    },
+    {
+     "x": 160,
+     "y": 455
+    },
+    {
+     "x": 200,
+     "y": 455
+    }
+   ],
+   "color": "#45c3bb"
+  },
+  {
+   "a": [
+    "b2",
+    "h9"
+   ],
+   "b": [
+    "b2",
+    "h17"
+   ],
+   "points": [
+    {
+     "x": 110,
+     "y": 505
+    },
+    {
+     "x": 190,
+     "y": 505
+    }
+   ],
+   "color": "#45c3bb"
+  },
+  {
+   "a": [
+    "b2",
+    "a18"
+   ],
+   "b": [
+    "b1",
+    "j44"
+   ],
+   "points": [
+    {
+     "x": 200,
+     "y": 245
+    },
+    {
+     "x": 460,
+     "y": 245
+    }
+   ],
+   "color": "#45c3bb"
+  },
+  {
+   "a": [
+    "b2",
+    "g15"
+   ],
+   "b": [
+    "b2",
+    "d16"
+   ],
+   "points": [
+    {
+     "x": 155,
+     "y": 500
+    },
+    {
+     "x": 155,
+     "y": 450
+    }
+   ],
+   "color": "#b48cff"
+  },
+  {
+   "a": [
+    "b2",
+    "h5"
+   ],
+   "b": [
+    "b2",
+    "h15"
+   ],
+   "points": [
+    {
+     "x": 105,
+     "y": 510
+    },
+    {
+     "x": 105,
+     "y": 515
+    },
+    {
+     "x": 170,
+     "y": 515
+    }
+   ],
+   "color": "#b48cff"
+  },
+  {
+   "a": [
+    "b2",
+    "a26"
+   ],
+   "b": [
+    "b2",
+    "a28"
+   ],
+   "points": [
+    {
+     "x": 280,
+     "y": 415
+    },
+    {
+     "x": 300,
+     "y": 415
+    }
+   ],
+   "color": "#59b5ce"
+  },
+  {
+   "a": [
+    "b2",
+    "b28"
+   ],
+   "b": [
+    "b2",
+    "b33"
+   ],
+   "points": [],
+   "color": "#59b5ce"
+  },
+  {
+   "a": [
+    "b2",
+    "g32"
+   ],
+   "b": [
+    "b2",
+    "d33"
+   ],
+   "points": [
+    {
+     "x": 340,
+     "y": 495
+    },
+    {
+     "x": 240,
+     "y": 495
+    },
+    {
+     "x": 240,
+     "y": 445
+    },
+    {
+     "x": 350,
+     "y": 445
+    }
+   ],
+   "color": "#59b5ce"
+  },
+  {
+   "a": [
+    "b1",
+    "j45"
+   ],
+   "b": [
+    "b2",
+    "a27"
+   ],
+   "points": [
+    {
+     "x": 470,
+     "y": 365
+    },
+    {
+     "x": 295,
+     "y": 365
+    },
+    {
+     "x": 295,
+     "y": 420
+    }
+   ],
+   "color": "#45d0c0"
+  },
+  {
+   "a": [
+    "b2",
+    "d42"
+   ],
+   "b": [
+    "b2",
+    "g42"
+   ],
+   "points": [
+    {
+     "x": 440,
+     "y": 460
+    },
+    {
+     "x": 400,
+     "y": 460
+    },
+    {
+     "x": 400,
+     "y": 495
+    },
+    {
+     "x": 440,
+     "y": 495
+    }
+   ],
+   "color": "#45d0c0"
+  },
+  {
+   "a": [
+    "b2",
+    "a29"
+   ],
+   "b": [
+    "b2",
+    "a42"
+   ],
+   "points": [
+    {
+     "x": 310,
+     "y": 415
+    },
+    {
+     "x": 440,
+     "y": 415
+    }
+   ],
+   "color": "#45d0c0"
+  },
+  {
+   "a": [
+    "b2",
+    "g40"
+   ],
+   "b": [
+    "b2",
+    "g34"
+   ],
+   "points": [
+    {
+     "x": 420,
+     "y": 505
+    },
+    {
+     "x": 360,
+     "y": 505
+    }
+   ],
+   "color": "#789fcb"
+  },
+  {
+   "a": [
+    "b1",
+    "j27"
+   ],
+   "b": [
+    "b2",
+    "h34"
+   ],
+   "points": [
+    {
+     "x": 290,
+     "y": 375
+    },
+    {
+     "x": 155,
+     "y": 375
+    },
+    {
+     "x": 155,
+     "y": 445
+    },
+    {
+     "x": 145,
+     "y": 445
+    },
+    {
+     "x": 145,
+     "y": 540
+    },
+    {
+     "x": 360,
+     "y": 540
+    }
+   ],
+   "color": "#789fcb"
+  },
+  {
+   "a": [
+    "b2",
+    "g41"
+   ],
+   "b": [
+    "b2",
+    "g35"
+   ],
+   "points": [
+    {
+     "x": 430,
+     "y": 510
+    },
+    {
+     "x": 375,
+     "y": 510
+    },
+    {
+     "x": 375,
+     "y": 500
+    }
+   ],
+   "color": "#a68acb"
+  },
+  {
+   "a": [
+    "b1",
+    "d28"
+   ],
+   "b": [
+    "b2",
+    "h35"
+   ],
+   "points": [
+    {
+     "x": 300,
+     "y": 100
+    },
+    {
+     "x": 230,
+     "y": 100
+    },
+    {
+     "x": 230,
+     "y": 370
+    },
+    {
+     "x": 160,
+     "y": 370
+    },
+    {
+     "x": 160,
+     "y": 445
+    },
+    {
+     "x": 155,
+     "y": 445
+    },
+    {
+     "x": 155,
+     "y": 450
+    },
+    {
+     "x": 140,
+     "y": 450
+    },
+    {
+     "x": 140,
+     "y": 445
+    },
+    {
+     "x": 135,
+     "y": 445
+    },
+    {
+     "x": 135,
+     "y": 545
+    },
+    {
+     "x": 370,
+     "y": 545
+    }
+   ],
+   "color": "#a68acb"
+  },
+  {
+   "a": [
+    "b2",
+    "g44"
+   ],
+   "b": [
+    "b2",
+    "d35"
+   ],
+   "points": [
+    {
+     "x": 460,
+     "y": 540
+    },
+    {
+     "x": 660,
+     "y": 540
+    },
+    {
+     "x": 660,
+     "y": 395
+    },
+    {
+     "x": 375,
+     "y": 395
+    },
+    {
+     "x": 375,
+     "y": 450
+    }
+   ],
+   "color": "#cfa16b"
+  },
+  {
+   "a": [
+    "b1",
+    "j31"
+   ],
+   "b": [
+    "b2",
+    "a35"
+   ],
+   "points": [
+    {
+     "x": 330,
+     "y": 375
+    },
+    {
+     "x": 370,
+     "y": 375
+    }
+   ],
+   "color": "#cfa16b"
+  },
+  {
+   "a": [
+    "b2",
+    "g36"
+   ],
+   "b": [
+    "b2",
+    "d36"
+   ],
+   "points": [
+    {
+     "x": 380,
+     "y": 490
+    },
+    {
+     "x": 320,
+     "y": 490
+    },
+    {
+     "x": 320,
+     "y": 455
+    },
+    {
+     "x": 380,
+     "y": 455
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b2",
+    "g20"
+   ],
+   "b": [
+    "b2",
+    "d25"
+   ],
+   "points": [
+    {
+     "x": 220,
+     "y": 495
+    },
+    {
+     "x": 150,
+     "y": 495
+    },
+    {
+     "x": 150,
+     "y": 460
+    },
+    {
+     "x": 270,
+     "y": 460
+    }
+   ],
+   "color": "#d9bf7a"
+  },
+  {
+   "a": [
+    "b2",
+    "j20"
+   ],
+   "b": [
+    "b3",
+    "i1"
+   ],
+   "points": [
+    {
+     "x": 220,
+     "y": 565
+    },
+    {
+     "x": 15,
+     "y": 565
+    },
+    {
+     "x": 15,
+     "y": 880
+    }
+   ],
+   "color": "#d9bf7a"
+  },
+  {
+   "a": [
+    "b2",
+    "a37"
+   ],
+   "b": [
+    "b2",
+    "a24"
+   ],
+   "points": [
+    {
+     "x": 390,
+     "y": 405
+    },
+    {
+     "x": 260,
+     "y": 405
+    }
+   ],
+   "color": "#d991b8"
+  },
+  {
+   "a": [
+    "b2",
+    "g19"
+   ],
+   "b": [
+    "b2",
+    "g23"
+   ],
+   "points": [
+    {
+     "x": 210,
+     "y": 505
+    },
+    {
+     "x": 250,
+     "y": 505
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "b3",
+    "g32"
+   ],
+   "b": [
+    "b3",
+    "d30"
+   ],
+   "points": [
+    {
+     "x": 340,
+     "y": 850
+    },
+    {
+     "x": 370,
+     "y": 850
+    },
+    {
+     "x": 370,
+     "y": 810
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "b2",
+    "j23"
+   ],
+   "b": [
+    "b3",
+    "a30"
+   ],
+   "points": [
+    {
+     "x": 250,
+     "y": 730
+    },
+    {
+     "x": 320,
+     "y": 730
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "b2",
+    "h19"
+   ],
+   "b": [
+    "conv1",
+    "H4"
+   ],
+   "points": [
+    {
+     "x": 210,
+     "y": 525
+    },
+    {
+     "x": 175,
+     "y": 525
+    },
+    {
+     "x": 175,
+     "y": 535
+    },
+    {
+     "x": -125,
+     "y": 535
+    },
+    {
+     "x": -125,
+     "y": 380
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "b1",
+    "d42"
+   ],
+   "b": [
+    "b2",
+    "g24"
+   ],
+   "points": [
+    {
+     "x": 440,
+     "y": 15
+    },
+    {
+     "x": 15,
+     "y": 15
+    },
+    {
+     "x": 15,
+     "y": 550
+    },
+    {
+     "x": 260,
+     "y": 550
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b2",
+    "g25"
+   ],
+   "b": [
+    "b2",
+    "g31"
+   ],
+   "points": [
+    {
+     "x": 270,
+     "y": 505
+    },
+    {
+     "x": 330,
+     "y": 505
+    }
+   ],
+   "color": "#b08fc7"
+  },
+  {
+   "a": [
+    "b2",
+    "g33"
+   ],
+   "b": [
+    "b2",
+    "g16"
+   ],
+   "points": [
+    {
+     "x": 350,
+     "y": 535
+    },
+    {
+     "x": 180,
+     "y": 535
+    }
+   ],
+   "color": "#df927a"
+  },
+  {
+   "a": [
+    "b2",
+    "a20"
+   ],
+   "b": [
+    "b2",
+    "a32"
+   ],
+   "points": [
+    {
+     "x": 220,
+     "y": 410
+    },
+    {
+     "x": 340,
+     "y": 410
+    }
+   ],
+   "color": "#aab965"
+  },
+  {
+   "a": [
+    "b2",
+    "d32"
+   ],
+   "b": [
+    "b2",
+    "g51"
+   ],
+   "points": [
+    {
+     "x": 345,
+     "y": 450
+    },
+    {
+     "x": 345,
+     "y": 370
+    },
+    {
+     "x": 675,
+     "y": 370
+    },
+    {
+     "x": 675,
+     "y": 545
+    },
+    {
+     "x": 530,
+     "y": 545
+    }
+   ],
+   "color": "#aab965"
+  },
+  {
+   "a": [
+    "b2",
+    "a34"
+   ],
+   "b": [
+    "b2",
+    "a17"
+   ],
+   "points": [
+    {
+     "x": 360,
+     "y": 425
+    },
+    {
+     "x": 190,
+     "y": 425
+    }
+   ],
+   "color": "#c5b778"
+  },
+  {
+   "a": [
+    "b2",
+    "g28"
+   ],
+   "b": [
+    "b1",
+    "d41"
+   ],
+   "points": [
+    {
+     "x": 300,
+     "y": 575
+    },
+    {
+     "x": 680,
+     "y": 575
+    },
+    {
+     "x": 680,
+     "y": 215
+    },
+    {
+     "x": 490,
+     "y": 215
+    },
+    {
+     "x": 490,
+     "y": 85
+    },
+    {
+     "x": 430,
+     "y": 85
+    }
+   ],
+   "color": "#75b77c"
+  },
+  {
+   "a": [
+    "b2",
+    "d39"
+   ],
+   "b": [
+    "b2",
+    "g54"
+   ],
+   "points": [
+    {
+     "x": 415,
+     "y": 450
+    },
+    {
+     "x": 415,
+     "y": 375
+    },
+    {
+     "x": 670,
+     "y": 375
+    },
+    {
+     "x": 670,
+     "y": 525
+    },
+    {
+     "x": 560,
+     "y": 525
+    }
+   ],
+   "color": "#e2b35c"
+  },
+  {
+   "a": [
+    "b2",
+    "j54"
+   ],
+   "b": [
+    "b3",
+    "a60"
+   ],
+   "points": [
+    {
+     "x": 560,
+     "y": 745
+    },
+    {
+     "x": 620,
+     "y": 745
+    }
+   ],
+   "color": "#e2b35c"
+  },
+  {
+   "a": [
+    "b2",
+    "a39"
+   ],
+   "b": [
+    "conv1",
+    "H1"
+   ],
+   "points": [
+    {
+     "x": 410,
+     "y": 330
+    }
+   ],
+   "color": "#e2b35c"
+  },
+  {
+   "a": [
+    "b2",
+    "d40"
+   ],
+   "b": [
+    "b2",
+    "g48"
+   ],
+   "points": [
+    {
+     "x": 425,
+     "y": 450
+    },
+    {
+     "x": 425,
+     "y": 400
+    },
+    {
+     "x": 655,
+     "y": 400
+    },
+    {
+     "x": 655,
+     "y": 535
+    },
+    {
+     "x": 505,
+     "y": 535
+    },
+    {
+     "x": 505,
+     "y": 500
+    }
+   ],
+   "color": "#68b3d1"
+  },
+  {
+   "a": [
+    "b2",
+    "j48"
+   ],
+   "b": [
+    "b3",
+    "b58"
+   ],
+   "points": [
+    {
+     "x": 500,
+     "y": 730
+    },
+    {
+     "x": 625,
+     "y": 730
+    },
+    {
+     "x": 625,
+     "y": 785
+    },
+    {
+     "x": 600,
+     "y": 785
+    }
+   ],
+   "color": "#68b3d1"
+  },
+  {
+   "a": [
+    "b2",
+    "a40"
+   ],
+   "b": [
+    "conv1",
+    "H2"
+   ],
+   "points": [
+    {
+     "x": 420,
+     "y": 340
+    }
+   ],
+   "color": "#68b3d1"
+  },
+  {
+   "a": [
+    "b2",
+    "d45"
+   ],
+   "b": [
+    "b2",
+    "g49"
+   ],
+   "points": [
+    {
+     "x": 490,
+     "y": 450
+    },
+    {
+     "x": 490,
+     "y": 495
+    },
+    {
+     "x": 510,
+     "y": 495
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "b2",
+    "j49"
+   ],
+   "b": [
+    "b3",
+    "a55"
+   ],
+   "points": [
+    {
+     "x": 510,
+     "y": 770
+    },
+    {
+     "x": 570,
+     "y": 770
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "b2",
+    "a45"
+   ],
+   "b": [
+    "conv1",
+    "H3"
+   ],
+   "points": [
+    {
+     "x": 470,
+     "y": 385
+    },
+    {
+     "x": 255,
+     "y": 385
+    },
+    {
+     "x": 255,
+     "y": 365
+    },
+    {
+     "x": -160,
+     "y": 365
+    },
+    {
+     "x": -160,
+     "y": 370
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "b2",
+    "a51"
+   ],
+   "b": [
+    "b2",
+    "a61"
+   ],
+   "points": [
+    {
+     "x": 530,
+     "y": 410
+    },
+    {
+     "x": 630,
+     "y": 410
+    }
+   ],
+   "color": "#db873e"
+  },
+  {
+   "a": [
+    "b2",
+    "a52"
+   ],
+   "b": [
+    "b2",
+    "a62"
+   ],
+   "points": [
+    {
+     "x": 540,
+     "y": 425
+    },
+    {
+     "x": 640,
+     "y": 425
+    }
+   ],
+   "color": "#d0ad48"
+  },
+  {
+   "a": [
+    "b2",
+    "d53"
+   ],
+   "b": [
+    "b2",
+    "i61"
+   ],
+   "points": [
+    {
+     "x": 550,
+     "y": 385
+    },
+    {
+     "x": 665,
+     "y": 385
+    },
+    {
+     "x": 665,
+     "y": 520
+    }
+   ],
+   "color": "#78a85b"
+  },
+  {
+   "a": [
+    "b2",
+    "d54"
+   ],
+   "b": [
+    "b2",
+    "i59"
+   ],
+   "points": [
+    {
+     "x": 560,
+     "y": 460
+    },
+    {
+     "x": 580,
+     "y": 460
+    },
+    {
+     "x": 580,
+     "y": 515
+    },
+    {
+     "x": 610,
+     "y": 515
+    }
+   ],
+   "color": "#43a99d"
+  },
+  {
+   "a": [
+    "b2",
+    "d55"
+   ],
+   "b": [
+    "b2",
+    "i58"
+   ],
+   "points": [
+    {
+     "x": 585,
+     "y": 450
+    },
+    {
+     "x": 585,
+     "y": 520
+    }
+   ],
+   "color": "#619bd1"
+  },
+  {
+   "a": [
+    "b2",
+    "a49"
+   ],
+   "b": [
+    "b2",
+    "a59"
+   ],
+   "points": [
+    {
+     "x": 510,
+     "y": 405
+    },
+    {
+     "x": 610,
+     "y": 405
+    }
+   ],
+   "color": "#a488cb"
+  },
+  {
+   "a": [
+    "b2",
+    "a50"
+   ],
+   "b": [
+    "b2",
+    "a58"
+   ],
+   "points": [
+    {
+     "x": 520,
+     "y": 415
+    },
+    {
+     "x": 600,
+     "y": 415
+    }
+   ],
+   "color": "#d77da0"
+  },
+  {
+   "a": [
+    "b3",
+    "g33"
+   ],
+   "b": [
+    "b1",
+    "j42"
+   ],
+   "points": [
+    {
+     "x": 350,
+     "y": 905
+    },
+    {
+     "x": 670,
+     "y": 905
+    },
+    {
+     "x": 670,
+     "y": 535
+    },
+    {
+     "x": 695,
+     "y": 535
+    },
+    {
+     "x": 695,
+     "y": 405
+    },
+    {
+     "x": 625,
+     "y": 405
+    },
+    {
+     "x": 625,
+     "y": 230
+    },
+    {
+     "x": 440,
+     "y": 230
+    }
+   ],
+   "color": "#dda15e"
+  },
+  {
+   "a": [
+    "b1",
+    "j43"
+   ],
+   "b": [
+    "b2",
+    "e1"
+   ],
+   "points": [
+    {
+     "x": 450,
+     "y": 360
+    },
+    {
+     "x": 110,
+     "y": 360
+    },
+    {
+     "x": 110,
+     "y": 415
+    },
+    {
+     "x": 95,
+     "y": 415
+    },
+    {
+     "x": 95,
+     "y": 460
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b3",
+    "a31"
+   ],
+   "b": [
+    "b1",
+    "d45"
+   ],
+   "points": [
+    {
+     "x": 330,
+     "y": 595
+    },
+    {
+     "x": 10,
+     "y": 595
+    },
+    {
+     "x": 10,
+     "y": 10
+    },
+    {
+     "x": 470,
+     "y": 10
+    }
+   ],
+   "color": "#d5808d"
+  },
+  {
+   "a": [
+    "b1",
+    "d46"
+   ],
+   "b": [
+    "b2",
+    "i1"
+   ],
+   "points": [
+    {
+     "x": 480,
+     "y": 0
+    },
+    {
+     "x": 5,
+     "y": 0
+    },
+    {
+     "x": 5,
+     "y": 520
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b3",
+    "g28"
+   ],
+   "b": [
+    "b3",
+    "g20"
+   ],
+   "points": [
+    {
+     "x": 300,
+     "y": 865
+    },
+    {
+     "x": 220,
+     "y": 865
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "d7"
+   ],
+   "b": [
+    "b3",
+    "h20"
+   ],
+   "points": [
+    {
+     "x": 65,
+     "y": 810
+    },
+    {
+     "x": 65,
+     "y": 870
+    },
+    {
+     "x": 95,
+     "y": 870
+    },
+    {
+     "x": 95,
+     "y": 875
+    },
+    {
+     "x": 220,
+     "y": 875
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "b7"
+   ],
+   "b": [
+    "conv4",
+    "H1"
+   ],
+   "points": [
+    {
+     "x": 75,
+     "y": 790
+    },
+    {
+     "x": 75,
+     "y": 610
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g29"
+   ],
+   "b": [
+    "b3",
+    "g37"
+   ],
+   "points": [
+    {
+     "x": 310,
+     "y": 865
+    },
+    {
+     "x": 390,
+     "y": 865
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "d8"
+   ],
+   "b": [
+    "b3",
+    "g12"
+   ],
+   "points": [
+    {
+     "x": 100,
+     "y": 815
+    },
+    {
+     "x": 80,
+     "y": 815
+    },
+    {
+     "x": 80,
+     "y": 855
+    },
+    {
+     "x": 140,
+     "y": 855
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "h12"
+   ],
+   "b": [
+    "b3",
+    "h29"
+   ],
+   "points": [
+    {
+     "x": 140,
+     "y": 900
+    },
+    {
+     "x": 310,
+     "y": 900
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "b8"
+   ],
+   "b": [
+    "conv4",
+    "H2"
+   ],
+   "points": [
+    {
+     "x": 100,
+     "y": 780
+    },
+    {
+     "x": 80,
+     "y": 780
+    },
+    {
+     "x": 80,
+     "y": 755
+    },
+    {
+     "x": 70,
+     "y": 755
+    },
+    {
+     "x": 70,
+     "y": 620
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "b9"
+   ],
+   "b": [
+    "b3",
+    "b16"
+   ],
+   "points": [
+    {
+     "x": 110,
+     "y": 785
+    },
+    {
+     "x": 180,
+     "y": 785
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g13"
+   ],
+   "b": [
+    "b3",
+    "d16"
+   ],
+   "points": [
+    {
+     "x": 150,
+     "y": 850
+    },
+    {
+     "x": 130,
+     "y": 850
+    },
+    {
+     "x": 130,
+     "y": 815
+    },
+    {
+     "x": 180,
+     "y": 815
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "a16"
+   ],
+   "b": [
+    "b3",
+    "a33"
+   ],
+   "points": [
+    {
+     "x": 180,
+     "y": 770
+    },
+    {
+     "x": 350,
+     "y": 770
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "c9"
+   ],
+   "b": [
+    "conv4",
+    "H3"
+   ],
+   "points": [
+    {
+     "x": 65,
+     "y": 800
+    },
+    {
+     "x": 65,
+     "y": 650
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g15"
+   ],
+   "b": [
+    "b3",
+    "g16"
+   ],
+   "points": [],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g40"
+   ],
+   "b": [
+    "b3",
+    "d40"
+   ],
+   "points": [
+    {
+     "x": 420,
+     "y": 850
+    },
+    {
+     "x": 450,
+     "y": 850
+    },
+    {
+     "x": 450,
+     "y": 815
+    },
+    {
+     "x": 420,
+     "y": 815
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "a32"
+   ],
+   "b": [
+    "b3",
+    "a40"
+   ],
+   "points": [
+    {
+     "x": 340,
+     "y": 775
+    },
+    {
+     "x": 420,
+     "y": 775
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "d10"
+   ],
+   "b": [
+    "b3",
+    "h15"
+   ],
+   "points": [
+    {
+     "x": 120,
+     "y": 805
+    },
+    {
+     "x": 210,
+     "y": 805
+    },
+    {
+     "x": 210,
+     "y": 870
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "b10"
+   ],
+   "b": [
+    "b3",
+    "b32"
+   ],
+   "points": [
+    {
+     "x": 165,
+     "y": 790
+    },
+    {
+     "x": 165,
+     "y": 800
+    },
+    {
+     "x": 340,
+     "y": 800
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "c10"
+   ],
+   "b": [
+    "conv4",
+    "H4"
+   ],
+   "points": [
+    {
+     "x": 130,
+     "y": 800
+    },
+    {
+     "x": 130,
+     "y": 660
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g21"
+   ],
+   "b": [
+    "b3",
+    "g36"
+   ],
+   "points": [
+    {
+     "x": 230,
+     "y": 855
+    },
+    {
+     "x": 380,
+     "y": 855
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g38"
+   ],
+   "b": [
+    "b3",
+    "g22"
+   ],
+   "points": [
+    {
+     "x": 400,
+     "y": 875
+    },
+    {
+     "x": 240,
+     "y": 875
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g23"
+   ],
+   "b": [
+    "b3",
+    "d17"
+   ],
+   "points": [
+    {
+     "x": 250,
+     "y": 895
+    },
+    {
+     "x": 75,
+     "y": 895
+    },
+    {
+     "x": 75,
+     "y": 795
+    },
+    {
+     "x": 190,
+     "y": 795
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "d18"
+   ],
+   "b": [
+    "b3",
+    "g39"
+   ],
+   "points": [
+    {
+     "x": 200,
+     "y": 745
+    },
+    {
+     "x": 50,
+     "y": 745
+    },
+    {
+     "x": 50,
+     "y": 870
+    },
+    {
+     "x": 40,
+     "y": 870
+    },
+    {
+     "x": 40,
+     "y": 910
+    },
+    {
+     "x": 410,
+     "y": 910
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g14"
+   ],
+   "b": [
+    "b3",
+    "d41"
+   ],
+   "points": [
+    {
+     "x": 160,
+     "y": 880
+    },
+    {
+     "x": 80,
+     "y": 880
+    },
+    {
+     "x": 80,
+     "y": 860
+    },
+    {
+     "x": 55,
+     "y": 860
+    },
+    {
+     "x": 55,
+     "y": 750
+    },
+    {
+     "x": 80,
+     "y": 750
+    },
+    {
+     "x": 80,
+     "y": 725
+    },
+    {
+     "x": 430,
+     "y": 725
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g30"
+   ],
+   "b": [
+    "b3",
+    "d14"
+   ],
+   "points": [
+    {
+     "x": 320,
+     "y": 905
+    },
+    {
+     "x": 45,
+     "y": 905
+    },
+    {
+     "x": 45,
+     "y": 865
+    },
+    {
+     "x": 60,
+     "y": 865
+    },
+    {
+     "x": 60,
+     "y": 805
+    },
+    {
+     "x": 115,
+     "y": 805
+    },
+    {
+     "x": 115,
+     "y": 815
+    },
+    {
+     "x": 125,
+     "y": 815
+    },
+    {
+     "x": 125,
+     "y": 810
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "a34"
+   ],
+   "b": [
+    "b3",
+    "a13"
+   ],
+   "points": [
+    {
+     "x": 360,
+     "y": 765
+    },
+    {
+     "x": 150,
+     "y": 765
+    }
+   ],
+   "color": "#2fbf71"
+  },
+  {
+   "a": [
+    "b3",
+    "g41"
+   ],
+   "b": [
+    "b3",
+    "g45"
+   ],
+   "points": [],
+   "color": "#4fb28b"
+  },
+  {
+   "a": [
+    "b3",
+    "d42"
+   ],
+   "b": [
+    "b3",
+    "g24"
+   ],
+   "points": [
+    {
+     "x": 485,
+     "y": 810
+    },
+    {
+     "x": 485,
+     "y": 815
+    },
+    {
+     "x": 640,
+     "y": 815
+    },
+    {
+     "x": 640,
+     "y": 895
+    },
+    {
+     "x": 260,
+     "y": 895
+    }
+   ],
+   "color": "#59a6c1"
+  },
+  {
+   "a": [
+    "b3",
+    "g25"
+   ],
+   "b": [
+    "b3",
+    "d25"
+   ],
+   "points": [
+    {
+     "x": 290,
+     "y": 860
+    },
+    {
+     "x": 290,
+     "y": 815
+    },
+    {
+     "x": 270,
+     "y": 815
+    }
+   ],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "d26"
+   ],
+   "b": [
+    "b3",
+    "g46"
+   ],
+   "points": [
+    {
+     "x": 280,
+     "y": 735
+    },
+    {
+     "x": 645,
+     "y": 735
+    },
+    {
+     "x": 645,
+     "y": 875
+    },
+    {
+     "x": 480,
+     "y": 875
+    }
+   ],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "g17"
+   ],
+   "b": [
+    "b3",
+    "d23"
+   ],
+   "points": [
+    {
+     "x": 190,
+     "y": 865
+    },
+    {
+     "x": 70,
+     "y": 865
+    },
+    {
+     "x": 70,
+     "y": 775
+    },
+    {
+     "x": 250,
+     "y": 775
+    }
+   ],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "a24"
+   ],
+   "b": [
+    "b3",
+    "a21"
+   ],
+   "points": [],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "a38"
+   ],
+   "b": [
+    "b3",
+    "a37"
+   ],
+   "points": [],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "b22"
+   ],
+   "b": [
+    "b3",
+    "b37"
+   ],
+   "points": [
+    {
+     "x": 240,
+     "y": 785
+    },
+    {
+     "x": 390,
+     "y": 785
+    }
+   ],
+   "color": "#9b6bf2"
+  },
+  {
+   "a": [
+    "b3",
+    "d39"
+   ],
+   "b": [
+    "b3",
+    "g49"
+   ],
+   "points": [
+    {
+     "x": 410,
+     "y": 805
+    },
+    {
+     "x": 635,
+     "y": 805
+    },
+    {
+     "x": 635,
+     "y": 850
+    },
+    {
+     "x": 510,
+     "y": 850
+    }
+   ],
+   "color": "#8298cd"
+  },
+  {
+   "a": [
+    "b3",
+    "d47"
+   ],
+   "b": [
+    "b3",
+    "g47"
+   ],
+   "points": [
+    {
+     "x": 490,
+     "y": 820
+    },
+    {
+     "x": 540,
+     "y": 820
+    },
+    {
+     "x": 540,
+     "y": 855
+    },
+    {
+     "x": 490,
+     "y": 855
+    }
+   ],
+   "color": "#70b76e"
+  },
+  {
+   "a": [
+    "b3",
+    "a15"
+   ],
+   "b": [
+    "b3",
+    "a47"
+   ],
+   "points": [
+    {
+     "x": 170,
+     "y": 760
+    },
+    {
+     "x": 490,
+     "y": 760
+    }
+   ],
+   "color": "#70b76e"
+  },
+  {
+   "a": [
+    "b3",
+    "b15"
+   ],
+   "b": [
+    "b2",
+    "j27"
+   ],
+   "points": [
+    {
+     "x": 175,
+     "y": 790
+    },
+    {
+     "x": 175,
+     "y": 575
+    },
+    {
+     "x": 290,
+     "y": 575
+    }
+   ],
+   "color": "#70b76e"
+  },
+  {
+   "a": [
+    "b1",
+    "a37"
+   ],
+   "b": [
+    "b1",
+    "a36"
+   ],
+   "points": [],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b2",
+    "g26"
+   ],
+   "b": [
+    "b1",
+    "d36"
+   ],
+   "points": [
+    {
+     "x": 280,
+     "y": 520
+    },
+    {
+     "x": 75,
+     "y": 520
+    },
+    {
+     "x": 75,
+     "y": 425
+    },
+    {
+     "x": 85,
+     "y": 425
+    },
+    {
+     "x": 85,
+     "y": 235
+    },
+    {
+     "x": 185,
+     "y": 235
+    },
+    {
+     "x": 185,
+     "y": 85
+    },
+    {
+     "x": 380,
+     "y": 85
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b3",
+    "g58"
+   ],
+   "b": [
+    "b2",
+    "j26"
+   ],
+   "points": [
+    {
+     "x": 600,
+     "y": 880
+    },
+    {
+     "x": 655,
+     "y": 880
+    },
+    {
+     "x": 655,
+     "y": 590
+    },
+    {
+     "x": 280,
+     "y": 590
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b3",
+    "g59"
+   ],
+   "b": [
+    "b3",
+    "g31"
+   ],
+   "points": [
+    {
+     "x": 610,
+     "y": 900
+    },
+    {
+     "x": 330,
+     "y": 900
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b3",
+    "g57"
+   ],
+   "b": [
+    "b3",
+    "d29"
+   ],
+   "points": [
+    {
+     "x": 590,
+     "y": 870
+    },
+    {
+     "x": 650,
+     "y": 870
+    },
+    {
+     "x": 650,
+     "y": 775
+    },
+    {
+     "x": 580,
+     "y": 775
+    },
+    {
+     "x": 580,
+     "y": 765
+    },
+    {
+     "x": 405,
+     "y": 765
+    },
+    {
+     "x": 405,
+     "y": 805
+    },
+    {
+     "x": 310,
+     "y": 805
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "b1",
+    "d35"
+   ],
+   "b": [
+    "b3",
+    "e1"
+   ],
+   "points": [
+    {
+     "x": 370,
+     "y": 80
+    },
+    {
+     "x": 180,
+     "y": 80
+    },
+    {
+     "x": 180,
+     "y": 355
+    },
+    {
+     "x": 0,
+     "y": 355
+    },
+    {
+     "x": 0,
+     "y": 820
+    }
+   ],
+   "color": "#ff6b8a"
+  },
+  {
+   "a": [
+    "giga",
+    "3V3"
+   ],
+   "b": [
+    "conv1",
+    "LV"
+   ],
+   "points": [
+    {
+     "x": -590,
+     "y": 670
+    },
+    {
+     "x": -120,
+     "y": 670
+    },
+    {
+     "x": -120,
+     "y": 390
+    },
+    {
+     "x": -235,
+     "y": 390
+    },
+    {
+     "x": -235,
+     "y": 355
+    },
+    {
+     "x": -230,
+     "y": 355
+    },
+    {
+     "x": -230,
+     "y": 350
+    }
+   ],
+   "color": "#e5484d"
+  },
+  {
+   "a": [
+    "conv1",
+    "LV"
+   ],
+   "b": [
+    "conv2",
+    "LV"
+   ],
+   "points": [
+    {
+     "x": -260,
+     "y": 350
+    },
+    {
+     "x": -260,
+     "y": 490
+    }
+   ],
+   "color": "#e5484d"
+  },
+  {
+   "a": [
+    "conv1",
+    "LV"
+   ],
+   "b": [
+    "conv3",
+    "LV"
+   ],
+   "points": [
+    {
+     "x": -230,
+     "y": 350
+    },
+    {
+     "x": -230,
+     "y": 345
+    },
+    {
+     "x": -255,
+     "y": 345
+    },
+    {
+     "x": -255,
+     "y": 210
+    }
+   ],
+   "color": "#e5484d"
+  },
+  {
+   "a": [
+    "conv2",
+    "LV"
+   ],
+   "b": [
+    "conv4",
+    "LV"
+   ],
+   "points": [
+    {
+     "x": -230,
+     "y": 490
+    },
+    {
+     "x": -230,
+     "y": 495
+    },
+    {
+     "x": -260,
+     "y": 495
+    },
+    {
+     "x": -260,
+     "y": 630
+    }
+   ],
+   "color": "#e5484d"
+  },
+  {
+   "a": [
+    "conv1",
+    "L1"
+   ],
+   "b": [
+    "giga",
+    "D23"
+   ],
+   "points": [
+    {
+     "x": -295,
+     "y": 330
+    },
+    {
+     "x": -295,
+     "y": 460
+    }
+   ],
+   "color": "#e2b35c"
+  },
+  {
+   "a": [
+    "conv1",
+    "L2"
+   ],
+   "b": [
+    "giga",
+    "D25"
+   ],
+   "points": [
+    {
+     "x": -290,
+     "y": 340
+    },
+    {
+     "x": -290,
+     "y": 470
+    }
+   ],
+   "color": "#68b3d1"
+  },
+  {
+   "a": [
+    "conv1",
+    "L3"
+   ],
+   "b": [
+    "giga",
+    "D27"
+   ],
+   "points": [
+    {
+     "x": -285,
+     "y": 370
+    },
+    {
+     "x": -285,
+     "y": 480
+    }
+   ],
+   "color": "#a68bd4"
+  },
+  {
+   "a": [
+    "conv1",
+    "L4"
+   ],
+   "b": [
+    "giga",
+    "D29"
+   ],
+   "points": [
+    {
+     "x": -280,
+     "y": 380
+    },
+    {
+     "x": -280,
+     "y": 490
+    }
+   ],
+   "color": "#e0a24f"
+  },
+  {
+   "a": [
+    "conv2",
+    "L1"
+   ],
+   "b": [
+    "giga",
+    "D31"
+   ],
+   "points": [
+    {
+     "x": -290,
+     "y": 470
+    },
+    {
+     "x": -290,
+     "y": 500
+    }
+   ],
+   "color": "#62b48c"
+  },
+  {
+   "a": [
+    "conv2",
+    "L2"
+   ],
+   "b": [
+    "giga",
+    "D33"
+   ],
+   "points": [
+    {
+     "x": -285,
+     "y": 480
+    },
+    {
+     "x": -285,
+     "y": 510
+    }
+   ],
+   "color": "#759fd5"
+  },
+  {
+   "a": [
+    "conv2",
+    "L3"
+   ],
+   "b": [
+    "giga",
+    "D35"
+   ],
+   "points": [
+    {
+     "x": -230,
+     "y": 510
+    },
+    {
+     "x": -230,
+     "y": 520
+    }
+   ],
+   "color": "#c38bac"
+  },
+  {
+   "a": [
+    "giga",
+    "D37"
+   ],
+   "b": [
+    "conv3",
+    "L1"
+   ],
+   "points": [
+    {
+     "x": -275,
+     "y": 530
+    },
+    {
+     "x": -275,
+     "y": 190
+    }
+   ],
+   "color": "#d4aa49"
+  },
+  {
+   "a": [
+    "giga",
+    "D39"
+   ],
+   "b": [
+    "conv3",
+    "L2"
+   ],
+   "points": [
+    {
+     "x": -130,
+     "y": 540
+    },
+    {
+     "x": -130,
+     "y": 255
+    },
+    {
+     "x": -240,
+     "y": 255
+    },
+    {
+     "x": -240,
+     "y": 200
+    }
+   ],
+   "color": "#de9655"
+  },
+  {
+   "a": [
+    "giga",
+    "D41"
+   ],
+   "b": [
+    "conv3",
+    "L3"
+   ],
+   "points": [
+    {
+     "x": -265,
+     "y": 550
+    },
+    {
+     "x": -265,
+     "y": 230
+    }
+   ],
+   "color": "#b7b758"
+  },
+  {
+   "a": [
+    "giga",
+    "D43"
+   ],
+   "b": [
+    "conv3",
+    "L4"
+   ],
+   "points": [
+    {
+     "x": -270,
+     "y": 560
+    },
+    {
+     "x": -270,
+     "y": 240
+    }
+   ],
+   "color": "#dfb96a"
+  },
+  {
+   "a": [
+    "giga",
+    "D45"
+   ],
+   "b": [
+    "conv4",
+    "L1"
+   ],
+   "points": [
+    {
+     "x": -255,
+     "y": 570
+    },
+    {
+     "x": -255,
+     "y": 610
+    }
+   ],
+   "color": "#4db58f"
+  },
+  {
+   "a": [
+    "giga",
+    "D47"
+   ],
+   "b": [
+    "conv4",
+    "L2"
+   ],
+   "points": [
+    {
+     "x": -265,
+     "y": 580
+    },
+    {
+     "x": -265,
+     "y": 620
+    }
+   ],
+   "color": "#53a8c2"
+  },
+  {
+   "a": [
+    "giga",
+    "D49"
+   ],
+   "b": [
+    "conv4",
+    "L3"
+   ],
+   "points": [
+    {
+     "x": -270,
+     "y": 590
+    },
+    {
+     "x": -270,
+     "y": 650
+    }
+   ],
+   "color": "#85a36b"
+  },
+  {
+   "a": [
+    "giga",
+    "D51"
+   ],
+   "b": [
+    "conv4",
+    "L4"
+   ],
+   "points": [
+    {
+     "x": -275,
+     "y": 600
+    },
+    {
+     "x": -275,
+     "y": 660
+    }
+   ],
+   "color": "#8b9acb"
+  }
+ ]
+}

@@ -4,6 +4,8 @@ import { templateSnapshot } from '../collab/applyTemplate';
 import { compileSketch } from '../../server/compile';
 import { ELEVATOR_CLASS_GIGA } from '../collab/elevatorClassSketch';
 import { SimEngine } from './engine';
+import { findTemplate } from '../collab/applyTemplate';
+import { TEMPLATES } from '../collab/templates';
 
 const SEGMENTS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 const DIGITS: Record<string, number> = { abcdef: 0, bc: 1, abdeg: 2, abcdg: 3, bcfg: 4 };
@@ -169,28 +171,80 @@ describe('ascensor de clase (LS75 / LS85 / LS48 + HC, 5 V)', () => {
     h.engine.stop();
   });
 
-  it('el sketch compila y la pantalla del GIGA muestra piso actual, destino y sentido', async () => {
+  it('con varios sensores activos a la vez gana el más alto: el piso nunca pasa de 4', () => {
+    const h = fixture();
+    const sp = h.snapshot.parts.find((p) => p.id === 'sp')!;
+    for (let mask = 1; mask < 16; mask++) {
+      sp.props = { ...sp.props, s1: false, s2: false, s3: false, s4: false };
+      h.engine.update({ ...h.snapshot, parts: [...h.snapshot.parts] });
+      h.tick(0.002);
+      sp.props = { ...sp.props, s1: !!(mask & 1), s2: !!(mask & 2), s3: !!(mask & 4), s4: !!(mask & 8) };
+      h.engine.update({ ...h.snapshot, parts: [...h.snapshot.parts] });
+      h.tick();
+      const expected = [4, 3, 2, 1].find((f) => mask & (1 << (f - 1)))!;
+      expect(h.value('u11'), `sensores ${mask.toString(2)}`).toBe(expected);
+      expect(h.digit('seg3')).toBe(expected);
+    }
+    h.engine.stop();
+  }, 120_000);
+
+  it('el sketch compila; la pantalla llama al ascensor y el GIGA mueve la cabina hasta el destino', async () => {
     const compiled = await compileSketch(ELEVATOR_CLASS_GIGA, 'arduino:avr:mega:cpu=atmega2560');
     expect(compiled.ok, compiled.stderr).toBe(true);
     const h = fixture(compiled.hex!);
     h.tick(1);
     const scene = () => String(h.engine.getVisual('screen')?.scene);
     expect(scene()).toContain('ASCENSOR');
-    expect(scene()).toContain('EN ESPERA');
-    h.floor(2);
-    h.tick(0.3);
-    h.press('pp4');
-    h.tick(0.5);
-    expect(scene()).toContain('PISO 4');
+    expect(scene()).toContain('LLAMAR AL PISO');
+    expect(h.value('u11'), 'arranca en el piso 1').toBe(1);
+    expect(h.digit('seg3')).toBe(1);
+    const tap = (x: number, y: number) => {
+      h.engine.setInput('screen', 'touch', (1 << 20) | (x << 10) | y);
+      h.tick(0.05);
+      h.engine.setInput('screen', 'touch', (x << 10) | y);
+      h.tick(0.3);
+    };
+    const callButton = (f: number) => tap(236 + (f - 1) * 131 + 60, 404);
+    const waitIdle = () => {
+      for (let i = 0; i < 200 && h.bit('u5', '1Q'); i++) h.tick(0.1);
+      expect(h.bit('u5', '1Q')).toBe(false);
+      h.tick(0.4);
+    };
+    // Llamada táctil al 4: sube tres pisos, pasa por 2 y 3 y se detiene en 4.
+    callButton(4);
+    expect(h.value('u8')).toBe(4);
+    expect(h.digit('seg')).toBe(4);
+    expect(h.bit('u5', '1Q')).toBe(true);
     expect(scene()).toContain('SUBIENDO');
-    h.floor(0);
-    h.floor(4);
-    h.tick(0.5);
-    expect(scene()).toContain('LLEGO');
-    h.press('pp1');
-    h.tick(0.5);
-    expect(scene()).toContain('PISO 1');
+    const seen = new Set<number>();
+    for (let i = 0; i < 140 && h.bit('u5', '1Q'); i++) { h.tick(0.1); seen.add(h.value('u11')); }
+    expect([...seen].filter((f) => f > 1)).toEqual([2, 3, 4]);
+    waitIdle();
+    expect(h.value('u11')).toBe(4);
+    expect(h.digit('seg3')).toBe(4);
+    // Pulsador azul de cabina al 2: baja.
+    h.press('pp2');
+    expect(h.value('u8')).toBe(2);
     expect(scene()).toContain('BAJANDO');
+    waitIdle();
+    expect(h.value('u11')).toBe(2);
+    expect(h.digit('seg3')).toBe(2);
+    expect(h.digit('seg')).toBe(2);
+    expect(scene()).toContain('PISO 2');
+    // En marcha, otras llamadas quedan bloqueadas.
+    callButton(1);
+    h.tick(0.3);
+    callButton(3);
+    expect(h.value('u8')).toBe(1);
+    waitIdle();
+    expect(h.value('u11')).toBe(1);
+    for (const pin of ['D23', 'D25', 'D27', 'D29', 'D31', 'D33', 'D35', 'D37', 'D39', 'D41', 'D43', 'D45', 'D47', 'D49', 'D51']) expect(h.engine.voltageAt('giga', pin)!, pin).toBeLessThan(3.4);
     h.engine.stop();
-  }, 120_000);
+  }, 180_000);
+
+  it('no está en la galería, pero el enlace ?new=elevator-class abre el montaje actual', () => {
+    expect(TEMPLATES.some((t) => t.id === 'elevator-class')).toBe(false);
+    const hidden = findTemplate('elevator-class');
+    expect(JSON.parse(JSON.stringify(hidden))).toEqual(JSON.parse(JSON.stringify(elevatorClassTemplate())));
+  });
 });

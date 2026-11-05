@@ -2,6 +2,7 @@
 // Protoboard de 400 en (320,−10): columna c → x = 350 + 10·(c−1); filas a–e = 50–90,
 // f–j = 120–160; rieles + = 10 / 190, − = 20 / 200 (sin orificio en las columnas 6, 12, 18…).
 import type { Props, Rotation, Vec } from '../core/types';
+import elevatorClass from './fixtures/elevator-class.json';
 import { SEQUENTIAL } from './sequential';
 import { TOUCHSCREEN } from './touchscreen';
 
@@ -259,3 +260,6 @@ void loop() {
 ];
 
 export const TEMPLATES: Template[] = [...SIMPLE, ...SEQUENTIAL, TOUCHSCREEN];
+
+/** Plantillas fuera de la galería: solo se abren con el enlace `/?new=<id>`. */
+export const HIDDEN_TEMPLATES: Template[] = [elevatorClass as unknown as Template];

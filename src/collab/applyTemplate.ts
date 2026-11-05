@@ -1,10 +1,10 @@
 import { toWorld, type CircuitSnapshot, type PartData, type WireEnd } from '../core/types';
 import { PARTS } from '../parts';
 import type { Project } from './project';
-import { TEMPLATES, type Template } from './templates';
+import { HIDDEN_TEMPLATES, TEMPLATES, type Template } from './templates';
 
 export function findTemplate(id: string | null) {
-  return TEMPLATES.find((t) => t.id === id) ?? null;
+  return TEMPLATES.find((t) => t.id === id) ?? HIDDEN_TEMPLATES.find((t) => t.id === id) ?? null;
 }
 
 /** Instantánea de la plantilla con los ids = claves; sirve para la vista previa y para sembrar. */

@@ -3,7 +3,7 @@ import { UserButton } from '@clerk/react';
 import { CLOUD, api, colorFor, type ProjectSummary } from '../cloud';
 import { Copy, ExternalLink, FolderClosed, House, LayoutTemplate, Link2, Loader2, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Users, X, Clock, CopyPlus, CircuitBoard } from 'lucide-react';
 import { TEMPLATES, type Template } from '../collab/templates';
-import { templateSnapshot } from '../collab/applyTemplate';
+import { findTemplate, templateSnapshot } from '../collab/applyTemplate';
 import { localUser } from '../collab/project';
 import type { CircuitSnapshot } from '../core/types';
 import { Logo, Wordmark } from './Logo';
@@ -183,6 +183,13 @@ export function Home() {
       .then(({ projects }) => setRecent(projects.map((p) => ({ room: p.id, name: p.name, at: Date.parse(p.updated_at), snapshot: p.preview ?? undefined, role: p.role, members: p.members, people: p.people }))))
       .catch(() => setRecent([]))
       .finally(() => setLoading(false));
+  }, []);
+
+  // Enlace directo «/?new=<plantilla>»: crea el circuito con ese montaje (también las ocultas).
+  useEffect(() => {
+    const t = findTemplate(new URLSearchParams(location.search).get('new'));
+    if (t) void create(t.id, t.name);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Atajo: «/» enfoca la búsqueda (si no se está escribiendo).
