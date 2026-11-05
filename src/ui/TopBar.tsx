@@ -333,6 +333,16 @@ function SharePopover() {
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   };
+  const [copiedEdit, setCopiedEdit] = useState(false);
+  const copyEdit = async () => {
+    setError(null);
+    try {
+      // Sin `view`: quien abre el enlace inicia sesión y entra con el rol que le corresponde.
+      const url = new URL(location.href); url.search = new URLSearchParams({ p: project.room }).toString(); url.hash = '';
+      await navigator.clipboard.writeText(url.href);
+      setCopiedEdit(true); setTimeout(() => setCopiedEdit(false), 1600);
+    } catch (e) { setError((e as Error).message); }
+  };
   const copyView = async () => {
     setBusy(true); setError(null);
     try {
@@ -382,6 +392,13 @@ function SharePopover() {
       </ul>
       <HintButton
         className="btn accent"
+        style={{ width: '100%', marginBottom: 6 }}
+        onClick={() => void copyEdit()}
+      >
+        {copiedEdit ? <Check size={14} /> : <Copy size={14} />} {copiedEdit ? 'Copiado' : 'Copiar enlace para editar'}
+      </HintButton>
+      <HintButton
+        className="btn"
         style={{ width: '100%' }}
         disabled={busy}
         onClick={() => void copyView()}
