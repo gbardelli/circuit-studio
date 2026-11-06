@@ -36,9 +36,9 @@ export function elevatorDesign(sourceSnapshot: CircuitSnapshot) {
     if (n === undefined) throw new Error(`No existe la red de ${part}.${pin}.`);
     return n;
   };
-  const supply = snapshot.parts.find(p => p.type === 'bench-supply' || p.type === 'breadboard-power');
+  const supply = snapshot.parts.find(p => p.type === 'bench-supply' || p.type === 'breadboard-power' || p.type === 'mb102-power');
   if (!supply) throw new Error('No se encontró la fuente del circuito.');
-  const high = netOf(supply.id, supply.type === 'breadboard-power' ? 'TP' : '+'), low = netOf(supply.id, supply.type === 'breadboard-power' ? 'TN' : '-');
+  const high = netOf(supply.id, supply.type === 'breadboard-power' || supply.type === 'mb102-power' ? 'TP' : '+'), low = netOf(supply.id, supply.type === 'breadboard-power' || supply.type === 'mb102-power' ? 'TN' : '-');
   const refs = new Map<number, Ref[]>();
   const names = new Map<number, string>();
   const add = (sheet: LogicSheet, id: string, kind: string, x: number, y: number, props: Props = {}) => {

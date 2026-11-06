@@ -29,6 +29,7 @@ export function assemblyEndLabel(end:WireEnd,snapshot:CircuitSnapshot) {
 }
 export function orientationText(part:PartData) {
   if(/^(74hc|74ls|cd4|ne555|tlc555|attiny)/.test(part.type)) return `Muesca hacia ${({0:'la izquierda',90:'arriba',180:'la derecha',270:'abajo'} as const)[part.rot]}.`;
+  if(part.type==='mb102-power') return 'Inserta los cuatro terminales en los rieles indicados. Revisa la polaridad y los jumpers antes de conectar el adaptador DC de 6,5 a 12 V.';
   if(part.type==='led') return 'Respeta el ánodo A y el cátodo K; la pata larga es el ánodo.';
   if(part.type==='capacitor') return 'Respeta los terminales + y − indicados en la pieza.';
   if(part.type.startsWith('breadboard')) return 'Coloca los rieles y las letras de las filas en la orientación indicada.';
@@ -59,7 +60,7 @@ export function buildAssemblyPlan(snapshot:CircuitSnapshot):AssemblyPlan {
   }
   const partSteps:AssemblyStep[]=ordered.map(part=>{
     const pins=placements.get(part.id)??[],owner=pins.find(p=>byId.get(p.board)?.type.startsWith('breadboard'))?.board??pins[0]?.board;
-    const physical=Object.fromEntries(Object.entries(part.props).filter(([key])=>['resistance','capacitance','color','cols','flip','partNumber'].includes(key)));
+    const physical=Object.fromEntries(Object.entries(part.props).filter(([key])=>['resistance','capacitance','color','cols','flip','partNumber','top','bottom'].includes(key)));
     return {kind:'part',key:`part:${part.id}`,part,owner,placements:pins,title:partTitle(part),phase:rank(part)<2?'base':'parts',signature:JSON.stringify([part.id,part.type,part.x,part.y,part.rot,physical,pins])};
   });
   const wireSteps:AssemblyStep[]=snapshot.wires.filter(w=>!w.sch).map(wire=>({kind:'wire',key:`wire:${wire.id}`,wire,title:`${assemblyEndLabel(wire.a,snapshot)} → ${assemblyEndLabel(wire.b,snapshot)}`,phase:isPowerPin(wire.a.pin)||isPowerPin(wire.b.pin)?'power':'signals',signature:wireAssemblySignature(wire)}));

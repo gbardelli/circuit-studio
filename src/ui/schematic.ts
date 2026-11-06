@@ -88,7 +88,7 @@ const MAX_TRUNK = 320;
 /** Ancho de la banderola de una etiqueta (igual que en el lienzo). */
 export const flagWidth = (text: string) => Math.max(18, text.length * 3.55 + 9) + 4;
 
-const SOURCES = new Set(['pushbutton', 'slide-switch', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8', 'clock', 'bench-supply', 'battery-9v', 'aa-pack', 'potentiometer', 'ldr']);
+const SOURCES = new Set(['pushbutton', 'slide-switch', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8', 'clock', 'mb102-power', 'bench-supply', 'battery-9v', 'aa-pack', 'potentiometer', 'ldr']);
 const PASSIVES = new Set(['resistor', 'capacitor', 'diode']);
 const SINKS = new Set(['led', 'seven-segment', 'buzzer', 'dc-motor', 'servo', 'rgb-led', 'led-bar-10']);
 const SYMBOL_TYPES = new Set(['bench-supply', 'resistor', 'led', 'diode', 'capacitor', 'potentiometer', 'ldr', 'pushbutton', 'slide-switch', 'battery-9v', 'aa-pack', 'npn', 'mosfet-n', 'dc-motor', 'buzzer', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8']);
@@ -133,7 +133,7 @@ function refPrefix(type: string): string {
   if (type === 'npn' || type === 'mosfet-n') return 'Q';
   if (type === 'pushbutton' || /switch/.test(type)) return 'SW';
   if (type === 'clock') return 'G';
-  if (type === 'bench-supply' || type.startsWith('battery') || type === 'aa-pack') return 'BT';
+  if (type === 'bench-supply' || type === 'mb102-power' || type.startsWith('battery') || type === 'aa-pack') return 'BT';
   if (def.category === 'Lógica' || def.category === 'Integrados') return 'U';
   return 'M';
 }
@@ -234,6 +234,7 @@ export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Sch
       const role = roleOf(p, pin);
       if (PARTS[p.type].mcu && role === 'power') label = pin.startsWith('3V3') ? '+3V3' : pin.startsWith('5V') ? '+5V' : pin;
       else if ((p.type === 'bench-supply' || p.type.startsWith('battery')) && pin === '+') label ??= `+${Number(p.props.voltage ?? 9)}V`;
+      else if (p.type === 'mb102-power' && role === 'power' && p.props.on !== false && Number(p.props[pin === 'TP' ? 'top' : 'bottom']) > 0) label ??= `+${Number(p.props[pin === 'TP' ? 'top' : 'bottom'])}V`;
       else if (role === 'power') label ??= 'VCC';
     }
     if (label) supplyNets.set(net, label);

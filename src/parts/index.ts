@@ -15,6 +15,7 @@ import { lcdI2c, pcf8574, pcf8574a } from './i2c';
 import { nextion } from './nextion';
 import { gigaDisplayShield } from './gigaDisplay';
 import { levelConverter, levelConverter8 } from './levelConverter';
+import { breadboardPower } from './breadboardPower';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -58,6 +59,7 @@ export const PART_LIST: PartDef[] = [
   pcf8574,
   pcf8574a,
   benchSupply,
+  breadboardPower,
   battery9v,
   aaPack,
   multimeter,
