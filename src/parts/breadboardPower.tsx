@@ -9,7 +9,7 @@ const RAIL_OPTIONS = [
   { value: '0', label: 'Desconectado' },
 ];
 const NEXT: Record<number, number> = { 5: 3.3, 3.3: 0, 0: 5 };
-const volts = (v: unknown) => (Number(v) === 3.3 ? 3.3 : Number(v) === 0 ? 0 : 5);
+const volts = (v: unknown) => (Math.abs(Number(v) - 3.3) < 0.01 ? 3.3 : Number(v) === 0 ? 0 : 5);
 const R_OUT = 0.3; // el regulador AMS1117 se hunde algo bajo carga
 const nodeV = (v: Float64Array, n: number) => (n < 0 ? 0 : v[n]);
 
@@ -26,7 +26,7 @@ const PowerRender = memo(function PowerRender({ part, visual, onInput, preview }
   const id = useId().replace(/:/g, '');
   const on = visual ? Boolean(visual.on) : part.props.on !== false;
   const live = !preview && Boolean(onInput);
-  const lit = visual ? visual.on === 1 : on;
+  const lit = visual ? Boolean(visual.on) : on;
   const jumper = (key: 'top' | 'bottom', y: number) => {
     const value = volts(visual?.[`${key}Setting`] ?? part.props[key]);
     const x = value === 3.3 ? -52 : value === 5 ? -38 : -66; // posición del puente: 3,3 · 5 · fuera
