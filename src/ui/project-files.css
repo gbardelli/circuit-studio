@@ -22,3 +22,9 @@
 @keyframes project-file-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .project-file-spinner { animation: none; } }
 @media (max-width: 420px) { .project-file-dialog { padding: 20px; } .project-file-preview dl { grid-template-columns: 1fr; gap: 12px; } }
+@media (max-width: 640px) {
+  .home-top { flex-wrap: wrap; }
+  .home-top .search { flex-basis: 100%; max-width: none; min-width: 0; }
+  .home-top > .grow { display: none; }
+  .home-top > .btn { flex: 1; min-width: 0; justify-content: center; }
+}
