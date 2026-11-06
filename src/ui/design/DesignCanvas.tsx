@@ -93,6 +93,13 @@ export function DesignCanvas() {
     setViewport({ zoom, x: (r.width - (x1 - x0) * zoom) / 2 - x0 * zoom, y: (r.height - (y1 - y0) * zoom) / 2 - y0 * zoom + 20 });
   }, [placed, setViewport]);
   const fitTick = useDesignUi((s) => s.fitTick);
+  const initiallyFitted = useRef(new Set<string>());
+  useEffect(() => {
+    const key = `${project.room}:${sheetId}`;
+    if (!placed.length || initiallyFitted.current.has(key)) return;
+    initiallyFitted.current.add(key);
+    if (!useDesignUi.getState().viewports[sheetId]) fit();
+  }, [project.room, sheetId, placed.length, fit]);
   useEffect(() => {
     if (fitTick) fit();
     // Solo cuando se pide; no al mover elementos.
@@ -411,13 +418,14 @@ export function DesignCanvas() {
             const a = pinWorld(w.a);
             const b = pinWorld(w.b);
             if (!a || !b) return null;
-            const d = pathOf(route(a.at, a.out, b.at, b.out));
+            const d = pathOf(w.points?.length ? [a.at, ...w.points, b.at] : route(a.at, a.out, b.at, b.out));
+            const liveColor = netColor(w.a);
             const on = selWires.includes(w.id);
             return (
               <g key={w.id} data-wire={w.id} className="d-wire">
                 <path d={d} stroke="transparent" strokeWidth={10} fill="none" />
                 {on && <path d={d} stroke="var(--accent)" strokeOpacity={0.45} strokeWidth={7} fill="none" strokeLinejoin="round" />}
-                <path d={d} stroke={netColor(w.a)} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round" />
+                <path d={d} stroke={liveColor === VALUE_COLOR.err ? liveColor : w.color ?? liveColor} strokeOpacity={w.color && liveColor !== VALUE_COLOR.err && sim.value(w.a.node, w.a.pin) !== 1 ? 0.65 : 1} strokeWidth={2.5} fill="none" strokeLinejoin="round" strokeLinecap="round"><title>{w.label ?? ''}</title></path>
               </g>
             );
           })}

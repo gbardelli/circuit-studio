@@ -30,8 +30,8 @@ export class DesignDoc {
         nodes.push({ id: nid, kind: String(n.get('kind')), x: Number(n.get('x')) || 0, y: Number(n.get('y')) || 0, rot: (Number(n.get('rot')) || 0) as Rotation, props: { ...((n.get('props') as Props) ?? {}) } }),
       );
       const wires: LogicWire[] = [];
-      (m.get('wires') as Y.Map<{ a: LogicPinRef; b: LogicPinRef }> | undefined)?.forEach((w, wid) => {
-        if (w?.a && w?.b) wires.push({ id: wid, a: w.a, b: w.b });
+      (m.get('wires') as Y.Map<Omit<LogicWire, 'id'>> | undefined)?.forEach((w, wid) => {
+        if (w?.a && w?.b) wires.push({ ...w, id: wid });
       });
       nodes.sort((a, b) => a.id.localeCompare(b.id));
       wires.sort((a, b) => a.id.localeCompare(b.id));
@@ -113,7 +113,7 @@ export class DesignDoc {
   }
 
   private wireMap(sheet: string) {
-    return this.ensure(sheet)?.get('wires') as Y.Map<{ a: LogicPinRef; b: LogicPinRef }> | undefined;
+    return this.ensure(sheet)?.get('wires') as Y.Map<Omit<LogicWire, 'id'>> | undefined;
   }
 
   addNode(sheet: string, kind: string, x: number, y: number, props: Props = {}, rot: Rotation = 0) {
@@ -133,12 +133,15 @@ export class DesignDoc {
   moveNodes(sheet: string, moves: { id: string; x: number; y: number }[]) {
     this.tx(() => {
       const nodes = this.nodes(sheet);
+      const changed = new Set<string>();
       for (const mv of moves) {
         const n = nodes?.get(mv.id);
         if (!n) continue;
+        if (n.get('x') !== mv.x || n.get('y') !== mv.y) changed.add(mv.id);
         if (n.get('x') !== mv.x) n.set('x', mv.x);
         if (n.get('y') !== mv.y) n.set('y', mv.y);
       }
+      this.clearRoutes(sheet, changed);
     });
   }
 
@@ -149,6 +152,7 @@ export class DesignDoc {
         const n = nodes?.get(id);
         if (n) n.set('rot', (((Number(n.get('rot')) || 0) + 90) % 360) as Rotation);
       }
+      this.clearRoutes(sheet, new Set(ids));
     });
   }
 
@@ -162,13 +166,23 @@ export class DesignDoc {
     });
   }
 
-  addWire(sheet: string, a: LogicPinRef, b: LogicPinRef) {
+  private clearRoutes(sheet: string, nodes: Set<string>) {
+    const wires = this.wireMap(sheet);
+    wires?.forEach((wire, id) => {
+      if (wire.points && (nodes.has(wire.a.node) || nodes.has(wire.b.node))) {
+        const { points: _points, ...rest } = wire;
+        wires.set(id, rest);
+      }
+    });
+  }
+
+  addWire(sheet: string, a: LogicPinRef, b: LogicPinRef, layout: Pick<LogicWire, 'points' | 'color' | 'label'> = {}) {
     const same = (p: LogicPinRef, q: LogicPinRef) => p.node === q.node && p.pin === q.pin;
     if (same(a, b)) return null;
     const existing = this.sheet(sheet)?.wires.find((w) => (same(w.a, a) && same(w.b, b)) || (same(w.a, b) && same(w.b, a)));
     if (existing) return existing.id;
     const id = shortId();
-    this.tx(() => this.wireMap(sheet)?.set(id, { a, b }));
+    this.tx(() => this.wireMap(sheet)?.set(id, { ...layout, a, b }));
     return id;
   }
 
@@ -206,7 +220,7 @@ export class DesignDoc {
       for (const w of wires) {
         const a = ids.get(w.a.node);
         const b = ids.get(w.b.node);
-        if (a && b) map?.set(shortId(), { a: { node: a, pin: w.a.pin }, b: { node: b, pin: w.b.pin } });
+        if (a && b) map?.set(shortId(), { a: { node: a, pin: w.a.pin }, b: { node: b, pin: w.b.pin }, ...(w.points ? { points: w.points.map(p => ({ x: p.x + dx, y: p.y + dy })) } : {}), ...(w.color ? { color: w.color } : {}), ...(w.label ? { label: w.label } : {}) });
       }
     });
     return [...ids.values()];

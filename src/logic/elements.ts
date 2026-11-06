@@ -125,6 +125,8 @@ export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 /** Líneas de una nota (el texto admite saltos de línea). */
 export const noteLines = (p: Props) => String(p.text ?? '').split(/\r?\n/);
 export const NOTE_LINE = 13;
+export const noteFontSize = (p: Props) => Math.max(9.5, Math.min(24, Number(p.fontSize) || 9.5));
+export const noteLineHeight = (p: Props) => Math.round(NOTE_LINE * noteFontSize(p) / 9.5);
 export const LED_COLORS = ['green', 'red', 'yellow', 'blue'] as const;
 const LED_COLOR_NAMES: Record<(typeof LED_COLORS)[number], string> = { green: 'Verde', red: 'Rojo', yellow: 'Amarillo', blue: 'Azul' };
 const SOURCE_PIN: LogicPinDef[] = [{ id: 'Y', x: 40, y: 10, dir: 'out' }];
@@ -353,10 +355,10 @@ const ELEMENTS: ElementDef[] = [
     description: 'Texto para explicar una parte del circuito.',
     keywords: ['nota', 'texto', 'comentario', 'etiqueta', 'anotacion'],
     defaults: { text: 'Nota' },
-    fields: [{ key: 'text', label: 'Texto', kind: 'longtext' }],
+    fields: [{ key: 'text', label: 'Texto', kind: 'longtext' }, { key: 'fontSize', label: 'Tamaño del texto', kind: 'number', min: 10, max: 24, step: 1 }],
     size: (p) => {
       const lines = noteLines(p);
-      return { w: Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 + 16) / 10) * 10), h: Math.ceil((lines.length * NOTE_LINE + 7) / 10) * 10 };
+      return { w: Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 * noteFontSize(p) / 9.5 + 16) / 10) * 10), h: Math.ceil((lines.length * noteLineHeight(p) + 7) / 10) * 10 };
     },
     pins: () => [],
     behavior: () => ({ step: () => [] }),

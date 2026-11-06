@@ -1,7 +1,7 @@
 // Modo diseño: circuitos lógicos ideales, al estilo de Logisim o CircuitVerse, independientes del
 // modelo eléctrico. Cada hoja es un circuito; una hoja de tipo «ic» define un integrado propio
 // que se usa dentro de otras hojas y, como integrado virtual, en la protoboard y el esquema.
-import type { Props, Rotation } from '../core/types';
+import type { Props, Rotation, Vec } from '../core/types';
 
 /** 0, 1 o X (sin conducir, conflicto o indeterminado). */
 export type Bit = 0 | 1 | 2;
@@ -25,6 +25,10 @@ export interface LogicWire {
   id: string;
   a: LogicPinRef;
   b: LogicPinRef;
+  /** Optional manually routed interior bends; terminal positions remain attached to nodes. */
+  points?: Vec[];
+  color?: string;
+  label?: string;
 }
 
 export interface LogicSheet {

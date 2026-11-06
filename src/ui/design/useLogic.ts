@@ -43,7 +43,7 @@ export function useLogicSim(sheet: LogicSheet) {
   const speed = useDesignUi((s) => s.speed);
   const [version, bump] = useReducer((n: number) => n + 1, 0);
   const structure = useMemo(() => {
-    const strip = (s: LogicSheet) => ({ ...s, name: '', description: '', nodes: s.nodes.map((n) => (n.kind === 'in' ? { ...n, x: 0, y: 0, props: { ...n.props, value: 0 } } : { ...n, x: 0, y: 0 })) });
+    const strip = (s: LogicSheet) => ({ ...s, name: '', description: '', wires: s.wires.map(w => ({ id: w.id, a: w.a, b: w.b })), nodes: s.nodes.filter(n => n.kind !== 'note').map((n) => (n.kind === 'in' ? { ...n, x: 0, y: 0, props: { ...n.props, value: 0 } } : { ...n, x: 0, y: 0 })) });
     const used = [...icDependencies(sheet.id, (id) => (id === sheet.id ? sheet : lookup(id)))].filter((id) => id !== sheet.id);
     return JSON.stringify([strip(sheet), ...used.map((id) => lookup(id)).filter(Boolean).map((s) => strip(s!))]);
   }, [sheet, lookup]);

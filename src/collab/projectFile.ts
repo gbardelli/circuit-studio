@@ -99,10 +99,19 @@ export function parseProjectFile(text: string): ProjectFile {
       const node = record(n, 'Elemento de diseño'); positioned(node, 'Elemento de diseño');
       string(node.kind, 'Tipo de elemento'); properties(node.props, 'Propiedades de diseño');
     }
-    for (const w of Object.values(links)) for (const end of ['a', 'b']) {
-      const ref = record(record(w, 'Conexión de diseño')[end], 'Terminal de diseño');
-      string(ref.node, 'Elemento conectado'); string(ref.pin, 'Patilla');
-      if (!Object.hasOwn(nodes, ref.node)) invalid('Una conexión de diseño apunta a un elemento que no existe.');
+    for (const w of Object.values(links)) {
+      const link = record(w, 'Conexión de diseño');
+      for (const end of ['a', 'b']) {
+        const ref = record(link[end], 'Terminal de diseño');
+        string(ref.node, 'Elemento conectado'); string(ref.pin, 'Patilla');
+        if (!Object.hasOwn(nodes, ref.node)) invalid('Una conexión de diseño apunta a un elemento que no existe.');
+      }
+      if (link.points !== undefined) {
+        if (!Array.isArray(link.points) || link.points.length > 10_000) invalid('Recorrido de diseño inválido.');
+        link.points.forEach(p => point(p, 'Recorrido de diseño'));
+      }
+      if (link.color !== undefined && (typeof link.color !== 'string' || !/^#(?:[\da-f]{3}|[\da-f]{4}|[\da-f]{6}|[\da-f]{8})$/i.test(link.color))) invalid('Color de diseño inválido.');
+      if (link.label !== undefined) string(link.label, 'Nombre de conexión');
     }
     sheets.push({ ...sheet, id, nodes: Object.entries(nodes).map(([nid, n]) => ({ ...record(n, 'Elemento'), id: nid })), wires: Object.entries(links).map(([wid, w]) => ({ ...record(w, 'Conexión'), id: wid })) } as unknown as LogicSheet);
   }

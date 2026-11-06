@@ -36,7 +36,7 @@ async function fixture() {
   const a = p.design.addNode(ic, 'in', 0.125, 4, { label: 'A' });
   const b = p.design.addNode(ic, 'not', 80, 0);
   const c = p.design.addNode(ic, 'out', 160, 0, { label: 'Y' });
-  p.design.addWire(ic, { node: a, pin: 'A' }, { node: b, pin: 'A' });
+  p.design.addWire(ic, { node: a, pin: 'A' }, { node: b, pin: 'A' }, { points: [{ x: 45.125, y: 14 }, { x: 45.125, y: 20 }], color: '#53cbb8', label: 'A' });
   p.design.addWire(ic, { node: b, pin: 'Y' }, { node: c, pin: 'A' });
   p.design.setSheet(ic, { order: [a, c], package: 8 });
   p.design.addNode(MAIN_SHEET, `ic:${ic}`, 123.25, -41.75, {}, 90);
