@@ -271,4 +271,13 @@ describe('aviso de versión nueva de la plantilla', () => {
     meta.set('template', { id: 'elevator-class', version: templateVersion(findTemplate('elevator-class')!) });
     expect(templateUpdate(meta, 'Ascensor con integrados de clase + GIGA')).toBe(null);
   });
+
+  it('la leyenda trae un nombre para cada color que usan los cables, con la paleta de Tinkercad', async () => {
+    const { WIRE_COLORS } = await import('../ui/geometry');
+    const t = elevatorClassTemplate();
+    const used = new Set(t.wires.map((w) => w.color));
+    expect([...used].every((c) => WIRE_COLORS.some((p) => p.value === c))).toBe(true);
+    expect(new Set(t.legend!.map((e) => e.color))).toEqual(used);
+    expect(t.legend!.every((e) => e.label.trim().length > 0)).toBe(true);
+  });
 });

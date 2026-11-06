@@ -23,7 +23,7 @@ export function templateSnapshot(t: Template): CircuitSnapshot {
 
 /** Huella del montaje de una plantilla: cambia cuando cambian sus piezas, cables o sketch. */
 export function templateVersion(t: Template) {
-  const text = JSON.stringify([t.parts, t.wires, t.sketch ?? '']);
+  const text = JSON.stringify([t.parts, t.wires, t.sketch ?? '', t.legend ?? []]);
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
   return (h >>> 0).toString(36);
@@ -42,6 +42,7 @@ export function templateUpdate(meta: { get(key: string): unknown }, name: string
 export function applyTemplate(project: Project, t: Template) {
   const snap = templateSnapshot(t);
   project.setMeta('template', { id: t.id, version: templateVersion(t) });
+  if (t.legend?.length) project.setMeta('wiring.legend', t.legend.map((e) => ({ color: e.color.toLowerCase(), colors: [e.color.toLowerCase()], label: e.label })));
   const ids = new Map<string, string>();
   project.setName(t.name);
   for (const p of snap.parts) ids.set(p.id, project.addPart(p.type, p.x, p.y, t.parts.find((q) => q.key === p.id)?.props ?? {}, p.rot));

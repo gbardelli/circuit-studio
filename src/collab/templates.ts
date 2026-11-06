@@ -32,6 +32,8 @@ export interface Template {
   parts: TemplatePart[];
   wires: TemplateWire[];
   sketch?: string;
+  /** Nombre de cada color de cable en la leyenda (se guarda en el circuito al crearlo; luego es editable). */
+  legend?: { color: string; label: string }[];
 }
 
 const RED = '#e5484d';

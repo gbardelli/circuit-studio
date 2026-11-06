@@ -45,6 +45,21 @@ const GROUP_NAMES = [
   { label: 'Relojes', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ'] },
   { label: 'Reinicio', names: ['RESET', '/RESET'] },
 ];
+/** Nombres de la leyenda: [color de Tinkercad, qué lleva]. */
+const LEGEND: [string, string][] = [
+  ['Rojo', '+5 V'],
+  ['Negro', 'GND'],
+  ['Naranja', '3,3 V del GIGA'],
+  ['Azul', 'Pulsadores de cabina y su codificador'],
+  ['Amarillo', 'Llamadas desde la pantalla'],
+  ['Verde', 'Sensores de planta y su codificador'],
+  ['Morado', 'Piso solicitado (destino)'],
+  ['Turquesa', 'Piso actual'],
+  ['Rosa', 'Control: ocupado, aceptar, llegó'],
+  ['Marrón', 'Reloj (NE555)'],
+  ['Gris', 'Segmentos de los displays'],
+  ['Blanco', 'Otras señales'],
+];
 const TINKERCAD_SIGNALS: Record<string, string> = Object.fromEntries(
   GROUP_NAMES.flatMap((g) => g.names.map((n) => [n, tinker(GROUP_COLOR[g.label])])),
 );
@@ -369,7 +384,12 @@ export function elevatorClassTemplate(): Template {
     sketch: ELEVATOR_CLASS_GIGA,
   }, TINKERCAD_SIGNALS);
   // 5 V (alimentación principal) en rojo y 3,3 V del GIGA en naranja; lo demás, al color de Tinkercad más cercano.
-  const tone = (c: string) => (c === WIRE.v5 ? tinker('Rojo') : c === WIRE.v33 ? tinker('Naranja') : nearestWireColor(c));
-  cached = { ...template, wires: template.wires.map((w) => ({ ...w, color: tone(w.color) })) };
+  // Los siete segmentos de cada display van en gris: así no se confunden con los colores de función.
+  const segments = new Set(Object.values(SEGMENT_COLORS));
+  const tone = (c: string) =>
+    c === WIRE.v5 ? tinker('Rojo') : c === WIRE.v33 ? tinker('Naranja') : segments.has(c) ? tinker('Gris') : nearestWireColor(c);
+  const wires = template.wires.map((w) => ({ ...w, color: tone(w.color) }));
+  const used = new Set(wires.map((w) => w.color));
+  cached = { ...template, wires, legend: LEGEND.filter(([label]) => used.has(tinker(label))).map(([label, name]) => ({ color: tinker(label), label: name })) };
   return structuredClone(cached);
 }

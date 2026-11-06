@@ -2713,7 +2713,7 @@
      "y": 50
     }
    ],
-   "color": "#f2862e"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2734,7 +2734,7 @@
      "y": 65
     }
    ],
-   "color": "#f2862e"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2759,7 +2759,7 @@
      "y": 160
     }
    ],
-   "color": "#2fbf71"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2788,7 +2788,7 @@
      "y": 175
     }
    ],
-   "color": "#22b8c4"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2813,7 +2813,7 @@
      "y": 160
     }
    ],
-   "color": "#3e7bfa"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2834,7 +2834,7 @@
      "y": 45
     }
    ],
-   "color": "#9b6bf2"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -2855,7 +2855,7 @@
      "y": 55
     }
    ],
-   "color": "#e86fb3"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4010,7 +4010,7 @@
      "y": 410
     }
    ],
-   "color": "#f2862e"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4031,7 +4031,7 @@
      "y": 425
     }
    ],
-   "color": "#f2862e"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4056,7 +4056,7 @@
      "y": 520
     }
    ],
-   "color": "#2fbf71"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4085,7 +4085,7 @@
      "y": 515
     }
    ],
-   "color": "#22b8c4"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4106,7 +4106,7 @@
      "y": 520
     }
    ],
-   "color": "#3e7bfa"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4127,7 +4127,7 @@
      "y": 405
     }
    ],
-   "color": "#9b6bf2"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -4148,7 +4148,7 @@
      "y": 415
     }
    ],
-   "color": "#e86fb3"
+   "color": "#8a8f98"
   },
   {
    "a": [
@@ -5737,6 +5737,52 @@
     }
    ],
    "color": "#2fbf71"
+  }
+ ],
+ "legend": [
+  {
+   "color": "#e5484d",
+   "label": "+5 V"
+  },
+  {
+   "color": "#26272b",
+   "label": "GND"
+  },
+  {
+   "color": "#f2862e",
+   "label": "3,3 V del GIGA"
+  },
+  {
+   "color": "#3e7bfa",
+   "label": "Pulsadores de cabina y su codificador"
+  },
+  {
+   "color": "#f5c518",
+   "label": "Llamadas desde la pantalla"
+  },
+  {
+   "color": "#2fbf71",
+   "label": "Sensores de planta y su codificador"
+  },
+  {
+   "color": "#9b6bf2",
+   "label": "Piso solicitado (destino)"
+  },
+  {
+   "color": "#22b8c4",
+   "label": "Piso actual"
+  },
+  {
+   "color": "#e86fb3",
+   "label": "Control: ocupado, aceptar, llegó"
+  },
+  {
+   "color": "#8b5a2b",
+   "label": "Reloj (NE555)"
+  },
+  {
+   "color": "#8a8f98",
+   "label": "Segmentos de los displays"
   }
  ]
 }
