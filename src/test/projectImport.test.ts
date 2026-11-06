@@ -1,13 +1,13 @@
 import * as Y from 'yjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { POST } from './index';
+import { POST } from '../../api/projects/index';
 
 const mocks = vi.hoisted(() => {
   const sql = Object.assign(vi.fn((strings: TemplateStringsArray, ...values: unknown[]) => ({ text: strings.join('?'), values })), { transaction: vi.fn().mockResolvedValue([]) });
   return { sql, ready: vi.fn(), roleFor: vi.fn(), requireUser: vi.fn() };
 });
-vi.mock('../_lib/db.js', () => mocks);
-vi.mock('../_lib/auth.js', () => ({ requireUser: mocks.requireUser, json: (body: unknown, status = 200) => new Response(JSON.stringify(body), { status }) }));
+vi.mock('../../api/_lib/db.js', () => mocks);
+vi.mock('../../api/_lib/auth.js', () => ({ requireUser: mocks.requireUser, json: (body: unknown, status = 200) => new Response(JSON.stringify(body), { status }) }));
 
 beforeEach(() => {
   vi.clearAllMocks();

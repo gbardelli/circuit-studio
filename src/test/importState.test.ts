@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
 import { describe, expect, it } from 'vitest';
-import { importState } from './importState';
+import { importState } from '../../api/_lib/importState';
 
 describe('server import state boundary', () => {
   it('accepts a complete Yjs document and derives its name from the document', () => {
