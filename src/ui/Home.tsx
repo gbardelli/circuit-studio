@@ -8,6 +8,7 @@ import { localUser } from '../collab/project';
 import type { CircuitSnapshot } from '../core/types';
 import { Logo, Wordmark } from './Logo';
 import { CircuitPreview } from './Preview';
+import { ImportProjectButton } from './ProjectFiles';
 
 interface Person {
   id: string;
@@ -399,6 +400,7 @@ export function Home() {
               )}
             </div>
             <span className="grow" />
+            <ImportProjectButton disabled={busy !== null} />
             <button className="btn primary" onClick={() => create()} disabled={busy !== null}>
               {busy === 'blank' ? <Loader2 size={15} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Plus size={15} strokeWidth={2.2} />} Nuevo circuito
             </button>

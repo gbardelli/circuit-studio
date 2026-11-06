@@ -9,6 +9,7 @@ import { Logo, Wordmark } from './Logo';
 import { PARTS } from '../parts';
 import { useUi } from './store';
 import { HistoryIcon, HistoryPanel } from './History';
+import { ProjectFileMenu } from './ProjectFiles';
 
 export function TopBar() {
   const { project, engine, detail } = useEditor();
@@ -109,6 +110,7 @@ export function TopBar() {
         </a>
         {!guiding && !project.readOnly && <PanelToggle panel="library" />}
         <span className="crumb-sep">/</span>
+        <ProjectFileMenu />
         <input
           className="project-name"
           value={name}

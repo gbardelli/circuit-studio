@@ -1,5 +1,6 @@
 import { json, requireUser } from '../_lib/auth.js';
 import { ready, roleFor, sql } from '../_lib/db.js';
+import { importState } from '../_lib/importState.js';
 
 const ID_RE = /^[A-Za-z0-9_-]{8,64}$/;
 
@@ -23,10 +24,24 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const user = await requireUser(req);
   if (!user) return json({ error: 'Inicia sesión' }, 401);
-  const body = (await req.json().catch(() => ({}))) as { id?: string; name?: string; duplicateOf?: string };
+  const body = (await req.json().catch(() => ({}))) as { id?: string; name?: string; duplicateOf?: string; initialState?: unknown };
+  let imported: ReturnType<typeof importState> | undefined;
+  if (body.initialState !== undefined) {
+    if (body.duplicateOf) return json({ error: 'No se puede importar y duplicar a la vez.' }, 400);
+    try { imported = importState(body.initialState); }
+    catch { return json({ error: 'El estado del proyecto no es válido o supera el tamaño permitido.' }, 400); }
+  }
   const id = body.id && ID_RE.test(body.id) ? body.id : crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-  const name = String(body.name ?? 'Circuito sin título').slice(0, 120);
+  const name = imported?.name ?? String(body.name ?? 'Circuito sin título').slice(0, 120);
   await ready();
+  if (imported) {
+    // The new private document and its owner must either both exist or neither exist.
+    await sql.transaction([
+      sql`INSERT INTO projects (id, name, owner_id, state, link_access) VALUES (${id}, ${name}, ${user.id}, ${imported.state}, 'none')`,
+      sql`INSERT INTO members (project_id, user_id, role, name, image) VALUES (${id}, ${user.id}, 'owner', ${user.name}, ${user.image})`,
+    ]);
+    return json({ id, name, role: 'owner' }, 201);
+  }
   if (body.duplicateOf) {
     // Copiar un circuito exige tener acceso a él; la copia es del usuario que la pide.
     if (!(await roleFor(body.duplicateOf, user))) return json({ error: 'No tienes acceso a este circuito' }, 403);
