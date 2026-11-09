@@ -1238,7 +1238,33 @@ const encoder148: ChipSpec<Record<string, never>> = {
   },
 };
 
+const readBufferOutputs = Array.from({ length: 8 }, (_, i) => `B${i + 1}`);
+const readBuffer245: ChipSpec = {
+  type: '74lvc245a-read',
+  part: '74LVC245A',
+  name: 'Buffer de lectura de 5 V a 3,3 V',
+  family: COMB,
+  description: 'SN74LVC245A a 3,3 V en sentido A hacia B. Entradas A tolerantes a 5,5 V. Conecta DIR a VCC y OE a GND.',
+  keywords: ['sn74lvc245a', 'adaptador de nivel', 'ttl', 'buffer'],
+  pins: ['DIR', ...readBufferOutputs.map((_, i) => `A${i + 1}`), 'GND', ...[...readBufferOutputs].reverse(), 'OE', 'VCC'],
+  desc: {
+    DIR: 'Sentido A hacia B: conectar a 3,3 V',
+    OE: 'Habilitación activa en bajo: conectar a GND',
+    VCC: 'Alimentación de 3,3 V',
+    ...Object.fromEntries(readBufferOutputs.flatMap((pin, i) => [
+      [`A${i + 1}`, 'Entrada lógica TTL, admite hasta 5,5 V'],
+      [pin, 'Salida lógica referida a la alimentación de 3,3 V'],
+    ])),
+  },
+  vcc: 'VCC', gnd: 'GND', minSupply: 2.7,
+  inputThresholds: { low: 0.8, high: 2 },
+  outputs: readBufferOutputs,
+  init: () => ({}),
+  evaluate: (io) => Object.fromEntries(readBufferOutputs.map((pin, i) => [pin, io.v('DIR') && !io.v('OE') ? io.v(`A${i + 1}`) : null])),
+};
+
 export const CHIPS: PartDef[] = [
+  chipDef(readBuffer245),
   ...gateChips.map((spec) => chipDef(spec)),
   ...gateChips.filter(spec => ['74hc00','74hc08','74hc32','74hc04'].includes(spec.type)).map(spec => chipDef(asLS(spec))),
   chipDef(register173),

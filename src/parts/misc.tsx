@@ -29,6 +29,7 @@ function ButtonRender({ part, onInput, preview, visual }: RenderProps) {
       ].map(([x, y]) => (
         <rect key={`${x}-${y}`} x={x - 1.2} y={y - 3} width={2.4} height={6} fill="#a8afb6" />
       ))}
+      <g transform={part.props.footprint === '5x5' ? 'translate(10 15) scale(1.8) translate(-10 -15)' : undefined}>
       <rect x={-3} y={2} width={26} height={26} rx={2} fill="url(#g-metal)" stroke="#727a82" strokeWidth={0.5} />
       <rect x={-1} y={4} width={22} height={22} rx={1.5} fill="#24262a" />
       <rect x={-0.5} y={4.5} width={21} height={21} rx={1.5} fill="url(#g-sheen)" stroke="#858a90" strokeOpacity="0.4" strokeWidth="0.4" />
@@ -55,6 +56,7 @@ function ButtonRender({ part, onInput, preview, visual }: RenderProps) {
         <circle cx={10} cy={15} r={down ? 7.2 : 7.8} fill={caps[color] ?? caps.red} />
         <circle cx={10} cy={15} r={down ? 5.6 : 6.2} fill="#fff" opacity={down ? 0.05 : 0.14} />
       </g>
+      </g>
     </g>
   );
 }
@@ -76,7 +78,7 @@ export const pushbutton: PartDef = {
     ['1a', '1b'],
     ['2a', '2b'],
   ],
-  bounds: () => ({ x: -4, y: -3, w: 28, h: 36 }),
+  bounds: (props) => props.footprint === '5x5' ? { x: -15, y: -10, w: 50, h: 50 } : { x: -4, y: -3, w: 28, h: 36 },
   fields: [
     {
       key: 'cap',
