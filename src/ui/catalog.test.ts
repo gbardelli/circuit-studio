@@ -15,6 +15,9 @@ describe('library navigation', () => {
     expect(sectionOf(PARTS.ldr)).toBe('inputs');
     expect(sectionOf(PARTS['hc-sr04'])).toBe('inputs');
     expect(sectionOf(PARTS['dip-switch-6'])).toBe('inputs');
+    expect(sectionOf(PARTS['pushbutton-large'])).toBe('inputs');
+    expect(PARTS['pushbutton-large'].defaults.footprint).toBe('5x5');
+    expect(PARTS['pushbutton-large'].pins(PARTS['pushbutton-large'].defaults)).toEqual(PARTS.pushbutton.pins(PARTS.pushbutton.defaults));
     expect(sectionOf(PARTS.l293d)).toBe('logic');
     expect(sectionOf(PARTS['bench-supply'])).toBe('power');
     const sensors = catalogGroups('inputs').find((group) => group.title === 'Sensores')!;

@@ -7,7 +7,7 @@ import { breadboardFull, breadboardHalf, breadboardMini } from './breadboard';
 import { capacitor, ceramicCapacitor, ldr, potentiometer, resistor } from './basic';
 import { buzzer, dcMotor, led, rgbLed, servo, sevenSegment } from './outputs';
 import { diode, hcsr04, lcd1602, mosfet, relay, tmp36 } from './extra';
-import { aaPack, battery9v, multimeter, npn, pushbutton, slideSwitch } from './misc';
+import { aaPack, battery9v, largePushbutton, multimeter, npn, pushbutton, slideSwitch } from './misc';
 import { CHIPS } from './chips';
 import { oscilloscope } from './scope';
 import { benchSupply, clockGen, dipSwitch4, dipSwitch6, dipSwitch, ledBar } from './supply';
@@ -41,6 +41,7 @@ export const PART_LIST: PartDef[] = [
   servo,
   dcMotor,
   pushbutton,
+  largePushbutton,
   slideSwitch,
   dipSwitch4,
   dipSwitch6,

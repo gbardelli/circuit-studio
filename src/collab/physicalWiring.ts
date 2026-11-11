@@ -8,7 +8,7 @@ export function componentBodies(parts: readonly PartData[]): RouteObstacle[] {
     let b = PARTS[p.type].bounds(p.props);
     if (/^(74|cd4|ne555|tlc555)/.test(p.type)) b = { x: b.x + 1, y: 3, w: b.w - 2, h: 24 };
     else if (p.type === 'resistor') b = { x: 9, y: -6, w: 22, h: 12 };
-    else if (p.type === 'pushbutton') b = { x: 0, y: 4, w: 20, h: 22 };
+    else if (p.type === 'pushbutton' && p.props.footprint !== '5x5') b = { x: 0, y: 4, w: 20, h: 22 };
     else if (p.type === 'led' || p.type === 'capacitor') b = { ...b, h: b.h - 10 };
     const corners = [{ x: b.x, y: b.y }, { x: b.x + b.w, y: b.y }, { x: b.x, y: b.y + b.h }, { x: b.x + b.w, y: b.y + b.h }].map(at => toWorld(p, at));
     const x = Math.min(...corners.map(c => c.x)), y = Math.min(...corners.map(c => c.y));

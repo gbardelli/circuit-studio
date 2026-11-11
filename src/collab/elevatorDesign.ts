@@ -85,11 +85,11 @@ export function elevatorDesign(sourceSnapshot: CircuitSnapshot) {
     const n = netOf(part, pin); names.set(n, label); attach(n, { node: node.id, pin: 'Y', out: true, sheet: main.id });
   };
   for (let f = 1; f <= 4; f++) {
-    const p = snapshot.parts.find(p => p.type === 'pushbutton' && String(p.props.label).startsWith(`PP${f}`));
+    const p = snapshot.parts.find(p => (p.type === 'pushbutton' || p.type === 'pushbutton-large') && String(p.props.label).startsWith(`PP${f}`));
     if (!p) throw new Error(`Falta PP${f}.`);
     source(`PP${f}`, `PP${f}`, p.id, f <= 2 ? '2b' : '2a', 80, 110 + (f - 1) * 50);
   }
-  const reset = snapshot.parts.find(p => p.type === 'pushbutton' && String(p.props.label).startsWith('RESET'));
+  const reset = snapshot.parts.find(p => (p.type === 'pushbutton' || p.type === 'pushbutton-large') && String(p.props.label).startsWith('RESET'));
   const sensors = snapshot.parts.find(p => p.type === 'dip-switch-4');
   const clock = byRef.get('U4');
   if (!reset || !sensors || !clock) throw new Error('Falta el reinicio, el sensor de planta o el reloj.');

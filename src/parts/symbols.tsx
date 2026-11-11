@@ -383,6 +383,7 @@ const SYMBOLS: Record<string, (orig: PartDef) => Symbol> = {
   potentiometer: () => POT_SYM,
   ldr: () => LDR_SYM,
   pushbutton: () => BUTTON_SYM,
+  'pushbutton-large': () => BUTTON_SYM,
   'slide-switch': () => SWITCH_SYM,
   'battery-9v': () => battery((p) => `${Number(p.voltage ?? 9)} V`),
   'aa-pack': () => battery((p) => `${1.5 * Number(p.cells ?? 2)} V`),

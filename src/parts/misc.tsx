@@ -101,6 +101,16 @@ export const pushbutton: PartDef = {
   Render: ButtonRender,
 };
 
+/** Same four terminals and simulation as the existing pushbutton, with the 5×5 footprint used by projects. */
+export const largePushbutton: PartDef = {
+  ...pushbutton,
+  type: 'pushbutton-large',
+  name: 'Pulsador grande (5×5)',
+  description: 'Pulsador táctil grande de cuatro patillas para protoboard. Mantén pulsado para cerrar el contacto durante la simulación.',
+  keywords: ['pulsador', 'botón', 'boton', 'grande', '5x5', 'button', 'táctil', 'tactil'],
+  defaults: { ...pushbutton.defaults, footprint: '5x5' },
+};
+
 // ── Interruptor deslizante SPDT ───────────────────────────────────────────────
 const SlideRender = memo(function SlideRender({ part, onInput, preview }: RenderProps) {
   const on = Boolean(part.props.on);

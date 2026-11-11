@@ -46,6 +46,18 @@ async function fixture() {
 }
 
 describe('portable project files', () => {
+  it('preserves a large pushbutton and its 5×5 footprint across export and import', async () => {
+    const p = await open();
+    const id = p.addPart('pushbutton-large', 100, 120, { cap: 'blue' });
+    const doc = projectFileDocument(parseProjectFile(exportProjectFile(p)));
+    const q = await open();
+    try {
+      Y.applyUpdate(q.doc, Y.encodeStateAsUpdate(doc));
+      expect(q.snapshot().parts.find(part => part.id === id)).toMatchObject({
+        type: 'pushbutton-large', x: 100, y: 120, props: { cap: 'blue', footprint: '5x5' },
+      });
+    } finally { doc.destroy(); }
+  });
   it('preserves edited logic wire colors and chip layouts through export', async () => {
     const { p, ic } = await fixture();
     const instance = p.design.sheet(MAIN_SHEET)!.nodes.find(n => n.kind === `ic:${ic}`)!;

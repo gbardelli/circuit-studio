@@ -88,10 +88,10 @@ const MAX_TRUNK = 320;
 /** Ancho de la banderola de una etiqueta (igual que en el lienzo). */
 export const flagWidth = (text: string) => Math.max(18, text.length * 3.55 + 9) + 4;
 
-const SOURCES = new Set(['pushbutton', 'slide-switch', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8', 'clock', 'mb102-power', 'bench-supply', 'battery-9v', 'aa-pack', 'potentiometer', 'ldr']);
+const SOURCES = new Set(['pushbutton', 'pushbutton-large', 'slide-switch', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8', 'clock', 'mb102-power', 'bench-supply', 'battery-9v', 'aa-pack', 'potentiometer', 'ldr']);
 const PASSIVES = new Set(['resistor', 'capacitor', 'diode']);
 const SINKS = new Set(['led', 'seven-segment', 'buzzer', 'dc-motor', 'servo', 'rgb-led', 'led-bar-10']);
-const SYMBOL_TYPES = new Set(['bench-supply', 'resistor', 'led', 'diode', 'capacitor', 'potentiometer', 'ldr', 'pushbutton', 'slide-switch', 'battery-9v', 'aa-pack', 'npn', 'mosfet-n', 'dc-motor', 'buzzer', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8']);
+const SYMBOL_TYPES = new Set(['bench-supply', 'resistor', 'led', 'diode', 'capacitor', 'potentiometer', 'ldr', 'pushbutton', 'pushbutton-large', 'slide-switch', 'battery-9v', 'aa-pack', 'npn', 'mosfet-n', 'dc-motor', 'buzzer', 'dip-switch-4', 'dip-switch-6', 'dip-switch-8']);
 
 function kindOf(type: string): Kind {
   if (SOURCES.has(type)) return 'source';
@@ -131,7 +131,7 @@ function refPrefix(type: string): string {
   if (type === 'led' || type === 'diode' || type === 'rgb-led') return 'D';
   if (type === 'seven-segment' || type === 'led-bar-10') return 'DS';
   if (type === 'npn' || type === 'mosfet-n') return 'Q';
-  if (type === 'pushbutton' || /switch/.test(type)) return 'SW';
+  if (type === 'pushbutton' || type === 'pushbutton-large' || /switch/.test(type)) return 'SW';
   if (type === 'clock') return 'G';
   if (type === 'bench-supply' || type === 'mb102-power' || type.startsWith('battery') || type === 'aa-pack') return 'BT';
   if (def.category === 'Lógica' || def.category === 'Integrados') return 'U';

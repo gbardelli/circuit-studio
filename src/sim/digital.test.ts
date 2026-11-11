@@ -11,14 +11,14 @@ function circuit(parts: PartData[], links: [string, string, string, string][]): 
 }
 
 describe('scheduled digital simulation', () => {
-  it('propagates a short input pulse through six gates within the scheduled events', () => {
+  it.each(['pushbutton', 'pushbutton-large'])('propagates a short %s pulse through six gates', (buttonType) => {
     const links: [string, string, string, string][] = [
       ['source', '+', 'gates', 'VCC'], ['source', '-', 'gates', 'GND'],
       ['button', '1a', 'gates', 'GND'], ['button', '2a', 'gates', '1A'],
       ['pullup', '1', 'gates', 'VCC'], ['pullup', '2', 'gates', '1A'],
     ];
     for (let n = 1; n < 6; n++) links.push(['gates', `${n}Y`, 'gates', `${n + 1}A`]);
-    const snap = circuit([part('source', 'bench-supply', 1000), part('gates', '74hc04', 2000), part('button', 'pushbutton', 3000), part('pullup', 'resistor', 4000, { resistance: 10000 })], links);
+    const snap = circuit([part('source', 'bench-supply', 1000), part('gates', '74hc04', 2000), part('button', buttonType, 3000), part('pullup', 'resistor', 4000, { resistance: 10000 })], links);
     const engine = new SimEngine();
     engine.update(snap); engine.start({ manual: true }); engine.tick(.02);
     for (let n = 0; n < 3; n++) {
