@@ -12,6 +12,10 @@ const BRAND_ASSETS: Record<string, string> = {
   Vishay: 'vishay.png',
   'KOA Speer': 'koa.png',
   Kingbright: 'kingbright.png',
+  Adafruit: 'adafruit.png',
+  SparkFun: 'sparkfun.png',
+  'Tower Pro': 'towerpro.png',
+  'B&K Precision': 'bkprecision.png',
 };
 
 export function ComponentReferences({ type }: { type: string }) {
@@ -21,11 +25,12 @@ export function ComponentReferences({ type }: { type: string }) {
 
     {references.map(reference => <div className="reference-item" key={`${reference.manufacturer}-${reference.partNumber}`}>
       <div className="reference-heading">
-        {BRAND_ASSETS[reference.manufacturer] && <img className={`reference-brand${reference.manufacturer === 'Kingbright' ? ' reference-brand-dark' : ''}`} src={`/manufacturers/${BRAND_ASSETS[reference.manufacturer]}`} alt="" />}
+        {BRAND_ASSETS[reference.manufacturer] && <img className={`reference-brand${['Kingbright', 'Adafruit', 'B&K Precision'].includes(reference.manufacturer) ? ' reference-brand-dark' : ''}`} src={`/manufacturers/${BRAND_ASSETS[reference.manufacturer]}`} alt="" />}
         <div className="reference-identity">
-          <span className="reference-maker">{reference.manufacturer}</span>
+          <span className="reference-maker">{reference.manufacturer}{reference.sourceRole === 'supplier' ? ' · Proveedor' : ''}</span>
           <strong>{reference.partNumber}</strong>
           {reference.example && <span className="reference-example">Ejemplo{reference.note ? ` · ${reference.note}` : ' de componente físico'}</span>}
+          {!reference.example && reference.note && <span className="reference-example">{reference.note}</span>}
         </div>
       </div>
       <a href={reference.datasheet} target="_blank" rel="noopener noreferrer" aria-label={`${reference.documentType === 'drawing' ? 'Abrir plano de dimensiones' : reference.documentType === 'archive' ? 'Abrir ficha archivada' : reference.documentType === 'product' ? 'Abrir documentación' : 'Abrir datasheet PDF'} de ${reference.partNumber}, en otra pestaña`}>

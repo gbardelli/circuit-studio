@@ -5,6 +5,7 @@ export interface ManufacturerReference {
   documentType?: 'product' | 'archive' | 'drawing';
   example?: boolean;
   note?: string;
+  sourceRole?: 'supplier';
 }
 
 // Documents describe real reference parts, not a guarantee that the simulation
@@ -138,3 +139,84 @@ MANUFACTURER_REFERENCES['74hc74'].push({
   manufacturer: 'Nexperia', partNumber: '74HC74',
   datasheet: 'https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf',
 });
+
+// Generic simulator parts do not identify a real product. These are clearly
+// marked examples, and retailer IDs are not presented as manufacturer SKUs.
+const supplierExamples: Record<string, [string, string, string?]> = {
+  'breadboard-full': ['239', 'Protoboard de 830 puntos'],
+  'breadboard-half': ['64', 'Protoboard de 400 puntos'],
+  'breadboard-mini': ['65', 'Protoboard mini de 170 puntos'],
+  capacitor: ['2193', '100 µF, 16 V'],
+  'capacitor-ceramic': ['753', '100 nF'],
+  'led-bar-10': ['1923', 'Barra de 10 LED, verde amarillento'],
+  'lcd-1602': ['181', 'LCD paralelo de 16 × 2'],
+  buzzer: ['160', 'Piezoeléctrico PS1240'],
+  'dc-motor': ['711', 'Motor DC tamaño 130'],
+  pushbutton: ['367', 'Pulsador de 6 mm'],
+  'slide-switch': ['805', 'Interruptor deslizante SPDT'],
+  potentiometer: ['356', '10 kΩ'],
+  ldr: ['161', 'Fotorresistencia CdS'],
+  'battery-9v': ['1321', 'Pila alcalina de 9 V'],
+  'aa-pack': ['830', 'Portapilas de 4 × AA'],
+  multimeter: ['850', 'Multímetro digital'],
+  oscilloscope: ['4652', 'Osciloscopio USB Analog Discovery 2'],
+};
+for (const [type, [id, note]] of Object.entries(supplierExamples)) {
+  MANUFACTURER_REFERENCES[type] = [{
+    manufacturer: 'Adafruit', partNumber: `Producto ${id}`,
+    datasheet: `https://www.adafruit.com/product/${id}`,
+    documentType: 'product', sourceRole: 'supplier', example: true, note,
+  }];
+}
+MANUFACTURER_REFERENCES['level-converter-4'] = [{
+  manufacturer: 'SparkFun', partNumber: 'BOB-12009',
+  datasheet: 'https://www.sparkfun.com/sparkfun-logic-level-converter-bi-directional.html', documentType: 'product',
+}];
+MANUFACTURER_REFERENCES['level-converter-8'] = [{
+  manufacturer: 'Texas Instruments', partNumber: 'TXS0108E',
+  datasheet: 'https://www.ti.com/lit/ds/symlink/txs0108e.pdf', note: 'Ficha del integrado del módulo',
+}];
+MANUFACTURER_REFERENCES['hc-sr04'] = [{
+  manufacturer: 'SparkFun', partNumber: 'SEN-15569',
+  datasheet: 'https://www.sparkfun.com/ultrasonic-distance-sensor-hc-sr04.html',
+  documentType: 'product', sourceRole: 'supplier', example: true, note: 'HC-SR04 de 5 V',
+}];
+MANUFACTURER_REFERENCES['mosfet-n'] = [{
+  manufacturer: 'Infineon', partNumber: 'IRLZ44N',
+  datasheet: 'https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlz44n-datasheet-en.pdf',
+}];
+MANUFACTURER_REFERENCES.npn = [{
+  manufacturer: 'onsemi', partNumber: '2N2222A',
+  datasheet: 'https://www.onsemi.com/download/data-sheet/pdf/2n2222a-d.pdf', example: true,
+}];
+MANUFACTURER_REFERENCES.servo = [{
+  manufacturer: 'Tower Pro', partNumber: 'SG90 Digital',
+  datasheet: 'https://towerpro.com.tw/product/sg90-7/', documentType: 'product', example: true,
+}];
+MANUFACTURER_REFERENCES['74138'] = [{
+  manufacturer: 'Texas Instruments', partNumber: 'SN74138',
+  datasheet: 'https://www.bitsavers.org/components/ti/_dataBooks/1981_TI_The_TTL_Data_Book_For_Design_Engineers_2ed.pdf',
+  documentType: 'archive', note: 'Libro TTL, sección 7-134',
+}];
+MANUFACTURER_REFERENCES['mb102-power'] = [{
+  manufacturer: 'SunFounder', partNumber: 'MB102',
+  datasheet: 'https://www.sunfounder.com/products/mb102-breadboard-power-module',
+  documentType: 'product', sourceRole: 'supplier', example: true, note: 'Las variantes pueden diferir',
+}];
+MANUFACTURER_REFERENCES['bench-supply'] = [{
+  manufacturer: 'B&K Precision', partNumber: '1685B',
+  datasheet: 'https://www.bkprecision.com/products/power-supplies/1685B',
+  documentType: 'product', example: true, note: '1–60 V, hasta 5 A',
+}];
+MANUFACTURER_REFERENCES['seven-segment'] = [{
+  manufacturer: 'Kingbright', partNumber: 'SC56-11SURKWA',
+  datasheet: 'https://www.kingbrightusa.com/product.asp?catalog_name=LED&product_id=SC56-11SURKWA',
+  documentType: 'product', example: true, note: 'Rojo, cátodo común',
+}];
+for (const count of [4, 6, 8]) {
+  MANUFACTURER_REFERENCES[`dip-switch-${count}`] = [{
+    manufacturer: 'OMRON', partNumber: `A6S-${count}101-H`,
+    datasheet: 'https://omronfs.omron.com/en_US/ecb/products/pdf/en-a6s.pdf',
+    example: true, note: 'Montaje superficial',
+  }];
+}

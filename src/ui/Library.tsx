@@ -109,9 +109,9 @@ function PartLibrary() {
           {families.map((group) => <option key={group.title} value={group.title}>{group.title}</option>)}
         </select>}
         {section && !searching && manufacturers.length > 0 && <label className="lib-maker-filter">
-          <span>Referencias por fabricante</span>
+          <span>Fabricante o proveedor</span>
           <select className="input lib-family" value={manufacturer} onChange={event => { setManufacturer(event.target.value); if (body.current) body.current.scrollTop = 0; }}>
-            <option value="">Todos los fabricantes</option>
+            <option value="">Todos</option>
             {manufacturers.map(name => <option key={name} value={name}>{name}</option>)}
           </select>
         </label>}

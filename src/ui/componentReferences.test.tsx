@@ -40,4 +40,20 @@ describe('manufacturer document display', () => {
     expect(renderer!.root.findByType('a').props['aria-label']).toContain('plano de dimensiones');
     act(() => renderer!.unmount());
   });
+  it('identifies the store as a supplier and the generic part as an example', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="breadboard-full" />); });
+    const html = JSON.stringify(renderer!.toJSON());
+    expect(html).toContain('Proveedor');
+    expect(html).toContain('Ejemplo');
+    expect(renderer!.root.findByType('a').props.href).toBe('https://www.adafruit.com/product/239');
+    expect(renderer!.root.findByType('img').props.src).toBe('/manufacturers/adafruit.png');
+    act(() => renderer!.unmount());
+  });
+  it('links the simulated eight-channel adapter to the actual TXS0108E', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="level-converter-8" />); });
+    expect(renderer!.root.findByType('a').props.href).toBe('https://www.ti.com/lit/ds/symlink/txs0108e.pdf');
+    act(() => renderer!.unmount());
+  });
 });
