@@ -27,3 +27,5 @@ La colaboración combina Yjs, Redis y PostgreSQL. En api/_lib/room.ts algunas es
 El código usa Clerk. Verificar si el despliegue tiene una instancia de producción y planificar la transición de usuarios. Better Auth es abierto, pero requiere operar autenticación, correo y recuperación; migrar sin validar identidad y titularidad podría impedir el acceso a proyectos. Evaluar una migración ensayada con respaldo antes de cambiar cuentas reales.
 
 Vercel, Redis, PostgreSQL y autenticación deben evaluarse como un sistema, con monitoreo y pruebas de carga y recuperación. No se han medido disponibilidad, capacidad ni costos del despliegue institucional. Definir objetivos y responsables con la universidad.
+
+El logotipo de Arduino se muestra en contexto descriptivo junto a la referencia de su placa. Recurso original: https://content.arduino.cc/brand/arduino-color.svg. Política: https://www.arduino.cc/en/trademark/guides/arduino-and-community-logos/. Los logotipos de otros fabricantes requieren verificar sus condiciones para este uso antes de incorporarlos.

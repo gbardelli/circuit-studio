@@ -5,7 +5,6 @@ import { DesignPalette } from './design/DesignPalette';
 import type { PartDef } from '../parts/types';
 import { scorePart } from '../parts/search';
 import { MANUFACTURER_REFERENCES } from '../parts/manufacturerReferences';
-import { ComponentReferences } from './ComponentReferences';
 import { useUi } from './store';
 import { CATALOG_SECTIONS, catalogGroups, partLabel, type CatalogSection } from './catalog';
 
@@ -94,7 +93,7 @@ function PartLibrary() {
     <aside className="library" aria-label="Componentes">
       <div className="lib-head">
         <div className="search">
-          <Search size={14} />
+          <Search size={16} />
           <input id="lib-search" className="input" placeholder="Buscar componente o fabricante" value={query}
             onChange={(e) => { setQuery(e.target.value); if (body.current) body.current.scrollTop = 0; }} aria-label="Buscar componentes" />
           {query ? <button className="icon-btn" onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={13} /></button> : <kbd>/</kbd>}
@@ -171,10 +170,6 @@ const PartCard = memo(function PartCard({
           {label.detail && <span className="card-detail">{label.detail}</span>}
         </span>
       </button>
-      {MANUFACTURER_REFERENCES[def.type]?.length > 0 && <details className="card-docs" onPointerDown={event => event.stopPropagation()}>
-        <summary>Documentación <span>{MANUFACTURER_REFERENCES[def.type].length}</span></summary>
-        <ComponentReferences type={def.type} />
-      </details>}
       <button className={`fav ${fav ? 'on' : ''}`} onClick={onFav} aria-label={fav ? 'Quitar de favoritos' : 'Añadir a favoritos'} aria-pressed={fav}>
         <Star size={12} fill={fav ? 'currentColor' : 'none'} />
       </button>

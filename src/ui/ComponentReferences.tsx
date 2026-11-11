@@ -7,9 +7,12 @@ export function ComponentReferences({ type }: { type: string }) {
   return <div className="reference-list">
     <p className="reference-intro">Referencias de la familia. Verifica la variante y el fabricante de tu pieza.</p>
     {references.map(reference => <div className="reference-item" key={`${reference.manufacturer}-${reference.partNumber}`}>
-      <div className="reference-identity">
-        <span className="reference-maker">{reference.manufacturer}</span>
-        <strong>{reference.partNumber}</strong>
+      <div className="reference-heading">
+        {reference.manufacturer === 'Arduino' && <img className="reference-logo" src="/manufacturers/arduino.svg" alt="" />}
+        <div className="reference-identity">
+          <span className="reference-maker">{reference.manufacturer}</span>
+          <strong>{reference.partNumber}</strong>
+        </div>
       </div>
       <a href={reference.datasheet} target="_blank" rel="noopener noreferrer" aria-label={`${reference.documentType === 'product' ? 'Abrir documentación' : 'Abrir datasheet PDF'} de ${reference.partNumber}, en otra pestaña`}>
         <FileText size={14} aria-hidden="true" />
