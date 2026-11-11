@@ -4,6 +4,8 @@ import { PARTS, PART_LIST, getPartsVersion, subscribeParts } from '../parts';
 import { DesignPalette } from './design/DesignPalette';
 import type { PartDef } from '../parts/types';
 import { scorePart } from '../parts/search';
+import { MANUFACTURER_REFERENCES } from '../parts/manufacturerReferences';
+import { ComponentReferences } from './ComponentReferences';
 import { useUi } from './store';
 import { CATALOG_SECTIONS, catalogGroups, partLabel, type CatalogSection } from './catalog';
 
@@ -40,6 +42,7 @@ function PartLibrary() {
   const [query, setQuery] = useState('');
   const [section, setSection] = useState<CatalogSection | null>(null);
   const [family, setFamily] = useState('');
+  const [manufacturer, setManufacturer] = useState('');
   const [favs, setFavs] = useState(() => readList('cs-favs'));
   const [recent, setRecent] = useState(() => readList('cs-recent'));
   const body = useRef<HTMLDivElement>(null);
@@ -48,12 +51,23 @@ function PartLibrary() {
   const searching = Boolean(query.trim());
   const selected = CATALOG_SECTIONS.find((item) => item.id === section);
   const families = useMemo(() => section ? catalogGroups(section) : [], [section, partsVersion]);
-  const results = useMemo(() => PART_LIST.map((d) => ({ d, score: scorePart(d, query) }))
+  const manufacturers = useMemo(() => [...new Set(families.flatMap(group => group.items.flatMap(def => (MANUFACTURER_REFERENCES[def.type] ?? []).map(ref => ref.manufacturer))))].sort(), [families]);
+  const results = useMemo(() => PART_LIST.map((d) => {
+    const references = MANUFACTURER_REFERENCES[d.type] ?? [];
+    const term = query.trim().toLocaleLowerCase();
+    const tokens = term.split(/\s+/);
+    const referenceMatch = term && references.some(reference => {
+      const text = `${reference.manufacturer} ${reference.partNumber} ${d.name} ${d.partNumber ?? ''}`.toLocaleLowerCase();
+      return tokens.every(token => text.includes(token));
+    });
+    return { d, score: Math.max(scorePart(d, query), referenceMatch ? 20 : 0) };
+  })
     .filter(({ score }) => score > 0).sort((a, b) => b.score - a.score).map(({ d }) => d), [query, partsVersion]);
   const byIds = (ids: string[]) => [...new Set(ids)].flatMap((id) => PARTS[id] ? [PARTS[id]] : []);
   const groups = searching
     ? [{ title: `Resultados · ${results.length}`, items: results }]
     : section ? families.filter((group) => !family || group.title === family)
+      .map(group => ({ ...group, items: manufacturer ? group.items.filter(def => MANUFACTURER_REFERENCES[def.type]?.some(ref => ref.manufacturer === manufacturer)) : group.items }))
     : [
       { title: 'Favoritos', items: byIds(favs) },
       { title: 'Recientes', items: byIds(recent.filter((id) => !favs.includes(id))) },
@@ -62,6 +76,7 @@ function PartLibrary() {
   const navigate = (next: CatalogSection | null) => {
     setSection(next);
     setFamily('');
+    setManufacturer('');
     if (body.current) body.current.scrollTop = 0;
   };
   const remember = (type: string) => {
@@ -80,7 +95,7 @@ function PartLibrary() {
       <div className="lib-head">
         <div className="search">
           <Search size={14} />
-          <input id="lib-search" className="input" placeholder="Buscar nombre o referencia" value={query}
+          <input id="lib-search" className="input" placeholder="Buscar componente o fabricante" value={query}
             onChange={(e) => { setQuery(e.target.value); if (body.current) body.current.scrollTop = 0; }} aria-label="Buscar componentes" />
           {query ? <button className="icon-btn" onClick={() => setQuery('')} aria-label="Limpiar búsqueda"><X size={13} /></button> : <kbd>/</kbd>}
         </div>
@@ -91,9 +106,16 @@ function PartLibrary() {
         {section === 'logic' && !searching && <select className="input lib-family" aria-label="Familia de integrados" value={family} onChange={(e) => {
           setFamily(e.target.value); if (body.current) body.current.scrollTop = 0;
         }}>
-          <option value="">Todas las familias</option>
+          <option value="">Todas las funciones</option>
           {families.map((group) => <option key={group.title} value={group.title}>{group.title}</option>)}
         </select>}
+        {section && !searching && manufacturers.length > 0 && <label className="lib-maker-filter">
+          <span>Referencias por fabricante</span>
+          <select className="input lib-family" value={manufacturer} onChange={event => { setManufacturer(event.target.value); if (body.current) body.current.scrollTop = 0; }}>
+            <option value="">Todos los fabricantes</option>
+            {manufacturers.map(name => <option key={name} value={name}>{name}</option>)}
+          </select>
+        </label>}
       </div>
       <div className="lib-body" ref={body}>
         {!section && !searching && <nav className="lib-categories" aria-label="Categorías de componentes">
@@ -107,12 +129,13 @@ function PartLibrary() {
           })}
         </nav>}
         {groups.filter((group) => group.items.length).map((group) => <section key={group.title} className="lib-section">
-          {(!family || searching) && <h3>{group.title}</h3>}
+          {(!family || searching) && <h3>{group.title}{!searching && <span className="lib-count">{group.items.length}</span>}</h3>}
           <div className="cards">{group.items.map((def) => <PartCard key={def.type} def={def}
             armed={placing === def.type} fav={favs.includes(def.type)} onFav={() => toggleFav(def.type)}
             onPick={() => { remember(def.type); setPlacing(placing === def.type ? null : def.type); useUi.getState().setCompactPanel(null); }}
             onDragStart={() => remember(def.type)} />)}</div>
         </section>)}
+        {!searching && section && groups.every(group => group.items.length === 0) && <div className="empty lib-empty-filters"><span>No hay componentes para estos filtros.</span><button className="btn sm" onClick={() => { setManufacturer(''); setFamily(''); }}>Limpiar filtros</button></div>}
         {searching && results.length === 0 && <div className="empty"><Search size={18} />No hay componentes con «{query.trim()}»</div>}
       </div>
     </aside>
@@ -148,6 +171,10 @@ const PartCard = memo(function PartCard({
           {label.detail && <span className="card-detail">{label.detail}</span>}
         </span>
       </button>
+      {MANUFACTURER_REFERENCES[def.type]?.length > 0 && <details className="card-docs" onPointerDown={event => event.stopPropagation()}>
+        <summary>Documentación <span>{MANUFACTURER_REFERENCES[def.type].length}</span></summary>
+        <ComponentReferences type={def.type} />
+      </details>}
       <button className={`fav ${fav ? 'on' : ''}`} onClick={onFav} aria-label={fav ? 'Quitar de favoritos' : 'Añadir a favoritos'} aria-pressed={fav}>
         <Star size={12} fill={fav ? 'currentColor' : 'none'} />
       </button>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Code2, Copy, Flame, TriangleAlert, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
 import { formatSI, parseSI } from '../core/units';
 import { PARTS } from '../parts';
+import { ComponentReferences } from './ComponentReferences';
 import { schematicPlacement } from './schematic';
 import { LED_COLORS } from '../parts/outputs';
 import type { Field } from '../parts/types';
@@ -250,6 +251,13 @@ function PartInspector({ part }: { part: PartData }) {
             <h2>{def.name}</h2>
             <p className="insp-desc" title={def.description}>{def.description}</p>
           </div>
+        </div>
+        <div className="insp-section component-reference">
+          <h3>Modelo y documentación</h3>
+          <p className="component-reference-model">Modelo en Circuit Studio: <strong>{def.model}</strong></p>
+          <p className="component-reference-note">El modelo simula una aproximación. El documento describe la pieza física y sus límites, que pueden ser distintos a los del simulador.</p>
+          {part.type.startsWith('74ls') && <p className="component-reference-note">El modelo lógico no reproduce por completo las corrientes de entrada ni el consumo interno. Verifica ambos en el datasheet.</p>}
+          <ComponentReferences type={part.type} />
         </div>
         {simRunning && damageOf(part.id) && <DamageNote damage={damageOf(part.id)!} />}
         <PartNameField part={part} placeholder={def.partNumber ?? def.name} board={part.type.startsWith('breadboard')} readOnly={project.readOnly} onChange={(value) => project.setProp(part.id, 'label', value)} />

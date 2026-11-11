@@ -609,3 +609,10 @@
 .connection-legend .swatch-palette { position: absolute; bottom: calc(100% + 8px); left: -6px; z-index: 50; display: grid; grid-template-columns: repeat(6, 18px); gap: 6px; padding: 8px; background: #15181d; border: 1px solid #343a44; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.45); }
 .connection-legend .swatch-palette button { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
 .connection-legend .swatch-palette button:hover, .connection-legend .swatch-palette button[aria-selected='true'] { outline: 2px solid #eef2f7; outline-offset: 1px; }
+
+.component-reference-model, .component-reference-note { margin: 0 0 8px; line-height: 1.45; font-size: 13px; }
+.component-reference-note, .component-reference-source small { color: var(--text-muted, #a9b1bd); }
+.component-reference-source { display: grid; gap: 6px; margin-top: 12px; font-size: 13px; line-height: 1.4; }
+.component-reference-source a { color: #9fc8ff; text-decoration: underline; text-underline-offset: 3px; }
+.component-reference-source a:focus-visible { outline: 2px solid #9fc8ff; outline-offset: 3px; }
+.component-reference-source small { font-size: 12px; }

@@ -1266,7 +1266,7 @@ const readBuffer245: ChipSpec = {
 export const CHIPS: PartDef[] = [
   chipDef(readBuffer245),
   ...gateChips.map((spec) => chipDef(spec)),
-  ...gateChips.filter(spec => ['74hc00','74hc08','74hc32','74hc04'].includes(spec.type)).map(spec => chipDef(asLS(spec))),
+  ...gateChips.filter(spec => ['74hc00','74hc02','74hc04','74hc08','74hc10','74hc20','74hc27','74hc32'].includes(spec.type)).map(spec => chipDef(asLS(spec))),
   chipDef(register173),
   // Mismo registro en CMOS HC: umbrales CMOS y alimentación de 2 a 6 V.
   chipDef({ ...register173, type: '74hc173', part: '74HC173', inputThresholds: undefined, minSupply: undefined,
