@@ -181,6 +181,21 @@ MANUFACTURER_REFERENCES['hc-sr04'] = [{
   datasheet: 'https://www.sparkfun.com/ultrasonic-distance-sensor-hc-sr04.html',
   documentType: 'product', sourceRole: 'supplier', example: true, note: 'HC-SR04 de 5 V',
 }];
+MANUFACTURER_REFERENCES['rgb-led'] = [{
+  manufacturer: 'SparkFun', partNumber: 'COM-16911',
+  datasheet: 'https://www.sparkfun.com/rgb-led-clear-lens-common-cathode-5mm.html',
+  documentType: 'product', sourceRole: 'supplier', example: true, note: 'LED RGB de cátodo común',
+}];
+MANUFACTURER_REFERENCES['lcd-i2c'] = [{
+  manufacturer: 'Addicore', partNumber: 'AD156',
+  datasheet: 'https://www.addicore.com/collections/electronics/products/1602-16x2-character-lcd-with-i2c-backpack',
+  documentType: 'product', sourceRole: 'supplier', example: true, note: 'LCD 16 × 2 con adaptador I²C',
+}];
+MANUFACTURER_REFERENCES.relay = [{
+  manufacturer: 'Seeed Studio', partNumber: 'Grove Relay V1.2',
+  datasheet: 'https://wiki.seeedstudio.com/Grove-Relay/',
+  documentType: 'product', example: true, note: 'Módulo de relé, versión 1.2',
+}];
 MANUFACTURER_REFERENCES['mosfet-n'] = [{
   manufacturer: 'Infineon', partNumber: 'IRLZ44N',
   datasheet: 'https://www.infineon.com/assets/row/public/documents/24/49/infineon-irlz44n-datasheet-en.pdf',

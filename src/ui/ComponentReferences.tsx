@@ -16,6 +16,7 @@ const BRAND_ASSETS: Record<string, string> = {
   SparkFun: 'sparkfun.png',
   'Tower Pro': 'towerpro.png',
   'B&K Precision': 'bkprecision.png',
+  'Seeed Studio': 'seeed.png',
 };
 
 export function ComponentReferences({ type }: { type: string }) {
@@ -25,7 +26,7 @@ export function ComponentReferences({ type }: { type: string }) {
 
     {references.map(reference => <div className="reference-item" key={`${reference.manufacturer}-${reference.partNumber}`}>
       <div className="reference-heading">
-        {BRAND_ASSETS[reference.manufacturer] && <img className={`reference-brand${['Kingbright', 'Adafruit', 'B&K Precision'].includes(reference.manufacturer) ? ' reference-brand-dark' : ''}`} src={`/manufacturers/${BRAND_ASSETS[reference.manufacturer]}`} alt="" />}
+        {BRAND_ASSETS[reference.manufacturer] && <img className={`reference-brand${['Kingbright', 'Adafruit', 'B&K Precision', 'Seeed Studio'].includes(reference.manufacturer) ? ' reference-brand-dark' : ''}`} src={`/manufacturers/${BRAND_ASSETS[reference.manufacturer]}`} alt="" />}
         <div className="reference-identity">
           <span className="reference-maker">{reference.manufacturer}{reference.sourceRole === 'supplier' ? ' · Proveedor' : ''}</span>
           <strong>{reference.partNumber}</strong>
