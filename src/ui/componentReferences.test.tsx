@@ -20,4 +20,24 @@ describe('manufacturer document display', () => {
     expect(links[2].props['aria-label']).toContain('archivada');
     act(() => renderer!.unmount());
   });
+  it('shows several verified sources and logos for 74HC00', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="74hc00" />); });
+    expect(renderer!.root.findAllByType('a').length).toBeGreaterThanOrEqual(3);
+    expect(renderer!.root.findAllByType('img').length).toBe(renderer!.root.findAllByType('a').length);
+    act(() => renderer!.unmount());
+  });
+  it('identifies a generic LED reference as a red example', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="led" />); });
+    expect(JSON.stringify(renderer!.toJSON())).toContain('LED rojo');
+    expect(JSON.stringify(renderer!.toJSON())).toContain('Ejemplo');
+    act(() => renderer!.unmount());
+  });
+  it('labels dimensional drawings accurately', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="nextion-28" />); });
+    expect(renderer!.root.findByType('a').props['aria-label']).toContain('plano de dimensiones');
+    act(() => renderer!.unmount());
+  });
 });

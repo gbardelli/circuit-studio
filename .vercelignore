@@ -1,0 +1,16 @@
+work
+docs/logisim
+node_modules
+dist
+data
+tools
+*.log
+.vercel
+.env*
+!.env.example
+.agents/
+.claude/
+.continue/
+.kiro/
+.trae/
+.windsurf/

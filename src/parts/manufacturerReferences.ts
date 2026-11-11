@@ -2,7 +2,9 @@ export interface ManufacturerReference {
   manufacturer: string;
   partNumber: string;
   datasheet: string;
-  documentType?: 'product' | 'archive';
+  documentType?: 'product' | 'archive' | 'drawing';
+  example?: boolean;
+  note?: string;
 }
 
 // Documents describe real reference parts, not a guarantee that the simulation
@@ -95,3 +97,44 @@ MANUFACTURER_REFERENCES['74ls47'].push(
   { manufacturer: 'Fairchild Semiconductor', partNumber: 'DM74LS47', datasheet: 'https://www.alldatasheet.com/datasheet-pdf/view/51080/FAIRCHILD/74LS47.html', documentType: 'archive' },
   { manufacturer: 'ON Semiconductor', partNumber: 'SN74LS47', datasheet: 'https://www.datasheetq.com/en/pdf-html/172773/ON-Semiconductor/1page/74LS47.html', documentType: 'archive' },
 );
+
+// Manufacturer references are examples for generic simulated components.
+MANUFACTURER_REFERENCES.resistor = [
+  { manufacturer: 'KOA Speer', partNumber: 'CF1/4', datasheet: 'https://www.koaspeer.com/products/leaded-resistors/general-purpose-leaded/cf/', documentType: 'product', example: true },
+  { manufacturer: 'Vishay', partNumber: 'CMF Industrial', datasheet: 'https://www.vishay.com/en/product/31018/', documentType: 'product', example: true },
+];
+MANUFACTURER_REFERENCES.led = [
+  { manufacturer: 'Kingbright', partNumber: 'WP1503ID', datasheet: 'https://www.kingbrightusa.com/images/catalog/SPEC/WP1503ID.pdf', example: true, note: 'LED rojo' },
+];
+MANUFACTURER_REFERENCES.diode = [
+  { manufacturer: 'Vishay', partNumber: '1N4007', datasheet: 'https://www.vishay.com/docs/88503/1n4001.pdf' },
+  { manufacturer: 'Diodes Incorporated', partNumber: '1N4007', datasheet: 'https://www.diodes.com/datasheet/download/1N4007.pdf' },
+];
+MANUFACTURER_REFERENCES['nextion-28'] = [
+  { manufacturer: 'Nextion', partNumber: 'NX3224T028', datasheet: 'https://cdn.nextion.tech/wp-content/uploads/2022/03/NX3224T028_dimension.pdf', documentType: 'drawing' },
+];
+
+for (const number of ['00', '04', '08', '14', '32', '86', '125', '595', '164', '138']) {
+  MANUFACTURER_REFERENCES[`74hc${number}`].push({
+    manufacturer: 'Diodes Incorporated', partNumber: `74HC${number}`,
+    datasheet: `https://www.diodes.com/datasheet/download/74HC${number}.pdf`,
+  });
+}
+for (const number of ['00', '02', '04', '08']) {
+  MANUFACTURER_REFERENCES[`74hc${number}`].push({
+    manufacturer: 'onsemi', partNumber: `MM74HC${number}`,
+    datasheet: `https://www.onsemi.com/pdf/datasheet/mm74hc${number}-d.pdf`,
+  });
+}
+MANUFACTURER_REFERENCES['74hc32'].push({
+  manufacturer: 'Nexperia', partNumber: '74HC32',
+  datasheet: 'https://www.nexperia.com/products/analog-logic-ics/logic/gates/or-gates/series/74HC32-74HCT32.html', documentType: 'product',
+});
+MANUFACTURER_REFERENCES['74hc138'].push({
+  manufacturer: 'Nexperia', partNumber: '74HC138',
+  datasheet: 'https://www.nexperia.com/products/analog-logic-ics/logic/decoders-and-demultiplexers-digital-multiplexers/decoders-demultiplexers/series/74HC138-74HCT138.html', documentType: 'product',
+});
+MANUFACTURER_REFERENCES['74hc74'].push({
+  manufacturer: 'Nexperia', partNumber: '74HC74',
+  datasheet: 'https://assets.nexperia.com/documents/data-sheet/74HC_HCT74.pdf',
+});

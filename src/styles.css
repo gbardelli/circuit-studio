@@ -2849,3 +2849,6 @@ body.lib-dragging * {
 .model-explainer { margin-top: 10px; font-size: 13px; color: var(--text-2); }
 .model-explainer summary { cursor: pointer; width: fit-content; }
 .model-explainer p { margin: 8px 0 0; line-height: 1.45; }
+.reference-brand { display: block; flex: 0 0 auto; width: 92px; height: 32px; padding: 5px 6px; border-radius: 5px; background: #fff; object-fit: contain; }
+.reference-brand-dark { background: #15181e; }
+.reference-example { color: var(--text-2); font-size: 11px; line-height: 1.3; }
