@@ -15,9 +15,9 @@ export function ComponentReferences({ type }: { type: string }) {
           <strong>{reference.partNumber}</strong>
         </div>
       </div>
-      <a href={reference.datasheet} target="_blank" rel="noopener noreferrer" aria-label={`${reference.documentType === 'product' ? 'Abrir documentación' : 'Abrir datasheet PDF'} de ${reference.partNumber}, en otra pestaña`}>
+      <a href={reference.datasheet} target="_blank" rel="noopener noreferrer" aria-label={`${reference.documentType === 'archive' ? 'Abrir ficha archivada' : reference.documentType === 'product' ? 'Abrir documentación' : 'Abrir datasheet PDF'} de ${reference.partNumber}, en otra pestaña`}>
         <FileText size={14} aria-hidden="true" />
-        {reference.documentType === 'product' ? 'Ver documentación' : 'Ver datasheet PDF'}
+        {reference.documentType === 'archive' ? 'Ver ficha archivada' : reference.documentType === 'product' ? 'Ver documentación' : 'Ver datasheet PDF'}
         <ArrowUpRight size={13} aria-hidden="true" />
       </a>
     </div>)}

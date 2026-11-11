@@ -10,4 +10,14 @@ describe('manufacturer document display', () => {
     expect(renderer!.root.findByType('img').props.src).toBe('/manufacturers/texas-instruments.svg');
     act(() => renderer!.unmount());
   });
+  it('distinguishes the official 74LS47 datasheet from historical archives', () => {
+    let renderer: ReturnType<typeof create>;
+    act(() => { renderer = create(<ComponentReferences type="74ls47" />); });
+    const links = renderer!.root.findAllByType('a');
+    expect(links).toHaveLength(3);
+    expect(links[0].props.href).toContain('ti.com');
+    expect(links[1].props['aria-label']).toContain('archivada');
+    expect(links[2].props['aria-label']).toContain('archivada');
+    act(() => renderer!.unmount());
+  });
 });

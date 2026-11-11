@@ -31,3 +31,5 @@ Vercel, Redis, PostgreSQL y autenticación deben evaluarse como un sistema, con 
 El logotipo de Arduino se muestra en contexto descriptivo junto a la referencia de su placa. Recurso original: https://content.arduino.cc/brand/arduino-color.svg. Política: https://www.arduino.cc/en/trademark/guides/arduino-and-community-logos/. Los logotipos de otros fabricantes requieren verificar sus condiciones para este uso antes de incorporarlos.
 
 Logo de Texas Instruments: recurso original https://www.ti.com/etc/designs/ti/images/ui/ic-logo.svg. Se muestra para identificar la fuente documental; las marcas pertenecen a sus titulares y no indican patrocinio.
+
+Las fichas históricas de Fairchild Semiconductor y ON Semiconductor para el 74LS47 enlazan a archivos de terceros. Su inclusión no indica disponibilidad comercial ni afiliación con Circuit Studio.

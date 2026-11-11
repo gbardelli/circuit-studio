@@ -2,7 +2,7 @@ export interface ManufacturerReference {
   manufacturer: string;
   partNumber: string;
   datasheet: string;
-  documentType?: 'product';
+  documentType?: 'product' | 'archive';
 }
 
 // Documents describe real reference parts, not a guarantee that the simulation
@@ -89,3 +89,9 @@ const verifiedReferences: Record<string, ManufacturerReference> = {
 for (const [type, reference] of Object.entries(verifiedReferences)) {
   MANUFACTURER_REFERENCES[type] = [reference];
 }
+
+// Historical manufacturer datasheets hosted by independent archives.
+MANUFACTURER_REFERENCES['74ls47'].push(
+  { manufacturer: 'Fairchild Semiconductor', partNumber: 'DM74LS47', datasheet: 'https://www.alldatasheet.com/datasheet-pdf/view/51080/FAIRCHILD/74LS47.html', documentType: 'archive' },
+  { manufacturer: 'ON Semiconductor', partNumber: 'SN74LS47', datasheet: 'https://www.datasheetq.com/en/pdf-html/172773/ON-Semiconductor/1page/74LS47.html', documentType: 'archive' },
+);
