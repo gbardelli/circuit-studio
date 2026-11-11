@@ -163,6 +163,7 @@ export class DesignDoc {
       if (!n || props[key] === value) return;
       props[key] = value;
       n.set('props', props);
+      if (['flip', 'blockWidth', 'pinSpacing', 'inputOrder', 'outputOrder'].includes(key)) this.clearRoutes(sheet, new Set([id]));
     });
   }
 
@@ -184,6 +185,18 @@ export class DesignDoc {
     const id = shortId();
     this.tx(() => this.wireMap(sheet)?.set(id, { ...layout, a, b }));
     return id;
+  }
+
+  setWireColor(sheet: string, ids: string[], color: string | null) {
+    this.tx(() => {
+      const wires = this.wireMap(sheet);
+      for (const id of ids) {
+        const wire = wires?.get(id);
+        if (!wire) continue;
+        const { color: _previous, ...rest } = wire;
+        wires?.set(id, color ? { ...rest, color } : rest);
+      }
+    });
   }
 
   /** Borra elementos (con sus cables) y cables sueltos. */

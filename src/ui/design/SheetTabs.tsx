@@ -1,5 +1,5 @@
 import { Cpu, LayoutGrid, Plus } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MAIN_SHEET } from '../../logic/types';
 import { useEditor } from '../context';
 import { useDesignUi } from './store';
@@ -27,6 +27,7 @@ export function SheetTabs() {
   const create = useCreateIc();
   const ics = sheets.filter((s) => s.kind === 'ic');
   const list = useRef<HTMLDivElement>(null);
+  const [overflow, setOverflow] = useState(false);
   // La hoja abierta siempre queda a la vista, aunque haya muchas.
   useEffect(() => {
     list.current?.querySelector<HTMLElement>('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -34,7 +35,10 @@ export function SheetTabs() {
   // El borde se desvanece solo si quedan pestañas ocultas a la derecha.
   const fade = () => {
     const el = list.current;
-    if (el) el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+    if (el) {
+      el.classList.toggle('more', el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+      setOverflow(el.scrollWidth > el.clientWidth + 1);
+    }
   };
   useEffect(() => {
     const el = list.current;
@@ -43,7 +47,7 @@ export function SheetTabs() {
     const ro = new ResizeObserver(fade);
     ro.observe(el);
     return () => ro.disconnect();
-  });
+  }, [ics.length]);
   return (
     <div className="float d-sheets">
       <div
@@ -65,6 +69,11 @@ export function SheetTabs() {
           </button>
         ))}
       </div>
+      {overflow && <select className="d-sheet-picker" aria-label="Ir a una hoja" value="" onChange={e => { if (e.target.value) setSheet(e.target.value); }}>
+        <option value="">Todas las hojas</option>
+        <option value={MAIN_SHEET}>Principal</option>
+        {ics.map(s => <option key={s.id} value={s.id}>{s.name || s.part || 'Integrado'}</option>)}
+      </select>}
       {!project.readOnly && (
         <button className="d-new" onClick={create} title="Nuevo integrado propio" aria-label="Nuevo integrado propio">
           <Plus size={14} />

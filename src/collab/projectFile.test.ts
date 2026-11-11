@@ -46,6 +46,23 @@ async function fixture() {
 }
 
 describe('portable project files', () => {
+  it('preserves edited logic wire colors and chip layouts through export', async () => {
+    const { p, ic } = await fixture();
+    const instance = p.design.sheet(MAIN_SHEET)!.nodes.find(n => n.kind === `ic:${ic}`)!;
+    const wire = p.design.sheet(ic)!.wires[0];
+    p.design.setProp(MAIN_SHEET, instance.id, 'outputOrder', JSON.stringify(['out-b', 'out-a']));
+    p.design.setProp(MAIN_SHEET, instance.id, 'titleSize', 14);
+    p.design.setWireColor(ic, [wire.id], '#123456');
+    const doc = projectFileDocument(parseProjectFile(exportProjectFile(p)));
+    const q = await open();
+    try {
+      Y.applyUpdate(q.doc, Y.encodeStateAsUpdate(doc));
+      expect(q.design.sheet(MAIN_SHEET)!.nodes.find(n => n.id === instance.id)?.props).toMatchObject({ titleSize: 14, outputOrder: '["out-b","out-a"]' });
+      expect(q.design.sheet(ic)!.wires.find(w => w.id === wire.id)?.color).toBe('#123456');
+      q.design.setWireColor(ic, [wire.id], null);
+      expect(q.design.sheet(ic)!.wires.find(w => w.id === wire.id)?.color).toBeUndefined();
+    } finally { doc.destroy(); }
+  });
   it('round-trips every persisted field, exact geometry, custom ICs, programs and metadata into fresh CRDT identities', async () => {
     const { p, r, board } = await fixture();
     const original = exportProjectFile(p);

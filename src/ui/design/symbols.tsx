@@ -69,7 +69,7 @@ function Gate({ kind, h, st }: { kind: string; h: number; st: SymbolState }) {
   );
 }
 
-function Box({ w, h, title, pins, st, accent }: { w: number; h: number; title: string; pins: Placed['pins']; st: SymbolState; accent?: string }) {
+function Box({ w, h, title, pins, st, accent, titlePosition = 'above', titleSize = 9 }: { w: number; h: number; title: string; pins: Placed['pins']; st: SymbolState; accent?: string; titlePosition?: string; titleSize?: number }) {
   const left = pins.filter((p) => p.x <= 0);
   const right = pins.filter((p) => p.x >= w);
   const top = pins.filter((p) => p.y <= 0 && p.x > 0 && p.x < w);
@@ -106,8 +106,8 @@ function Box({ w, h, title, pins, st, accent }: { w: number; h: number; title: s
         ))}
       </g>
       {left.some((p) => p.id === 'CLK') && <path d={`M10 ${left.find((p) => p.id === 'CLK')!.y - 5}l7 5l-7 5`} fill="none" stroke={INK} strokeWidth={1.5} />}
-      {title && (
-        <text x={w / 2} y={-5} textAnchor="middle" fontFamily={FONT} fontSize={8.5} fontWeight={600} fill={INK}>
+      {title && titlePosition !== 'hidden' && (
+        <text x={w / 2} y={titlePosition === 'inside' ? 12 : titlePosition === 'below' ? h + titleSize + 3 : -5} textAnchor="middle" fontFamily={FONT} fontSize={titleSize} fontWeight={600} fill={INK}>
           {title}
         </text>
       )}
@@ -234,7 +234,8 @@ export const LogicSymbol = memo(function LogicSymbol({ placed, st }: { placed: P
       </g>
     );
   const title = k === 'dff' ? 'D' : k === 'jkff' ? 'JK' : k === 'tff' ? 'T' : k === 'srlatch' ? 'SR' : placed.def.name;
-  return <Box w={w} h={h} title={k.startsWith('chip:') || k.startsWith('ic:') ? title : ''} pins={pins} st={st} accent={k.startsWith('ic:') ? 'var(--d-ic)' : undefined} />;
+  const titleSize = Math.max(7, Math.min(20, Number(node.props.titleSize) || 9));
+  return <Box w={w} h={h} title={k.startsWith('chip:') || k.startsWith('ic:') ? title : ''} pins={pins} st={st} accent={k.startsWith('ic:') ? 'var(--d-ic)' : undefined} titlePosition={String(node.props.titlePosition ?? 'above')} titleSize={titleSize} />;
 });
 
 /** Miniatura para la paleta: el símbolo centrado y sin valores. */

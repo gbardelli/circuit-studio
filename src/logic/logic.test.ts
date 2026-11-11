@@ -4,6 +4,7 @@ import { fixture } from '../test/electrical';
 import { icParts, icIssues, packagePins, registerIcs } from './ic';
 import { LogicSim, icDependencies, truthTable } from './sim';
 import { IC_PREFIX, type LogicNode, type LogicSheet, type LogicWire } from './types';
+import { elementDef } from './elements';
 
 let seq = 0;
 function sheet(id: string, kind: 'main' | 'ic', nodes: Omit<LogicNode, 'x' | 'y' | 'rot'>[], wires: [string, string, string, string][], meta: Partial<LogicSheet> = {}): LogicSheet {
@@ -43,6 +44,25 @@ const halfAdder = sheet(
 );
 
 describe('simulador lógico del modo diseño', () => {
+  it('reorders visual pins without changing their identity or electrical order', () => {
+    const lookup = (id: string) => id === halfAdder.id ? halfAdder : undefined;
+    const def = elementDef(`${IC_PREFIX}${halfAdder.id}`, lookup)!;
+    const ctx = { sheet: lookup, instantiate: () => null };
+    const original = def.pins({}, ctx);
+    const edited = def.pins({ blockWidth: 150, pinSpacing: 30, outputOrder: JSON.stringify(['c', 's']) }, ctx);
+    expect(edited.map(p => p.id)).toEqual(original.map(p => p.id));
+    expect(edited.find(p => p.id === 'c')).toMatchObject({ x: 150, y: 20 });
+    expect(edited.find(p => p.id === 's')).toMatchObject({ x: 150, y: 50 });
+    expect(def.size({ blockWidth: 150, pinSpacing: 30 }, ctx)).toEqual({ w: 150, h: 70 });
+    const main = sheet('main', 'main', [
+      { id: 'a', kind: 'in', props: {} }, { id: 'b', kind: 'in', props: {} },
+      { id: 'chip', kind: `${IC_PREFIX}${halfAdder.id}`, props: { outputOrder: JSON.stringify(['c', 's']) } },
+      { id: 'sum', kind: 'out', props: {} }, { id: 'carry', kind: 'out', props: {} },
+    ], [['a', 'Y', 'chip', 'a'], ['b', 'Y', 'chip', 'b'], ['chip', 's', 'sum', 'A'], ['chip', 'c', 'carry', 'A']]);
+    const sim = new LogicSim(main, lookup);
+    sim.setSource('a', 1); sim.setSource('b', 0);
+    expect([sim.value('sum', 'A'), sim.value('carry', 'A')]).toEqual([1, 0]);
+  });
   it('propaga puertas y entradas interactivas', () => {
     const sim = new LogicSim(halfAdder, () => undefined);
     for (const [a, b, s, c] of [

@@ -397,10 +397,19 @@ export function chipPins(spec: ChipSpec<unknown>) {
 }
 
 /** Con «flip» las entradas pasan a la derecha y las salidas a la izquierda; los rótulos siguen derechos. */
-function blockPins(inputs: { id: string; label?: string }[], outputs: { id: string; label?: string }[], flip = false): LogicPinDef[] {
+export function visualPinOrder(pins: { id: string }[], value: unknown): string[] {
+  let saved: unknown = [];
+  try { if (typeof value === 'string') saved = JSON.parse(value); } catch { /* Ignore malformed legacy data. */ }
+  const ids = pins.map(p => p.id);
+  const valid = Array.isArray(saved) ? saved.filter((id): id is string => typeof id === 'string' && ids.includes(id)) : [];
+  return [...new Set([...valid, ...ids])];
+}
+function blockPins(inputs: { id: string; label?: string }[], outputs: { id: string; label?: string }[], props: Props): LogicPinDef[] {
+  const flip = flipped(props), width = blockWidth(props), spacing = pinSpacing(props);
+  const ins = visualPinOrder(inputs, props.inputOrder), outs = visualPinOrder(outputs, props.outputOrder);
   return [
-    ...inputs.map((p, i) => ({ ...p, x: flip ? 100 : 0, y: 20 + i * 20, dir: 'in' as const })),
-    ...outputs.map((p, i) => ({ ...p, x: flip ? 0 : 100, y: 20 + i * 20, dir: 'out' as const })),
+    ...inputs.map((p) => ({ ...p, x: flip ? width : 0, y: 20 + ins.indexOf(p.id) * spacing, dir: 'in' as const })),
+    ...outputs.map((p) => ({ ...p, x: flip ? 0 : width, y: 20 + outs.indexOf(p.id) * spacing, dir: 'out' as const })),
   ];
 }
 const flipped = (p: Props) => num(p.flip, 0) === 1;
@@ -413,7 +422,18 @@ const FLIP_FIELD: LogicField = {
     { value: '1', label: 'Entradas a la derecha' },
   ],
 };
-const blockSize = (inputs: number, outputs: number) => ({ w: 100, h: 20 * Math.max(inputs, outputs, 1) + 20 });
+const blockWidth = (p: Props) => Math.max(100, Math.min(240, Math.round(num(p.blockWidth, 100) / 10) * 10));
+const pinSpacing = (p: Props) => Math.max(20, Math.min(40, Math.round(num(p.pinSpacing, 20) / 10) * 10));
+const blockSize = (inputs: number, outputs: number, p: Props) => ({ w: blockWidth(p), h: pinSpacing(p) * (Math.max(inputs, outputs, 1) - 1) + 40 });
+const BLOCK_FIELDS: LogicField[] = [FLIP_FIELD,
+  { key: 'blockWidth', label: 'Ancho del integrado', kind: 'number', min: 100, max: 240, step: 10 },
+  { key: 'pinSpacing', label: 'Espacio entre patillas', kind: 'number', min: 20, max: 40, step: 10 },
+  { key: 'titlePosition', label: 'Posición del título', kind: 'select', options: [
+    { value: 'above', label: 'Arriba' }, { value: 'inside', label: 'Dentro' }, { value: 'below', label: 'Abajo' }, { value: 'hidden', label: 'Oculto' },
+  ] },
+  { key: 'titleSize', label: 'Tamaño del título', kind: 'number', min: 7, max: 20, step: 1 },
+];
+const BLOCK_DEFAULTS = { flip: 0, blockWidth: 100, pinSpacing: 20, titlePosition: 'above', titleSize: 9 };
 
 function chipElement(type: string, spec: ChipSpec<unknown>): ElementDef {
   const { inputs, outputs } = chipPins(spec);
@@ -423,10 +443,10 @@ function chipElement(type: string, spec: ChipSpec<unknown>): ElementDef {
     group: 'Integrados 74HC y CD4000',
     description: `${spec.name}. ${spec.description}`,
     keywords: [type, spec.part.toLowerCase(), ...spec.keywords],
-    defaults: { flip: 0 },
-    fields: [FLIP_FIELD],
-    size: () => blockSize(inputs.length, outputs.length),
-    pins: (p) => blockPins(inputs.map((id) => ({ id })), outputs.map((id) => ({ id })), flipped(p)),
+    defaults: BLOCK_DEFAULTS,
+    fields: BLOCK_FIELDS,
+    size: (p) => blockSize(inputs.length, outputs.length, p),
+    pins: (p) => blockPins(inputs.map((id) => ({ id })), outputs.map((id) => ({ id })), p),
     behavior: () => {
       let state = spec.init();
       let prev: Record<string, boolean> = {};
@@ -483,14 +503,14 @@ function icElement(sheet: LogicSheet): ElementDef {
     group: 'Mis integrados',
     description: sheet.description || sheet.name,
     keywords: [sheet.name.toLowerCase(), sheet.part.toLowerCase(), 'integrado', 'propio', 'custom'],
-    defaults: { flip: 0 },
-    fields: [FLIP_FIELD],
-    size: () => blockSize(ins.length, outs.length),
+    defaults: BLOCK_DEFAULTS,
+    fields: BLOCK_FIELDS,
+    size: (p) => blockSize(ins.length, outs.length, p),
     pins: (p) =>
       blockPins(
         ins.map((n) => ({ id: n.id, label: pinName(n, signals.indexOf(n)) })),
         outs.map((n) => ({ id: n.id, label: pinName(n, signals.indexOf(n)) })),
-        flipped(p),
+        p,
       ),
     behavior: (_p, ctx) => {
       const inner = ctx.instantiate(sheet.id);

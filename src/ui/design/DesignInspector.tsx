@@ -2,7 +2,7 @@
 // un integrado propio: nombre, referencia, encapsulado, orden de patillas y tabla de verdad.
 import { ArrowDown, ArrowUp, CircuitBoard, Cpu, PackagePlus, RotateCw, Trash2 } from 'lucide-react';
 import { useMemo, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { elementDef, icSignals, pinName } from '../../logic/elements';
+import { elementDef, icSignals, pinName, visualPinOrder } from '../../logic/elements';
 import { DIP_SIZES, icIssues, packagePins, packageSize } from '../../logic/ic';
 import { truthTable } from '../../logic/sim';
 import { IC_PREFIX, MAIN_SHEET, type Bit, type LogicSheet } from '../../logic/types';
@@ -11,6 +11,8 @@ import { useUi } from '../store';
 import { useCreateIc } from './SheetTabs';
 import { useDesignUi } from './store';
 import { useLookup, useSheet } from './useLogic';
+import { drawCtx } from './geometry';
+import { WIRE_COLORS } from '../geometry';
 
 export function DesignInspector() {
   const sheetId = useDesignUi((s) => s.sheet);
@@ -70,6 +72,7 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
           ) : f.kind === 'number' ? (
             <div className="d-number">
               <input
+                className="input"
                 id={`d-${f.key}`}
                 type="number"
                 min={f.min}
@@ -104,6 +107,7 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
           </button>
         </div>
       )}
+      {(isIc || node.kind.startsWith('chip:')) && <PinOrderEditor sheet={sheet} id={id} />}
       <div className="insp-section actions">
         <button className="btn sm" onClick={() => project.design.rotateNodes(sheet.id, [id])} title="Girar · R">
           <RotateCw size={14} /> Girar
@@ -123,6 +127,42 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
   );
 }
 
+function PinOrderEditor({ sheet, id }: { sheet: LogicSheet; id: string }) {
+  const { project } = useEditor();
+  const lookup = useLookup();
+  const node = sheet.nodes.find(n => n.id === id)!;
+  const def = elementDef(node.kind, lookup);
+  if (!def) return null;
+  const pins = def.pins(node.props, drawCtx(lookup));
+  const groups = [
+    { name: 'Entradas', dir: 'in', key: 'inputOrder' },
+    { name: 'Salidas', dir: 'out', key: 'outputOrder' },
+  ] as const;
+  return <div className="insp-section"><h3>Posición de las patillas</h3>
+    {groups.map(group => {
+      const available = pins.filter(p => p.dir === group.dir);
+      const order = visualPinOrder(available, node.props[group.key]);
+      if (order.length < 2) return null;
+      const move = (i: number, delta: number) => {
+        const next = [...order], other = i + delta;
+        if (other < 0 || other >= next.length) return;
+        [next[i], next[other]] = [next[other], next[i]];
+        project.design.setProp(sheet.id, id, group.key, JSON.stringify(next));
+      };
+      return <div key={group.key} className="d-pin-group"><span className="label">{group.name}</span><ol className="d-order">
+        {order.map((pinId, i) => {
+          const name = available.find(p => p.id === pinId)?.label ?? pinId;
+          return <li key={pinId}>
+            <span className="d-pin-name">{name}</span>
+            <button className="icon-btn" disabled={project.readOnly || i === 0} onClick={() => move(i, -1)} aria-label={`Subir ${name}`}><ArrowUp size={14} /></button>
+            <button className="icon-btn" disabled={project.readOnly || i === order.length - 1} onClick={() => move(i, 1)} aria-label={`Bajar ${name}`}><ArrowDown size={14} /></button>
+          </li>;
+        })}
+      </ol></div>;
+    })}
+  </div>;
+}
+
 function SelectionInspector({ sheet, nodes, wires }: { sheet: LogicSheet; nodes: string[]; wires: string[] }) {
   const { project } = useEditor();
   const create = useCreateIc();
@@ -138,6 +178,10 @@ function SelectionInspector({ sheet, nodes, wires }: { sheet: LogicSheet; nodes:
       <p className="insp-hint">
         {nodes.length} {nodes.length === 1 ? 'elemento' : 'elementos'} · {wires.length} {wires.length === 1 ? 'cable' : 'cables'}
       </p>
+      {wires.length > 0 && <div className="insp-section"><h3>Color de {wires.length === 1 ? 'cable' : 'cables'}</h3>
+        <div className="swatches">{WIRE_COLORS.map(c => <button key={c.value} className="swatch" style={{ background: c.value }} aria-label={c.label} title={c.label} disabled={project.readOnly} aria-pressed={wires.every(id => sheet.wires.find(w => w.id === id)?.color?.toLowerCase() === c.value.toLowerCase())} onClick={() => project.design.setWireColor(sheet.id, wires, c.value)} />)}</div>
+        <button className="btn sm" disabled={project.readOnly} onClick={() => project.design.setWireColor(sheet.id, wires, null)}>Color automático</button>
+      </div>}
       {nodes.length > 0 && !project.readOnly && (
         <div className="insp-section">
           <button
