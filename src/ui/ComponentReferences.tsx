@@ -3,12 +3,13 @@ import { MANUFACTURER_REFERENCES } from '../parts/manufacturerReferences';
 
 export function ComponentReferences({ type }: { type: string }) {
   const references = MANUFACTURER_REFERENCES[type] ?? [];
-  if (!references.length) return <p className="reference-empty">Aún no hay documentación de fabricante verificada para este componente.</p>;
+  if (!references.length) return <p className="reference-empty">Sin ficha de fabricante verificada.</p>;
   return <div className="reference-list">
-    <p className="reference-intro">Referencias de la familia. Verifica la variante y el fabricante de tu pieza.</p>
+
     {references.map(reference => <div className="reference-item" key={`${reference.manufacturer}-${reference.partNumber}`}>
       <div className="reference-heading">
         {reference.manufacturer === 'Arduino' && <img className="reference-logo" src="/manufacturers/arduino.svg" alt="" />}
+        {reference.manufacturer === 'Texas Instruments' && <img className="reference-logo-ti" src="/manufacturers/texas-instruments.svg" alt="" />}
         <div className="reference-identity">
           <span className="reference-maker">{reference.manufacturer}</span>
           <strong>{reference.partNumber}</strong>

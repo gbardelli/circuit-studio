@@ -72,3 +72,20 @@ for (const [type, partNumber] of Object.entries(additionalTiReferences)) {
     datasheet: `https://www.ti.com/lit/ds/symlink/${partNumber.toLowerCase()}.pdf`,
   }];
 }
+
+const verifiedReferences: Record<string, ManufacturerReference> = {
+  '74lvc245a-read': { manufacturer: 'Texas Instruments', partNumber: 'SN74LVC245A', datasheet: 'https://www.ti.com/lit/ds/symlink/sn74lvc245a.pdf' },
+  '74hc173': { manufacturer: 'Texas Instruments', partNumber: 'CD74HC173', datasheet: 'https://www.ti.com/lit/ds/symlink/cd74hc173.pdf' },
+  '74ls74': { manufacturer: 'Texas Instruments', partNumber: 'SN74LS74A', datasheet: 'https://www.ti.com/lit/ds/symlink/sn74ls74a.pdf' },
+  '7473': { manufacturer: 'Texas Instruments', partNumber: 'SN7473', datasheet: 'https://www.ti.com/lit/ds/symlink/sn54ls73a.pdf' },
+  '7475': { manufacturer: 'Texas Instruments', partNumber: 'SN7475', datasheet: 'https://www.ti.com/lit/ds/symlink/sn74ls75.pdf' },
+  '74153': { manufacturer: 'Texas Instruments', partNumber: 'SN74153', datasheet: 'https://www.ti.com/lit/ds/symlink/sn74ls153.pdf' },
+  '74148': { manufacturer: 'Texas Instruments', partNumber: 'SN74148', datasheet: 'https://www.ti.com/lit/ds/symlink/sn54ls148.pdf' },
+  '74ls47': { manufacturer: 'Texas Instruments', partNumber: 'SN74LS47', datasheet: 'https://www.ti.com/lit/ds/symlink/sn74ls47.pdf' },
+  '74hc283': { manufacturer: 'Texas Instruments', partNumber: 'CD74HC283', datasheet: 'https://www.ti.com/lit/ds/symlink/cd74hc283.pdf' },
+  'tmp36': { manufacturer: 'Analog Devices', partNumber: 'TMP36', datasheet: 'https://www.analog.com/en/products/tmp36.html', documentType: 'product' },
+  'giga-display-shield': { manufacturer: 'Arduino', partNumber: 'GIGA Display Shield', datasheet: 'https://docs.arduino.cc/hardware/giga-display-shield/', documentType: 'product' },
+};
+for (const [type, reference] of Object.entries(verifiedReferences)) {
+  MANUFACTURER_REFERENCES[type] = [reference];
+}

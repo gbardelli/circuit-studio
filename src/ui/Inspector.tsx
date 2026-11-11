@@ -254,10 +254,13 @@ function PartInspector({ part }: { part: PartData }) {
         </div>
         <div className="insp-section component-reference">
           <h3>Modelo y documentación</h3>
-          <p className="component-reference-model">Modelo en Circuit Studio: <strong>{def.model}</strong></p>
-          <p className="component-reference-note">El modelo simula una aproximación. El documento describe la pieza física y sus límites, que pueden ser distintos a los del simulador.</p>
-          {part.type.startsWith('74ls') && <p className="component-reference-note">El modelo lógico no reproduce por completo las corrientes de entrada ni el consumo interno. Verifica ambos en el datasheet.</p>}
+          <p className="component-reference-model">Modelo: <strong>{def.model}</strong></p>
           <ComponentReferences type={part.type} />
+          <details className="model-explainer">
+            <summary>Sobre esta simulación</summary>
+            <p>El modelo es una aproximación. Consulta los límites de la pieza física antes de montarla.</p>
+            {part.type.startsWith('74ls') && <p>Las corrientes de entrada y el consumo interno no se reproducen por completo.</p>}
+          </details>
         </div>
         {simRunning && damageOf(part.id) && <DamageNote damage={damageOf(part.id)!} />}
         <PartNameField part={part} placeholder={def.partNumber ?? def.name} board={part.type.startsWith('breadboard')} readOnly={project.readOnly} onChange={(value) => project.setProp(part.id, 'label', value)} />

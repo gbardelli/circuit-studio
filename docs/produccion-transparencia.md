@@ -29,3 +29,5 @@ El código usa Clerk. Verificar si el despliegue tiene una instancia de producci
 Vercel, Redis, PostgreSQL y autenticación deben evaluarse como un sistema, con monitoreo y pruebas de carga y recuperación. No se han medido disponibilidad, capacidad ni costos del despliegue institucional. Definir objetivos y responsables con la universidad.
 
 El logotipo de Arduino se muestra en contexto descriptivo junto a la referencia de su placa. Recurso original: https://content.arduino.cc/brand/arduino-color.svg. Política: https://www.arduino.cc/en/trademark/guides/arduino-and-community-logos/. Los logotipos de otros fabricantes requieren verificar sus condiciones para este uso antes de incorporarlos.
+
+Logo de Texas Instruments: recurso original https://www.ti.com/etc/designs/ti/images/ui/ic-logo.svg. Se muestra para identificar la fuente documental; las marcas pertenecen a sus titulares y no indican patrocinio.
