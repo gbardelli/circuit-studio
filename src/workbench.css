@@ -364,7 +364,8 @@
 }
 .diagnostics-layout {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(280px, 1.1fr);
+  grid-template-columns: minmax(210px, 0.82fr) minmax(250px, 1.05fr) minmax(280px, 1.15fr);
+  grid-template-rows: minmax(0, 1fr);
   min-height: 0;
   flex: 1;
   overflow: hidden;
@@ -978,7 +979,8 @@
     max-height: 60vh;
   }
   .diagnostics-layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
   }
   .signal-explanation {
     border-top: 1px solid var(--lab-rule);
@@ -1180,7 +1182,8 @@
     bottom: 40px;
   }
   .diagnostics-layout {
-    grid-template-rows: minmax(70px, 1fr) minmax(100px, 1fr);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
   }
 }
 .assembly-intro{margin:0;color:var(--text-2);font-size:12px;line-height:1.5;max-width:100ch}
@@ -1189,9 +1192,9 @@
 .canvas-wrap.assembly-focus{padding-bottom:0}.assembly-focus .connection-guide{display:none}.assembly-focus .zoom-float{bottom:12px}
 
 /* The workbench is a tool surface: direct resize, restrained chrome, one active task. */
-.workbench-flexible{max-height:none;overflow:visible;animation:none;border-top:1px solid #ffffff18;background:#111315}
+.workbench-flexible{max-height:none;min-height:0;overflow:hidden;animation:none;border-top:1px solid #ffffff18;background:#111315}
 .workbench-flexible.is-resizing{user-select:none}
-.workbench-resizer{position:absolute;inset:-6px 0 auto;height:12px;cursor:row-resize;touch-action:none;z-index:7;display:flex;justify-content:center;align-items:center}
+.workbench-resizer{position:absolute;top:0;left:0;right:0;height:6px;cursor:row-resize;touch-action:none;z-index:7;display:flex;justify-content:center;align-items:center}
 .workbench-resizer>span{width:36px;height:3px;border-radius:2px;background:#626a7466;transition:background-color 120ms cubic-bezier(.2,.8,.2,1)}
 .workbench-resizer:hover>span,.workbench-resizer:focus-visible>span{background:#a8b3be}
 .workbench-resizer:focus-visible{outline:2px solid var(--accent);outline-offset:-3px}

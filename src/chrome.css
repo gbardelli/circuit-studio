@@ -366,14 +366,19 @@
   .lab-section-head { padding: 10px 14px; flex-wrap: wrap; gap: 8px; }
   .lab-section-head>span { display: none; }
 }
-.signals-panel .lab-empty { display: grid; grid-template-columns: minmax(0,1fr) auto; grid-template-rows: auto auto; align-content: center; align-items: start; gap: 8px 22px; min-height: 0; padding: 18px 22px; }
-.signals-panel .lab-empty>strong { grid-column: 1; grid-row: 1; font-size: 20px; }
-.signals-panel .lab-empty>p { grid-column: 1; grid-row: 2; margin: 0; max-width: 52ch; }
-.signals-panel .lab-empty>.btn { grid-column: 2; margin: 0; align-self: start; }
-.signals-panel .lab-empty>.btn:first-of-type { grid-row: 1; }
-.signals-panel .lab-empty>.btn:nth-of-type(2) { grid-row: 2; }
-.diagnostics-layout .lab-empty>strong { font-size: 19px; }
-@media(max-width:760px) { .signals-panel .lab-empty { display: flex; gap: 10px; } }
+.signals-panel .lab-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-height: 0; padding: 22px; }
+.signals-panel .lab-empty>strong { font-size: 20px; }
+.signals-panel .lab-empty>p { margin: 0 0 6px; max-width: 42ch; }
+.signals-panel .lab-empty>.btn { margin: 0; }
+.signal-suggest { display: flex; flex-wrap: wrap; gap: 6px; max-width: 640px; }
+.signal-chip { height: 30px; padding: 0 10px; border-radius: 999px; border: 1px solid #ffffff16; background: #ffffff08; color: #d7e0ec; font-size: 12.5px; }
+.signal-chip:hover { background: #ffffff12; color: #fff; }
+.wave-level { width: 16px; flex: none; text-align: center; font-size: 11px; font-weight: 650; font-variant-numeric: tabular-nums; color: #8d98a6; }
+.wave-level.is-high { color: #8ee0b8; }
+.wave-level.is-low { color: #a9c4e6; }
+.signal-status { height: 24px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 999px; background: #e5bf7a18; color: #e6d3a4; font-size: 12px; }
+.diagnostics-layout .lab-empty>strong { font-size: 18px; }
+@media(max-width:760px) { .signals-panel .lab-empty { gap: 10px; } }
 
 /* Participant names keep one line; identity comes from the account photo. */
 .people .participant-row { grid-template-columns: 28px minmax(0,1fr) auto; gap: 8px; padding: 7px 6px; min-height: 42px; }
@@ -563,9 +568,56 @@
 
 }
 /* Electrical measurements keep units and reference conditions readable at panel widths. */
-.electrical-measurements { grid-column: 1 / -1; min-width: 0; padding: 20px; border-top: 1px solid #ffffff12; }
-.diagnostics-layout { overflow: auto; align-content: start; }
-.diagnostics-layout .checks-list, .diagnostics-layout .signal-explanation { max-height: 320px; }
+.diagnostics-frame { container-type: inline-size; display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden; }
+.diagnostics-layout { display: grid; grid-template-columns: minmax(210px, 0.82fr) minmax(250px, 1.05fr) minmax(280px, 1.15fr); grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; flex: 1; min-height: 0; }
+.diagnostics-layout > section { min-width: 0; min-height: 0; max-height: none; overflow: auto; }
+.diagnostics-layout > .electrical-measurements { grid-column: auto; margin: 0; padding: 0 0 8px; border-top: 0; border-left: 1px solid #ffffff10; }
+.diagnostics-layout .electrical-measurements thead th { position: static; }
+.diagnostics-layout .electrical-table-scroll { max-height: none; overflow: visible; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.diagnostics-layout .electrical-scope, .diagnostics-layout .electrical-pending { margin: 12px 16px; }
+.diag-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; min-height: 56px; padding: 12px 16px 10px; background: #1c1f24; border-bottom: 1px solid #ffffff0a; }
+.diag-head h2 { margin: 0; font-size: 15px; font-weight: 600; letter-spacing: -0.02em; color: #f2f5f8; }
+.diag-head span { display: block; margin-top: 2px; font-size: 12px; color: #a9b4c2; }
+.diag-stats { display: flex; gap: 6px; }
+.diag-stats span { display: grid; justify-items: end; min-width: 64px; padding: 4px 8px; border-radius: 8px; background: #ffffff06; color: #b7c2d0; font-size: 11px; line-height: 1.2; }
+.diag-stats strong { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; color: #eef2f6; letter-spacing: -0.03em; }
+.diag-stats .is-bad strong { color: #ffb4ae; }
+.diag-stats .is-warn strong { color: #efd3a0; }
+.diag-stats .is-ok strong { color: #b7e7cd; }
+.diag-empty { padding: 22px 16px; }
+.diag-empty svg { color: #8dcea9; }
+.diag-search { display: flex; align-items: center; gap: 8px; margin: 12px 16px; padding: 0 10px; height: 36px; border-radius: 8px; background: #12151a; border: 1px solid #ffffff12; color: #8d98a6; }
+.diag-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: #eef2f6; font-size: 13.5px; }
+.diag-search input:focus { outline: none; }
+.diag-results { display: grid; margin: 0 16px 8px; border: 1px solid #ffffff10; border-radius: 8px; overflow: auto; max-height: 220px; background: #171b20; }
+.diag-results button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 9px 10px; border: 0; background: transparent; color: #d5dee8; font-size: 13px; text-align: left; }
+.diag-results button:hover { background: #ffffff08; }
+.diag-results p { margin: 0; padding: 10px; color: #aeb8c6; font-size: 13px; }
+.diag-hero { display: grid; gap: 6px; margin: 4px 16px 12px; padding: 12px 14px; border-radius: 12px; background: linear-gradient(#ffffff08, #ffffff03); border: 1px solid #ffffff0c; }
+.diag-hero span { font-size: 12px; color: #b7c3d2; }
+.diag-hero strong { display: block; margin-top: 2px; font-size: 28px; line-height: 1; font-weight: 600; letter-spacing: -0.04em; font-variant-numeric: tabular-nums; color: #f4f7fb; }
+.diag-hero p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: #c5d0de; }
+.diag-chain, .diag-origin ul { list-style: none; margin: 0; padding: 0 12px 12px; }
+.diag-node-main { display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; gap: 10px; align-items: start; width: 100%; padding: 10px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: inherit; }
+.diag-node-main:hover { background: #ffffff06; }
+.diag-mark { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: #8d98a6; }
+.diag-mark.is-high { background: #7ddeaf; box-shadow: 0 0 0 3px #7ddeaf22; }
+.diag-mark.is-low { background: #8eb4e4; }
+.diag-mark.is-indeterminado { background: #e4c98a; }
+.diag-node-copy { display: grid; gap: 2px; min-width: 0; }
+.diag-node-copy strong { font-size: 13.5px; font-weight: 600; color: #eef2f7; }
+.diag-node-copy span { font-size: 12.5px; line-height: 1.4; color: #aeb9c8; }
+.diag-node-read { display: grid; justify-items: end; gap: 2px; }
+.diag-node-read b { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #e7edf5; }
+.diag-node-read small { font-size: 11px; color: #a9b6c6; }
+.diag-origin { margin: 0 8px 8px 26px; }
+.diag-origin summary { cursor: pointer; padding: 4px 0 8px; color: #c5d0de; font-size: 12.5px; }
+@container (max-width: 860px) {
+  .diagnostics-frame { overflow: auto; }
+  .diagnostics-layout { display: flex; flex-direction: column; overflow: visible; }
+  .diagnostics-layout > section { overflow: visible; }
+  .diagnostics-layout > .electrical-measurements { border-left: 0; border-top: 1px solid #ffffff10; }
+}
 .electrical-scope { font-size: 14px; line-height: 1.55; color: var(--ui-label); max-width: 90ch; margin: 12px 0; }
 .electrical-pending { font-size: 14px; line-height: 1.5; margin: 14px 0; }
 .electrical-pending summary { cursor: pointer; padding: 8px 0; font-weight: 550; }
@@ -609,6 +661,13 @@
 .connection-legend .swatch-palette { position: absolute; bottom: calc(100% + 8px); left: -6px; z-index: 50; display: grid; grid-template-columns: repeat(6, 18px); gap: 6px; padding: 8px; background: #15181d; border: 1px solid #343a44; border-radius: 8px; box-shadow: 0 10px 28px rgba(0,0,0,.45); }
 .connection-legend .swatch-palette button { width: 18px; height: 18px; border-radius: 4px; border: 1px solid rgba(255,255,255,.18); cursor: pointer; padding: 0; }
 .connection-legend .swatch-palette button:hover, .connection-legend .swatch-palette button[aria-selected='true'] { outline: 2px solid #eef2f7; outline-offset: 1px; }
+
+/* Leyenda de colores en el panel derecho: una entrada por línea, bajo «En el circuito». */
+.insp-legend { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 2px 12px 14px; }
+.insp-legend .legend-item, .insp-legend .legend-item.is-editable-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; column-gap: 10px; width: 100%; margin: 0; padding: 2px 0; text-align: left; }
+.insp-legend .connection-tones { padding-top: 4px; }
+.insp-legend .legend-name { text-align: left; font-size: 13px; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; padding: 1px 6px; margin: 0 0 0 -6px; justify-self: start; }
+.insp-legend .legend-count { margin: 0; padding-top: 2px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
 .component-reference-model, .component-reference-note { margin: 0 0 8px; line-height: 1.45; font-size: 13px; }
 .component-reference-note, .component-reference-source small { color: var(--text-muted, #a9b1bd); }

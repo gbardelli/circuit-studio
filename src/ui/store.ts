@@ -12,6 +12,17 @@ export interface Toast {
 }
 
 export type LabPanel = 'signals'|'diagnostics'|'assembly'|'notes';
+export type CodeTheme = 'grafito' | 'claro' | 'papel' | 'contraste';
+export interface CodeView {
+  mode: 'dock' | 'full';
+  height: number;
+  theme: CodeTheme;
+  fontSize: number;
+  lineHeight: number;
+  wrap: boolean;
+  lineNumbers: boolean;
+  tabSize: 2 | 4;
+}
 export type AssemblyTab = 'steps'|'materials'|'photo';
 export type Tool = 'select' | 'hand';
 export type View = 'board' | 'schematic' | 'design';
@@ -75,6 +86,8 @@ export interface UiState {
   setPlacing(type: string | null): void;
   setSim(running: boolean): void;
   openCode(partId: string | null, tab?: 'code' | 'serial' | null): void;
+  codeView: CodeView;
+  setCodeView(patch: Partial<CodeView>): void;
   showToast(text: string | null, tone?: Toast['tone']): void;
   setTool(tool: Tool): void;
   /** Piezas copiadas con Ctrl C (ids del circuito). */
@@ -105,6 +118,32 @@ function readPanels(): UiState['collapsed'] {
     return { library: Boolean(saved.library), inspector: Boolean(saved.inspector) };
   } catch {
     return { library: false, inspector: false };
+  }
+}
+
+const CODE_KEY = 'cs-code-view';
+const CODE_DEFAULT: CodeView = {
+  mode: 'dock', height: 340, theme: 'grafito', fontSize: 13, lineHeight: 1.6, wrap: false, lineNumbers: true, tabSize: 2,
+};
+function readCodeView(): CodeView {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CODE_KEY) ?? '{}') as Partial<CodeView>;
+    const theme: CodeTheme = saved.theme === 'claro' || saved.theme === 'papel' || saved.theme === 'contraste' ? saved.theme : 'grafito';
+    const fontSize = Number(saved.fontSize);
+    const lineHeight = Number(saved.lineHeight);
+    const height = Number(saved.height);
+    return {
+      mode: saved.mode === 'full' ? 'full' : 'dock',
+      height: Number.isFinite(height) ? Math.max(200, Math.min(900, height)) : CODE_DEFAULT.height,
+      theme,
+      fontSize: Number.isFinite(fontSize) ? Math.max(12, Math.min(18, Math.round(fontSize))) : CODE_DEFAULT.fontSize,
+      lineHeight: lineHeight === 1.45 || lineHeight === 1.85 ? lineHeight : 1.6,
+      wrap: Boolean(saved.wrap),
+      lineNumbers: saved.lineNumbers !== false,
+      tabSize: saved.tabSize === 4 ? 4 : 2,
+    };
+  } catch {
+    return CODE_DEFAULT;
   }
 }
 
@@ -166,6 +205,22 @@ export const useUi = create<UiState>((set) => ({
   setPlacing: (placing) => set({ placing }),
   setSim: (simRunning) => set({ simRunning }),
   openCode: (codeFor, tab = 'code') => set({ codeFor, bottomTab: codeFor ? tab : null,...(codeFor?{labPanel:null,labFullscreen:false}:{}) }),
+  codeView: readCodeView(),
+  setCodeView: (patch) => set((s) => {
+    const codeView = readCodeView();
+    const next = { ...s.codeView, ...patch };
+    const safe: CodeView = {
+      ...next,
+      mode: next.mode === 'full' ? 'full' : 'dock',
+      height: Math.max(200, Math.min(900, next.height || codeView.height)),
+      fontSize: Math.max(12, Math.min(18, Math.round(next.fontSize))),
+      lineHeight: next.lineHeight === 1.45 || next.lineHeight === 1.85 ? next.lineHeight : 1.6,
+      tabSize: next.tabSize === 4 ? 4 : 2,
+      theme: next.theme === 'claro' || next.theme === 'papel' || next.theme === 'contraste' ? next.theme : 'grafito',
+    };
+    try { localStorage.setItem(CODE_KEY, JSON.stringify(safe)); } catch { /* sin persistencia */ }
+    return { codeView: safe };
+  }),
   showToast: (text, tone = 'info') => {
     clearTimeout(toastTimer);
     set({ toast: text ? { text, tone } : null });

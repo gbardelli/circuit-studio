@@ -77,7 +77,7 @@ function thresholds(part: PartData, readings: Record<string, number>) {
   };
 }
 export function pinLabel(part: PartData, pin: string) {
-  return `${part.props.label || PARTS[part.type]?.partNumber || PARTS[part.type]?.name || part.type} · ${pin}`;
+  return `${part.props.label || PARTS[part.type]?.partNumber || PARTS[part.type]?.name || part.type}  ${pin}`;
 }
 export function electricalChecks(
   snapshot: CircuitSnapshot,

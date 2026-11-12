@@ -28,6 +28,12 @@ const COLORS = [
   "#eaa0ce",
   "#b8cc7e",
 ];
+function levelAt(edges: Edge[] | undefined, cursor: number) {
+  let value: number | null = null;
+  for (const edge of edges ?? []) if (edge.t <= cursor) value = edge.v;
+  if (value === null) return null;
+  return value > 2.5 ? "H" : "L";
+}
 export function wavePath(
   edges: Edge[],
   start: number,
@@ -122,12 +128,8 @@ export function Signals() {
             disabled={!engine.running || lab.seeking}
             onClick={() => engine.pause(!lab.paused)}
           >
-            {lab.paused ? <Play size={13} /> : <Pause size={13} />}{" "}
-            {lab.seeking
-              ? "Reconstruyendo…"
-              : lab.paused
-                ? "Reanudar desde aquí"
-                : "Pausar"}
+            {lab.paused ? <Play size={13} /> : <Pause size={13} />}
+            {lab.seeking ? "Actualizando" : lab.paused ? "Reanudar" : "Pausar"}
           </HintButton>
           <HintButton
             className="icon-btn panel-control"
@@ -148,15 +150,7 @@ export function Signals() {
           <span className="lab-time">
             {lab.cursor.toFixed(4)} s <span>/ {lab.duration.toFixed(2)} s</span>
           </span>
-          {lab.seeking ? (
-            <span className="lab-caption" role="status">
-              Reconstruyendo estado…
-            </span>
-          ) : lab.paused && lab.cursor < lab.duration ? (
-            <span className="lab-caption">
-              Al reanudar se crea una nueva trayectoria.
-            </span>
-          ) : null}
+          {lab.paused && <span className="signal-status">Pausado</span>}
         </div>
         <div
           className="signal-view-controls"
@@ -186,9 +180,10 @@ export function Signals() {
           <HintButton
             className="btn ghost sm"
             disabled={!lab.probes.length}
+            aria-label="Exportar VCD"
             onClick={() => download("circuit-studio.vcd", vcd(lab))}
           >
-            <Download size={16} /> Exportar VCD
+            <Download size={14} /> Exportar
           </HintButton>
           <PopoverPanel
             label="Añadir señal"
@@ -205,7 +200,7 @@ export function Signals() {
             <div className="signal-picker">
               <input
                 autoFocus
-                placeholder="Buscar componente o pin…"
+                placeholder="Buscar pin"
                 aria-label="Buscar señal"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -216,9 +211,7 @@ export function Signals() {
                     o.name.toLowerCase().includes(search.toLowerCase()) &&
                     !lab.probes.some((p) => p.key === o.key),
                 ) && (
-                  <p className="ui-signal-empty">
-                    No hay señales disponibles para esta búsqueda.
-                  </p>
+                  <p className="ui-signal-empty">Ningún pin coincide.</p>
                 )}
                 {options
                   .filter(
@@ -260,29 +253,19 @@ export function Signals() {
         </div>
         {!lab.probes.length ? (
           <div className="lab-empty">
-            <strong>Añade señales al analizador</strong>
-            <p>
-              Añade una señal o fija una red desde el lienzo. Selecciona un
-              flanco para inspeccionar el circuito en ese instante.
-            </p>
+            <strong>Ninguna señal</strong>
+            <p>Fija un pin en el lienzo o elige una salida.</p>
             <HintButton className="btn sm" onClick={() => setAdding(true)}>
-              <Plus size={14} /> Añadir primera señal
+              <Plus size={14} /> Añadir señal
             </HintButton>
             {suggested.length > 0 && (
-              <HintButton
-                className="btn ghost sm"
-                onClick={() =>
-                  engine.watch(
-                    suggested.map((o, i) => ({
-                      key: o.key,
-                      name: o.name,
-                      color: COLORS[i % COLORS.length],
-                    })),
-                  )
-                }
-              >
-                Usar salidas del montaje
-              </HintButton>
+              <div className="signal-suggest">
+                {suggested.map((o) => (
+                  <HintButton key={o.key} className="signal-chip" onClick={() => add(o.key, o.name)}>
+                    {o.name}
+                  </HintButton>
+                ))}
+              </div>
             )}
           </div>
         ) : (
@@ -296,6 +279,9 @@ export function Signals() {
                   className="signal-dot"
                   style={{ background: probe.color }}
                 />
+                <span className={`wave-level ${levelAt(lab.traces[probe.key], lab.cursor) === "H" ? "is-high" : levelAt(lab.traces[probe.key], lab.cursor) === "L" ? "is-low" : ""}`}>
+                  {levelAt(lab.traces[probe.key], lab.cursor) ?? "–"}
+                </span>
                 <input
                   aria-label={`Nombre de ${probe.name}`}
                   title={probe.name}

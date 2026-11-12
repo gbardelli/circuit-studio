@@ -29,6 +29,11 @@ interface PinHit {
   desc?: string;
 }
 
+function pinCaption(label: string) {
+  const match = /^(.*)\s·\s*patilla\s+(\d+)\s*$/i.exec(label);
+  return match ? { name: match[1], pin: match[2] } : { name: label, pin: null as string | null };
+}
+
 /** Último color de cable usado: el siguiente cable nace con él. Sin uso previo, se sugiere uno por el pin. */
 let lastWireColor: string | null = null;
 const nextWireColor = (pinId: string) => {
@@ -349,6 +354,8 @@ export function Canvas() {
   const onPointerDown = (e: React.PointerEvent) => {
     magnet.current=null;
     if ((e.target as Element).closest('[data-interactive]')) return;
+    const boardTitle = (e.target as Element).closest('[data-board-title]')?.getAttribute('data-board-title');
+    if (boardTitle && e.button === 0) { setMenu(null); setPicker(null); select([boardTitle]); return; }
     setMenu(null);
     setPicker(null);
     if (e.button === 2) return;
@@ -607,6 +614,8 @@ export function Canvas() {
       startNetEdit(Number(netAttr), e.clientX, e.clientY);
       return;
     }
+    const titleId = target.closest('[data-board-title]')?.getAttribute('data-board-title');
+    if (titleId) { if (!project.readOnly) focusPartName(titleId); return; }
     const partId = target.closest('[data-part]')?.getAttribute('data-part');
     if (!partId) return;
     // Doble clic = propiedades, como en KiCad o Fritzing. Una placa programable abre su código.
@@ -887,6 +896,7 @@ export function Canvas() {
   }, [flowOn, flowEdges, engine, snapshot]);
 
   const hoverVoltage = hoverPin && simRunning ? engine.voltageAt(hoverPin.part, hoverPin.pin) : null;
+  const pinTip = hoverPin ? pinCaption(hoverPin.label) : null;
   const gridStep = z < 0.8 ? 50 : 10;
   const draggingIds = drag?.kind === 'parts' && drag.moved ? drag.ids : [];
   const hasSelection = selection.length + wireSelection.length > 0;
@@ -949,7 +959,7 @@ export function Canvas() {
           )}
 
           {/* Nombre de cada protoboard: doble clic lo edita (enfoca su campo en el inspector). */}
-          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && (p.props.label || selection.includes(p.id))).map(p=><text key={`stage-${p.id}`} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill={p.props.label?'#d6dce4':'#7d8794'} fontStyle={p.props.label?undefined:'italic'} stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" style={{cursor:project.readOnly?undefined:'text'}} onDoubleClick={e=>{if(project.readOnly)return;e.stopPropagation();focusPartName(p.id);}}><title>Doble clic para cambiar el nombre</title>{String(p.props.label||'Protoboard sin nombre · doble clic para nombrarla')}</text>)}
+          {!sch && scene.parts.filter(p=>p.type.startsWith('breadboard') && (p.props.label || selection.includes(p.id))).map(p=><text key={`stage-${p.id}`} data-board-title={p.id} x={p.x+6} y={p.y-20} fontSize={18} fontWeight={550} fill={p.props.label?'#d6dce4':'#7d8794'} fontStyle={p.props.label?undefined:'italic'} stroke="#0c0e10" strokeWidth={5} paintOrder="stroke" style={{cursor:project.readOnly?undefined:'text'}} onDoubleClick={e=>{if(project.readOnly)return;e.stopPropagation();focusPartName(p.id);}}><title>Doble clic para cambiar el nombre</title>{String(p.props.label||'Protoboard sin nombre · doble clic para nombrarla')}</text>)}
           <g className="wires">
             {scene.wires.map((w) => (
               <g key={w.id} opacity={wireEmphasis(w.id, hoverWire, wireSelection, assemblyWire).opacity}>
@@ -1086,12 +1096,17 @@ export function Canvas() {
         <DamageTip damage={damageOf(hoverPart)!} left={cursor.x * z + viewport.x + 16} top={cursor.y * z + viewport.y + 18} />
       )}
 
-      {hoverPin && cursor && (!drag || drag.kind === 'end') && (
-        <div className="pin-tip" role="tooltip" style={{ left: Math.max(8, Math.min(hoverPin.pos.x * z + viewport.x + 14, (svgRef.current?.clientWidth ?? 320) - 288)), top: Math.max(8, Math.min(hoverPin.pos.y * z + viewport.y + 16, (svgRef.current?.clientHeight ?? 200) - 100)) }}>
-          <strong style={{ fontWeight: 500 }}>{hoverPin.label}</strong>
-          {hoverPin.desc && <span className="pin-desc">{hoverPin.desc}</span>}
-          {hoverVoltage !== null && <span className="mono v">{formatSI(hoverVoltage, 'V')}</span>}
-          <span className="pin-probe">Alt + clic para observar esta señal</span>
+      {hoverPin && pinTip && cursor && (!drag || drag.kind === 'end') && (
+        <div className="pin-tip" role="tooltip" style={{ left: Math.max(8, Math.min(hoverPin.pos.x * z + viewport.x + 14, (svgRef.current?.clientWidth ?? 320) - 240)), top: Math.max(8, Math.min(hoverPin.pos.y * z + viewport.y + 16, (svgRef.current?.clientHeight ?? 200) - 120)) }}>
+          <div className="pin-id">
+            <strong>{pinTip.name}</strong>
+            {pinTip.pin && <span><small>Patilla</small>{pinTip.pin}</span>}
+          </div>
+          {hoverPin.desc && <p>{hoverPin.desc}</p>}
+          <footer>
+            {hoverVoltage !== null && <b className="v">{formatSI(hoverVoltage, 'V')}</b>}
+            <span>Observar <kbd>Alt</kbd> clic</span>
+          </footer>
         </div>
       )}
 
