@@ -659,7 +659,7 @@ input[type='range']::-moz-range-thumb {
 .lib-category { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 58px; padding: 8px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text-2); }
 .lib-category:hover { background: var(--hover); }
 .lib-cat-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--text); }
-.lib-category span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-category > span:not(.lib-cat-mark) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lib-category strong { font-size: 13px; font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
 .lib-category small { font-size: 12px; line-height: 1.35; color: var(--text-3); }
 .lib-category em { margin: 0; font-style: normal; font-variant-numeric: tabular-nums; font-size: 12px; color: var(--text-3); }
@@ -3077,3 +3077,7 @@ body.lib-dragging * {
 .audio-files-message.is-error { color: #ffaaa6; }
 @media (hover: hover) { .audio-upload:hover:not(:disabled) { background: #3a414a; } .audio-track-remove:hover { color: #ff9d99; background: #ff6b6b17; } }
 @media (prefers-reduced-motion: reduce) { .audio-upload, .audio-empty { transition: none; } .audio-upload:active { transform: none; } }
+
+.audio-track-play { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border: 1px solid #aecbf127; border-radius: 8px; background: #a4c8f21a; color: #c3dcfb; cursor: pointer; }
+.audio-track-play.is-playing { color: #e7f1ff; background: #7da9df36; border-color: #a9cbf261; }
+@media (hover: hover) { .audio-track-play:hover { background: #9dbfe633; color: #fff; } }

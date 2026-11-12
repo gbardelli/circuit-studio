@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FileAudio, HardDrive, Music2, Plus, Trash2, UploadCloud } from 'lucide-react';
+import { FileAudio, HardDrive, Pause, Play, Plus, Trash2, UploadCloud } from 'lucide-react';
 import { buildNetlist, pinKey } from '../core/netlist';
 import type { CircuitSnapshot } from '../core/types';
 import { PARTS } from '../parts';
@@ -39,7 +39,7 @@ async function saveTracks(room: string, part: string, files: File[]) {
   window.dispatchEvent(new Event(EVENT));
 }
 
-type Track = { number: number; name: string; size: number };
+type Track = { number: number; name: string; size: number; file: Blob };
 
 async function listTracks(room: string, part: string): Promise<Track[]> {
   const database = await db();
@@ -53,7 +53,7 @@ async function listTracks(room: string, part: string): Promise<Track[]> {
       if (!cursor) return;
       const number = Number(String(cursor.key).slice(prefix.length));
       const file = cursor.value as File;
-      if (Number.isInteger(number) && number > 0) tracks.push({ number, name: file.name || `${String(number).padStart(4, '0')}.mp3`, size: file.size });
+      if (Number.isInteger(number) && number > 0) tracks.push({ number, name: file.name || `${String(number).padStart(4, '0')}.mp3`, size: file.size, file });
       cursor.continue();
     };
     tx.oncomplete = () => { database.close(); resolve(tracks.sort((a, b) => a.number - b.number)); };
@@ -86,6 +86,28 @@ export function DFPlayerFiles({ room, part }: { room: string; part: string }) {
   const [dragging, setDragging] = useState(false);
   const [removing, setRemoving] = useState<number | null>(null);
   const input = useRef<HTMLInputElement>(null);
+  const preview = useRef<{ audio: HTMLAudioElement; url: string; number: number } | null>(null);
+  const [playing, setPlaying] = useState<number | null>(null);
+  const stopPreview = () => {
+    const current = preview.current;
+    if (current) { current.audio.pause(); current.audio.onended = null; current.audio.onerror = null; URL.revokeObjectURL(current.url); preview.current = null; }
+    setPlaying(null);
+  };
+  useEffect(() => () => {
+    const current = preview.current;
+    if (current) { current.audio.pause(); current.audio.onended = null; current.audio.onerror = null; URL.revokeObjectURL(current.url); preview.current = null; }
+  }, [room, part]);
+  const playPreview = (track: Track) => {
+    if (preview.current?.number === track.number) { stopPreview(); return; }
+    stopPreview(); setMessage(''); setError(false);
+    const url = URL.createObjectURL(track.file);
+    const audio = new Audio(url);
+    preview.current = { audio, url, number: track.number };
+    setPlaying(track.number);
+    audio.onended = () => { if (preview.current?.audio === audio) stopPreview(); };
+    audio.onerror = () => { if (preview.current?.audio === audio) { stopPreview(); setError(true); setMessage('No se pudo reproducir el archivo. Comprueba que sea un audio válido.'); } };
+    void audio.play().catch(() => { if (preview.current?.audio === audio) { stopPreview(); setError(true); setMessage('No se pudo reproducir el audio. Comprueba el archivo y el sonido del navegador.'); } });
+  };
   useEffect(() => {
     let active = true;
     setTracks(null); setMessage(''); setRemoving(null);
@@ -100,6 +122,7 @@ export function DFPlayerFiles({ room, part }: { room: string; part: string }) {
       const numbers = files.map((file) => Number(file.name.match(/^(\d{1,4})\.(?:mp3|wav)$/i)?.[1]));
       if (numbers.some((number) => !number || number > 9999)) throw new Error('Usa nombres numerados como 0001.mp3 o 0002.wav.');
       if (new Set(numbers).size !== numbers.length) throw new Error('Cada pista debe tener un número diferente.');
+      if (preview.current && numbers.includes(preview.current.number)) stopPreview();
       await saveTracks(room, part, files);
       setMessage(files.length === 1 ? 'Pista guardada.' : `${files.length} pistas guardadas.`);
     } catch (reason) { setError(true); setMessage(reason instanceof Error ? reason.message : 'No se pudieron guardar los archivos.'); }
@@ -107,7 +130,7 @@ export function DFPlayerFiles({ room, part }: { room: string; part: string }) {
   };
   const remove = async (number: number) => {
     setBusy(true); setMessage(''); setError(false);
-    try { await removeTrack(room, part, number); setRemoving(null); setMessage('Pista eliminada.'); }
+    try { if (preview.current?.number === number) stopPreview(); await removeTrack(room, part, number); setRemoving(null); setMessage('Pista eliminada.'); }
     catch { setError(true); setMessage('No se pudo eliminar la pista.'); }
     finally { setBusy(false); }
   };
@@ -115,7 +138,7 @@ export function DFPlayerFiles({ room, part }: { room: string; part: string }) {
     <div className="audio-files-heading"><div><h3 id="audio-files-title">Archivos de audio</h3><p>Biblioteca del DFPlayer</p></div><span className="audio-files-count">{tracks === null ? '…' : `${tracks.length} ${tracks.length === 1 ? 'pista' : 'pistas'}`}</span></div>
     <input ref={input} className="audio-files-input" type="file" tabIndex={-1} aria-hidden="true" multiple accept=".mp3,.wav,audio/mpeg,audio/wav" aria-label="Seleccionar archivos de audio" onChange={(event) => { const files = Array.from(event.currentTarget.files ?? []); event.currentTarget.value = ''; void upload(files); }} />
     {tracks?.length ? <div className="audio-track-list" aria-label="Pistas guardadas">{tracks.map((track) => <div className="audio-track" key={track.number}>
-      <span className="audio-track-icon"><Music2 size={15} aria-hidden="true" /></span><span className="audio-track-info"><strong title={track.name}>{track.name}</strong><span>Pista {String(track.number).padStart(4, '0')} · {fileSize(track.size)}</span></span>
+      <button type="button" className={`audio-track-play ${playing === track.number ? 'is-playing' : ''}`} aria-label={`${playing === track.number ? 'Detener' : 'Reproducir'} ${track.name}`} aria-pressed={playing === track.number} onClick={() => playPreview(track)}>{playing === track.number ? <Pause size={14} fill="currentColor" aria-hidden="true" /> : <Play size={14} fill="currentColor" aria-hidden="true" />}</button><span className="audio-track-info"><strong title={track.name}>{track.name}</strong><span>Pista {String(track.number).padStart(4, '0')} · {fileSize(track.size)}</span></span>
       {removing === track.number ? <span className="audio-track-confirm"><button type="button" onClick={() => void remove(track.number)} disabled={busy}>Eliminar</button><button type="button" onClick={() => setRemoving(null)}>Cancelar</button></span> : <button type="button" className="audio-track-remove" aria-label={`Eliminar ${track.name}`} onClick={() => setRemoving(track.number)}><Trash2 size={15} /></button>}
     </div>)}</div> : tracks && <div className={`audio-empty ${dragging ? 'is-dragging' : ''}`} onDragOver={(event) => { event.preventDefault(); setDragging(true); }} onDragLeave={() => setDragging(false)} onDrop={(event) => { event.preventDefault(); setDragging(false); void upload(Array.from(event.dataTransfer.files)); }}>
       <span className="audio-empty-icon"><FileAudio size={19} aria-hidden="true" /></span><strong>Agrega tus pistas</strong><span>Arrastra archivos aquí o selecciónalos.</span>
