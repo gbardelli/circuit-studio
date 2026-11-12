@@ -23,9 +23,9 @@ export function sectionOf(def: PartDef): CatalogSection {
 function groupOf(def: PartDef): string {
   switch (sectionOf(def)) {
     case 'boards': return def.mcu ? 'Arduino' : 'Protoboards';
-    case 'basic': return def.category === 'Semiconductores' ? 'Diodos y transistores' : 'Resistencias y condensadores';
+    case 'basic': return def.type === 'note' ? 'Anotaciones' : def.category === 'Semiconductores' ? 'Diodos y transistores' : 'Resistencias y condensadores';
     case 'inputs': return ['ldr', 'tmp36', 'hc-sr04'].includes(def.type) ? 'Sensores' : def.type === 'clock' ? 'Generadores de señal' : 'Interruptores y controles';
-    case 'outputs': return ['dc-motor', 'servo', 'buzzer', 'relay'].includes(def.type) ? 'Actuadores' : 'LEDs y pantallas';
+    case 'outputs': return ['dfplayer-mini', 'speaker-50mm', 'buzzer'].includes(def.type) ? 'Audio' : ['dc-motor', 'servo', 'relay'].includes(def.type) ? 'Actuadores' : 'LEDs y pantallas';
     case 'logic': return def.family ?? 'Otros integrados';
     case 'power': return def.category === 'Instrumentos' ? 'Instrumentos' : 'Fuentes y baterías';
   }

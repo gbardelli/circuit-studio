@@ -2,7 +2,7 @@
 // Physical routing runs after placement, so displays and chip bodies remain clear.
 import { toWorld, type Props, type Rotation, type Vec } from '../core/types';
 import { PARTS } from '../parts';
-import { colorNamedNetworks, routePhysicalWiring, shortenPhysicalWiring } from './physicalWiring';
+import { colorNamedNetworks, routePhysicalWiring, shortenPhysicalWiring, type RouteOptions } from './physicalWiring';
 import type { Template, TemplatePart, TemplateWire } from './templates';
 
 export type Ref = [string, string];
@@ -31,6 +31,7 @@ export const WIRE = {
   control: '#ff6b8a', // control: aceptar, ocupado, llegada
   clock: '#45d0c0', // reloj
   reset: '#b48cff', // reinicio
+  encoder: '#8b5a2b', // interior del codificador de sensores y su retardo
   segment: '#c08457', // segmentos del display
   uart: '#5ab0ff', // UART de la pantalla
   monitor: '#8a96a3', // líneas que solo lee el GIGA
@@ -66,6 +67,17 @@ export class Bench {
 
   loose(key: string, type: string, x: number, y: number, props: Props = {}, rot: Rotation = 0) {
     this.parts.push({ key, type, x, y, props, rot });
+  }
+
+  /**
+   * Clava un módulo de alimentación (MB102) en los rieles de `col`: sus cuatro patillas ocupan
+   * tp, tn, bp y bn de esa columna. Devuelve la pieza para que se pueda ajustar.
+   */
+  plugPower(key: string, board: string, col: number, props: Props = {}) {
+    const b = this.boards.get(board)!;
+    if (!railHole(col)) throw new Error(`Plantilla: la columna ${col} no tiene agujero de riel`);
+    for (const rail of ['tp', 'tn', 'bp', 'bn']) this.claim(board, `${rail}${col}`);
+    this.parts.push({ key, type: 'mb102-power', x: b.x + colX(col), y: b.y + RAIL_Y.tp, props, rot: 0 });
   }
 
   /** Clava una pieza con su patilla de origen en (col, row). */
@@ -211,12 +223,12 @@ export class Bench {
     throw new Error(`Plantilla: no hay espacio para desacoplo en ${board}`);
   }
 
-  template(meta: Omit<Template, 'parts' | 'wires'>, palette: Readonly<Record<string, string>> = {}): Template {
+  template(meta: Omit<Template, 'parts' | 'wires'>, palette: Readonly<Record<string, string>> = {}, route: RouteOptions = {}): Template {
     const scene = {
       parts: this.parts.map(p => ({ id: p.key, type: p.type, x: p.x, y: p.y, rot: p.rot ?? 0, props: { ...PARTS[p.type].defaults, ...p.props } })),
       wires: this.wires.map((w, i) => ({ id: `w${i}`, color: w.color, points: w.points ?? [], a: { part: w.a[0], pin: w.a[1], ...this.at(w.a) }, b: { part: w.b[0], pin: w.b[1], ...this.at(w.b) } })),
     };
-    const result = colorNamedNetworks(routePhysicalWiring(shortenPhysicalWiring(scene)), palette);
+    const result = colorNamedNetworks(routePhysicalWiring(shortenPhysicalWiring(scene), route), palette);
     return { ...meta, parts: this.parts, wires: result.wires.map(w => ({ a: [w.a.part!, w.a.pin!], b: [w.b.part!, w.b.pin!], points: w.points, color: w.color })) };
   }
 }

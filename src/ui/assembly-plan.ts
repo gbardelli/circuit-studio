@@ -1,6 +1,6 @@
 import { buildNetlist } from '../core/netlist';
 import type { CircuitSnapshot, PartData, WireData, WireEnd } from '../core/types';
-import { PARTS } from '../parts';
+import { PARTS, isNote } from '../parts';
 
 export type AssemblyPhase = 'base' | 'parts' | 'power' | 'signals';
 export const ASSEMBLY_PHASES: {id:AssemblyPhase;label:string}[] = [
@@ -52,7 +52,7 @@ export function buildAssemblyPlan(snapshot:CircuitSnapshot):AssemblyPlan {
     const board=[...(parents.get(p.id)??[])].map(id=>byId.get(id)!).find(b=>b.type.startsWith('breadboard'));
     return board?snapshot.parts.indexOf(board):snapshot.parts.indexOf(p);
   };
-  const remaining=[...snapshot.parts].sort((a,b)=>(rank(a)<2?rank(a):2)-(rank(b)<2?rank(b):2)||stage(a)-stage(b)||rank(a)-rank(b)||a.y-b.y||a.x-b.x||a.id.localeCompare(b.id));
+  const remaining=snapshot.parts.filter(p=>!isNote(p.type)).sort((a,b)=>(rank(a)<2?rank(a):2)-(rank(b)<2?rank(b):2)||stage(a)-stage(b)||rank(a)-rank(b)||a.y-b.y||a.x-b.x||a.id.localeCompare(b.id));
   const ordered:PartData[]=[],placed=new Set<string>();
   while(remaining.length) {
     const index=remaining.findIndex(p=>[...(parents.get(p.id)??[])].every(id=>placed.has(id)));

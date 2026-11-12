@@ -35,7 +35,10 @@ export const CircuitPreview = memo(function CircuitPreview({ snapshot, pad = 30,
         const def = PARTS[p.type];
         return (
           <g key={p.id} transform={`translate(${p.x} ${p.y}) rotate(${p.rot})`}>
-            <def.Render part={p} visual={null} preview />
+            {def ? <def.Render part={p} visual={null} preview /> : <g>
+              <rect width={80} height={40} rx={3} fill="#20242b" stroke="#78828f" />
+              <text x={40} y={23} textAnchor="middle" fill="#c9d1dc" fontSize={7}>{p.type.startsWith('ic:') ? 'Integrado' : 'Componente'}</text>
+            </g>}
           </g>
         );
       })}

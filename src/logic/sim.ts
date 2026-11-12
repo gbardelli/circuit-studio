@@ -86,7 +86,7 @@ export class LogicSim {
       const def = elementDef(node.kind, lookup);
       if (!def) continue;
       const index = this.insts.length;
-      const env = { source: () => this.sources.get(node.id) ?? (node.kind === 'in' ? (Number(node.props.value) ? 1 : 0) : 0) as Bit };
+      const env = { source: () => this.sources.get(node.id) ?? (node.kind === 'in' ? (Number(node.props.value) ? 1 : 0) : node.kind === 'button' && Number(node.props.activeLow) ? 1 : 0) as Bit };
       const pins = def.pins(node.props, ctx);
       const ins = pins.filter((p) => p.dir === 'in').map((p) => net(pinKey(node.id, p.id)));
       const outs = pins.filter((p) => p.dir === 'out').map((p) => net(pinKey(node.id, p.id)));

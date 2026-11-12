@@ -99,7 +99,7 @@ export interface I2cSlave {
 export interface Field {
   key: string;
   label: string;
-  kind: 'si' | 'select' | 'range' | 'color' | 'boolean';
+  kind: 'si' | 'select' | 'range' | 'color' | 'boolean' | 'text';
   unit?: string;
   options?: { value: string; label: string }[];
   min?: number;

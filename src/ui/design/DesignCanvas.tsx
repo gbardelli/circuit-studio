@@ -3,9 +3,10 @@
 import { AlertTriangle, Maximize, Minus, Pause, Play, Plus, RotateCcw, SkipForward } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
 import type { Vec } from '../../core/types';
-import { elementDef } from '../../logic/elements';
+import { buttonIdle, elementDef } from '../../logic/elements';
 import { icDependencies } from '../../logic/sim';
-import { IC_PREFIX, MAIN_SHEET, X, type Bit, type LogicPinRef } from '../../logic/types';
+import { IC_PREFIX, MAIN_SHEET, X, type Bit, type LogicPinRef, type LogicSheet } from '../../logic/types';
+import { distToSegment } from '../geometry';
 import { useEditor } from '../context';
 import { useUi } from '../store';
 import { ViewTabs } from '../ViewTabs';
@@ -156,6 +157,34 @@ export function DesignCanvas() {
 
   const pinRef = (p: { node: string; id: string }): LogicPinRef => ({ node: p.node, pin: p.id });
 
+  /** Puntos de un cable tal como se dibuja. */
+  const wireVertices = (w: LogicSheet['wires'][number]): Vec[] | null => {
+    const a = pinWorld(w.a);
+    const b = pinWorld(w.b);
+    if (!a || !b) return null;
+    return w.points?.length ? [a.at, ...w.points, b.at] : route(a.at, a.out, b.at, b.out);
+  };
+  /**
+   * Qué cable se elige al hacer clic en `p`. Gana el que pasa más cerca; los cables cuyo recorrido coincide en ese punto
+   * (varios tramos sobre una misma línea) quedan empatados y cada clic elige el siguiente, así se llega a todos.
+   */
+  const pickWire = (p: Vec, fallback: string): string => {
+    const reach = 7 / z;
+    const near = sheet.wires.flatMap((w) => {
+      const pts = wireVertices(w);
+      if (!pts) return [];
+      let d = Infinity;
+      for (let i = 1; i < pts.length; i++) d = Math.min(d, distToSegment(p, pts[i - 1], pts[i]));
+      return d <= reach ? [{ id: w.id, d }] : [];
+    });
+    if (!near.length) return fallback;
+    const best = Math.min(...near.map((x) => x.d));
+    const tied = near.filter((x) => x.d <= best + 1.5 / z).map((x) => x.id);
+    if (tied.length < 2) return tied[0];
+    const current = tied.findIndex((id) => selWires.includes(id));
+    return tied[(current + 1) % tied.length];
+  };
+
   // ── Puntero ──────────────────────────────────────────────────────────────────────
   const onPointerDown = (e: RPointerEvent<SVGSVGElement>) => {
     if (e.button === 1 || (e.button === 0 && space)) {
@@ -188,7 +217,7 @@ export function DesignCanvas() {
     }
     const wireEl = target.closest('[data-wire]');
     if (wireEl) {
-      const id = wireEl.getAttribute('data-wire')!;
+      const id = pickWire(p, wireEl.getAttribute('data-wire')!);
       select(e.shiftKey ? selNodes : [], e.shiftKey ? [...new Set([...selWires, id])] : [id]);
       setDrag(null);
       return;
@@ -198,7 +227,7 @@ export function DesignCanvas() {
       const id = nodeEl.getAttribute('data-node')!;
       const node = byId.get(id)?.node;
       if (node?.kind === 'button') {
-        sim.setSource(id, 1);
+        sim.setSource(id, buttonIdle(node.props) ? 0 : 1);
         refresh();
         setDrag({ kind: 'press', node: id });
         return;
@@ -237,7 +266,8 @@ export function DesignCanvas() {
     }
     if (!drag) return;
     if (drag.kind === 'press') {
-      sim.setSource(drag.node, 0);
+      const btn = byId.get(drag.node)?.node;
+      sim.setSource(drag.node, btn ? buttonIdle(btn.props) : 0);
       refresh();
     } else if (drag.kind === 'move') {
       if (drag.moved && drag.ids.length) {
@@ -253,6 +283,15 @@ export function DesignCanvas() {
         const n = byId.get(drag.node)?.node;
         if (n?.kind === 'in') {
           const v: Bit = sim.source(n.id) === 1 ? 0 : 1;
+          // Entradas del mismo grupo (p. ej. los sensores de piso) son excluyentes: al encender una se apagan las demás.
+          const group = String(n.props.group ?? '');
+          if (v === 1 && group) {
+            for (const o of sheet?.nodes ?? []) {
+              if (o.id === n.id || o.kind !== 'in' || o.props.group !== group || sim.source(o.id) !== 1) continue;
+              sim.setSource(o.id, 0);
+              if (!ro) project.design.setProp(sheetId, o.id, 'value', 0);
+            }
+          }
           sim.setSource(n.id, v);
           refresh();
           if (!ro) project.design.setProp(sheetId, n.id, 'value', v);
@@ -414,7 +453,7 @@ export function DesignCanvas() {
         <rect width="100%" height="100%" fill="url(#d-grid)" />
         <rect width="100%" height="100%" fill="url(#d-grid-major)" />
         <g transform={`translate(${viewport.x} ${viewport.y}) scale(${z})`}>
-          {sheet.wires.map((w) => {
+          {[...sheet.wires.filter((w) => !selWires.includes(w.id)), ...sheet.wires.filter((w) => selWires.includes(w.id))].map((w) => {
             const a = pinWorld(w.a);
             const b = pinWorld(w.b);
             if (!a || !b) return null;

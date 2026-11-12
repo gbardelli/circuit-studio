@@ -9,6 +9,8 @@
     "start": "tsx server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc -b",
+    "predeploy": "tsx scripts/check-part-types.ts",
+    "deploy": "vercel deploy --prod --yes",
     "setup:arduino": "node scripts/setup-arduino.mjs",
     "prebuild:hex": "tsx scripts/prebuild-hex.ts"
   },

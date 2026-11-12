@@ -2,7 +2,7 @@
 // un integrado propio: nombre, referencia, encapsulado, orden de patillas y tabla de verdad.
 import { ArrowDown, ArrowUp, CircuitBoard, Cpu, PackagePlus, RotateCw, Trash2 } from 'lucide-react';
 import { useMemo, useState, type InputHTMLAttributes, type TextareaHTMLAttributes } from 'react';
-import { elementDef, icSignals, pinName, visualPinOrder } from '../../logic/elements';
+import { elementDef, icSignals, pinName, visualPinOrder, TT_PRESETS, ttColumns, ttEncode, ttInputs, ttNames, ttOutputs, ttPreset, ttRows } from '../../logic/elements';
 import { DIP_SIZES, icIssues, packagePins, packageSize } from '../../logic/ic';
 import { truthTable } from '../../logic/sim';
 import { IC_PREFIX, MAIN_SHEET, type Bit, type LogicSheet } from '../../logic/types';
@@ -61,7 +61,11 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
           <label className="label" htmlFor={`d-${f.key}`}>
             {f.label}
           </label>
-          {f.kind === 'select' ? (
+          {f.kind === 'toggle' ? (
+            <label className="d-toggle">
+              <input id={`d-${f.key}`} type="checkbox" checked={Boolean(Number(node.props[f.key] ?? def.defaults[f.key] ?? 0))} onChange={(e) => project.design.setProp(sheet.id, id, f.key, e.target.checked ? 1 : 0)} /> Sí
+            </label>
+          ) : f.kind === 'select' ? (
             <select className="input" id={`d-${f.key}`} value={String(node.props[f.key] ?? def.defaults[f.key] ?? '')} onChange={(e) => project.design.setProp(sheet.id, id, f.key, Number.isNaN(Number(e.target.value)) ? e.target.value : Number(e.target.value))}>
               {f.options!.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -81,7 +85,20 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
                 value={Number(node.props[f.key] ?? def.defaults[f.key])}
                 onChange={(e) => {
                   const v = Number(e.target.value);
-                  if (Number.isFinite(v)) project.design.setProp(sheet.id, id, f.key, Math.min(f.max ?? Infinity, Math.max(f.min ?? -Infinity, v)));
+                  if (!Number.isFinite(v)) return;
+                  const clamped = Math.min(f.max ?? Infinity, Math.max(f.min ?? -Infinity, v));
+                  if (node.kind === 'tabla' && (f.key === 'inputs' || f.key === 'outputs')) {
+                    // Al cambiar el tamaño de la tabla se rehace: AND con las nuevas entradas y salidas en blanco.
+                    const next = { ...node.props, [f.key]: clamped };
+                    const n = ttInputs(next), m = ttOutputs(next);
+                    const columns = Array.from({ length: m }, (_, j) => (j < ttOutputs(node.props) && f.key === 'outputs' ? ttColumns(node.props)[j] : ttPreset('and', n)));
+                    project.design.setProp(sheet.id, id, f.key, clamped);
+                    project.design.setProp(sheet.id, id, 'inNames', '');
+                    project.design.setProp(sheet.id, id, 'outNames', '');
+                    project.design.setProp(sheet.id, id, 'table', ttEncode(columns));
+                    return;
+                  }
+                  project.design.setProp(sheet.id, id, f.key, clamped);
                 }}
               />
               {f.unit && <span>{f.unit}</span>}
@@ -100,6 +117,7 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
           )}
         </div>
       ))}
+      {node.kind === 'tabla' && <TruthEditor sheetId={sheet.id} node={node} />}
       {isIc && (
         <div className="insp-section">
           <button className="btn sm" onClick={() => useDesignUi.getState().setSheet(node.kind.slice(IC_PREFIX.length))}>
@@ -484,4 +502,73 @@ function DraftText({ value, onCommit, transform = (v) => v, multiline, ...rest }
     },
   };
   return multiline ? <textarea {...props} /> : <input {...props} />;
+}
+
+
+/** Editor de la tabla de verdad de una compuerta: la tabla es la definición y queda guardada con el elemento. */
+function TruthEditor({ sheetId, node }: { sheetId: string; node: LogicSheet['nodes'][number] }) {
+  const { project } = useEditor();
+  const n = ttInputs(node.props);
+  const rows = ttRows(node.props);
+  const columns = ttColumns(node.props);
+  const inNames = ttNames(node.props, 'in');
+  const outNames = ttNames(node.props, 'out');
+  const set = (key: string, value: string | number) => project.design.setProp(sheetId, node.id, key, value);
+  const flip = (j: number, r: number) => {
+    const col = columns[j].split('');
+    col[r] = col[r] === '1' ? '0' : '1';
+    const next = columns.map((c, i) => (i === j ? col.join('') : c));
+    set('table', ttEncode(next));
+  };
+  const preset = (id: string, label: string, inputs: number) => {
+    set('inputs', inputs);
+    set('outputs', 1);
+    set('inNames', '');
+    set('outNames', 'Y');
+    set('label', label);
+    set('table', ttPreset(id, inputs));
+  };
+  return (
+    <div className="insp-section">
+      <span className="label">Tabla de verdad</span>
+      <div className="d-truth-presets" role="group" aria-label="Compuertas básicas">
+        {TT_PRESETS.map((pr) => (
+          <button key={pr.id} className="btn sm" onClick={() => preset(pr.id, pr.label, pr.inputs)} title={`Rehacer la tabla como ${pr.label}`}>
+            {pr.label}
+          </button>
+        ))}
+      </div>
+      <table className="d-truth" aria-label="Tabla de verdad">
+        <thead>
+          <tr>
+            {inNames.map((t) => (
+              <th key={`i${t}`}>{t}</th>
+            ))}
+            {outNames.map((t) => (
+              <th key={`o${t}`} className="out">
+                {t}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {Array.from({ length: rows }, (_, r) => (
+            <tr key={r}>
+              {Array.from({ length: n }, (_, i) => (
+                <td key={i}>{(r >> (n - 1 - i)) & 1}</td>
+              ))}
+              {columns.map((col, j) => (
+                <td key={j} className="out">
+                  <button className={`d-cell${col[r] === '1' ? ' on' : ''}`} onClick={() => flip(j, r)} aria-label={`Salida ${outNames[j]} en la fila ${r}: ${col[r]}. Clic para cambiar`}>
+                    {col[r]}
+                  </button>
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="insp-hint">La tabla se guarda con el elemento y se ve dentro del símbolo. Clic en una salida para cambiarla.</p>
+    </div>
+  );
 }

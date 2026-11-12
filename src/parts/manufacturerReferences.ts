@@ -14,6 +14,7 @@ const tiHc = ['00', '02', '04', '08', '10', '11', '14', '20', '27', '32', '86', 
 const tiLs = ['00', '02', '04', '08', '10', '20', '27', '32', '48', '75', '85'];
 
 export const MANUFACTURER_REFERENCES: Record<string, ManufacturerReference[]> = {};
+MANUFACTURER_REFERENCES['dfplayer-mini'] = [{ manufacturer: 'DFRobot', partNumber: 'DFR0299', datasheet: 'https://wiki.dfrobot.com/dfr0299', documentType: 'product', example: true, note: 'Comprueba la variante del módulo' }];
 
 for (const number of tiHc) {
   const partNumber = `SN74HC${number}`;

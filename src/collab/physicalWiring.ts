@@ -100,7 +100,12 @@ class Queue {
 }
 
 /** Orthogonal, obstacle-aware paths. Occupied tracks are reserved, crossings remain perpendicular. */
-export function routePhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
+export interface RouteOptions {
+  /** Cables más separados entre sí y con menos cruces y codos: para montajes con muchos cables largos. */
+  tidy?: boolean;
+}
+export function routePhysicalWiring(scene: CircuitSnapshot, options: RouteOptions = {}): CircuitSnapshot {
+  const tidy = Boolean(options.tidy);
   const bodies = componentBodies(scene.parts);
   const boards = scene.parts.filter(p => p.type.startsWith('breadboard'));
   const all = scene.wires.flatMap(w => [w.a, w.b]);
@@ -154,7 +159,10 @@ export function routePhysicalWiring(scene: CircuitSnapshot): CircuitSnapshot {
         if (used) continue;
         const cross = nextDir === 0 ? vertical[next] : horizontal[next];
         const board = boards.find(b => p.x >= b.x && p.x <= b.x + 680 && p.y >= b.y + 60 && p.y <= b.y + 170);
-        const cost = costs[current] + step + (dir === nextDir ? 0 : 12) + (cross ? 9 : 0) + (board && nextDir === 0 ? 2 : 0);
+        // Con `tidy`: los cables largos prefieren los pasillos entre placas, evitan cruzarse y no se pegan a otro paralelo.
+        const bend = tidy ? 18 : 12, crossing = tidy ? 18 : 9, onBoard = tidy ? 7 : 2;
+        const crowded = tidy && (nextDir === 0 ? horizontal[next - width] || horizontal[next + width] : vertical[next - 1] || vertical[next + 1]) ? 6 : 0;
+        const cost = costs[current] + step + (dir === nextDir ? 0 : bend) + (cross ? crossing : 0) + (board && nextDir === 0 ? onBoard : 0) + crowded;
         const key = next * 2 + nextDir;
         if (visited[key] === stamp && costs[key] <= cost) continue;
         visited[key] = stamp; costs[key] = cost; parents[key] = current;

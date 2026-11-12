@@ -29,7 +29,9 @@ export function DesignPalette() {
     () => sheets.filter((s): s is LogicSheet => s.kind === 'ic' && s.id !== sheet && !icDependencies(s.id, lookup).has(sheet)).map((s) => elementDef(`${IC_PREFIX}${s.id}`, lookup)!).filter(Boolean),
     [sheets, sheet, lookup],
   );
-  const all = useMemo(() => [...baseElements(), ...ics, ...chipElements().values()], [ics]);
+  // Keep legacy truth-table gates readable in saved projects, but do not offer
+  // them as new elements; the existing IC truth table remains in the inspector.
+  const all = useMemo(() => [...baseElements().filter((element) => element.kind !== 'tabla'), ...ics, ...chipElements().values()], [ics]);
   const q = fold(query.trim());
   const match = (d: ElementDef) => !q || fold([d.name, d.description, ...d.keywords].join(' ')).includes(q);
 

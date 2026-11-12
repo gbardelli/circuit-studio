@@ -3,6 +3,8 @@
 // Adafruit_GFX, Arduino_GigaDisplayTouch y GigaDisplayRGB), así el mismo código compila para
 // el GIGA real con las librerías oficiales. Ver src/sim/gigaDisplay.ts para el protocolo.
 
+import { DFROBOT_FILES } from './dfrobotLibrary';
+
 const GFX = `#pragma once
 // Simulador de Circuit Studio: sustituto de Arduino_GigaDisplay_GFX para el núcleo AVR.
 #include <Arduino.h>
@@ -130,7 +132,11 @@ const FILES: Record<string, string> = {
  */
 export function simLibraryFiles(source: string, fqbn: string): { path: string; content: string }[] {
   if (!fqbn.startsWith('arduino:avr:')) return [];
-  return Object.entries(FILES)
+  const result = Object.entries(FILES)
     .filter(([name]) => new RegExp(`#\\s*include\\s*[<"]${name.replace('.', '\\.')}[>"]`).test(source))
     .map(([name, content]) => ({ path: `${name.slice(0, -2)}/${name}`, content }));
+  if (/^\s*#\s*include\s*[<"]DFRobotDFPlayerMini\.h[>"]/m.test(source)) {
+    for (const [name, content] of Object.entries(DFROBOT_FILES)) result.push({ path: `DFRobotDFPlayerMini/${name}`, content });
+  }
+  return result;
 }

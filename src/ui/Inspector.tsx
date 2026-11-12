@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Code2, Copy, Flame, TriangleAlert, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
 import { formatSI, parseSI } from '../core/units';
-import { PARTS } from '../parts';
+import { PARTS, isNote } from '../parts';
 import { ComponentReferences } from './ComponentReferences';
 import { schematicPlacement } from './schematic';
 import { LED_COLORS } from '../parts/outputs';
@@ -14,7 +14,10 @@ import { Thumb } from './Library';
 import { DesignInspector } from './design/DesignInspector';
 import { useUi } from './store';
 import { ParticipantRow } from './Participants';
-import { configuredLegend, updateLegendLabel } from './wiring-legend';
+import { configuredLegend, connectionLegend, renameLegendEntry, updateLegendLabel } from './wiring-legend';
+import { buildNetlist } from '../core/netlist';
+import { LegendItem } from './ConnectionGuide';
+import { DFPlayerFiles } from './dfplayerAudio';
 
 const METRICS: Record<string, { label: string; unit: string }> = {
   i: { label: 'Corriente', unit: 'A' },
@@ -76,8 +79,10 @@ function EmptyInspector() {
   const { project } = useEditor();
   const select = useUi((s) => s.select);
   const groups = new Map<string, string[]>();
-  for (const p of snapshot.parts) groups.set(p.type, [...(groups.get(p.type) ?? []), p.id]);
+  for (const p of snapshot.parts.filter((q) => !isNote(q.type))) groups.set(p.type, [...(groups.get(p.type) ?? []), p.id]);
   const rows = [...groups.entries()].sort((a, b) => PARTS[a[0]].name.localeCompare(PARTS[b[0]].name));
+  const rawLegend = project.meta.get('wiring.legend');
+  const legend = useMemo(() => connectionLegend(snapshot, buildNetlist(snapshot, PARTS), rawLegend), [snapshot, rawLegend]);
 
   return (
     <>
@@ -124,6 +129,24 @@ function EmptyInspector() {
         </ul>
         {peers.length === 0 && <p className="insp-hint">Comparte el enlace para editar a la vez.</p>}
       </div>
+      {legend.length > 0 && (
+        <div className="insp-card">
+          <div className="insp-head">
+            <h2>Colores de cables</h2>
+          </div>
+          <div className="connection-legend insp-legend">
+            {legend.map((entry) => (
+              <LegendItem
+                key={entry.color}
+                entry={entry}
+                editable={!project.readOnly}
+                onRecolor={(from, to) => project.recolorWires(from, to)}
+                onRename={(label) => project.setMeta('wiring.legend', renameLegendEntry(project.meta.get('wiring.legend'), entry.colors, label))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -297,6 +320,7 @@ function PartInspector({ part }: { part: PartData }) {
             </div>
           </div>
         )}
+        {part.type === 'dfplayer-mini' && <DFPlayerFiles room={project.room} part={part.id} />}
         <div className="insp-section">
           <div className="actions">
             <button className="btn sm" onClick={() => view === 'schematic' ? project.rotateSchematic([part.id], schematicPlacement(project.snapshot().parts)) : project.rotateParts([part.id])} title="Rotar · R">
@@ -422,6 +446,7 @@ function FieldEditor({ field, value, onChange }: { field: Field; value: unknown;
       </div>
     );
   }
+  if (field.kind === 'text') return <TextField id={id} field={field} value={String(value ?? '')} onChange={onChange} />;
   if (field.kind === 'boolean') {
     return (
       <div className="prop">
@@ -431,6 +456,18 @@ function FieldEditor({ field, value, onChange }: { field: Field; value: unknown;
     );
   }
   return null;
+}
+
+function TextField({ id, field, value, onChange }: { id: string; field: Field; value: string; onChange: (v: string) => void }) {
+  const [text, setText] = useState(value);
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(value); }, [value, focused]);
+  return (
+    <div className="prop">
+      <label htmlFor={id}>{field.label}</label>
+      <textarea id={id} className="input note-text" rows={5} maxLength={600} value={text} onFocus={() => setFocused(true)} onBlur={() => { setFocused(false); if (text !== value) onChange(text); }} onChange={(e) => setText(e.target.value)} />
+    </div>
+  );
 }
 
 function SiField({ id, field, value, onChange }: { id: string; field: Field; value: number; onChange: (v: number) => void }) {

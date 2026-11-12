@@ -92,6 +92,8 @@ export class Project {
   private wireCache = new Map<string, { json: string; data: WireData }>();
   private snap: CircuitSnapshot = { parts: [], wires: [] };
   private stale = true;
+  /** Piezas del documento que esta versión de la app no conoce: no se dibujan, pero siguen guardadas en el proyecto. */
+  hidden: { type: string; count: number }[] = [];
   private listeners = new Set<() => void>();
   private scheduled = false;
 
@@ -172,9 +174,13 @@ export class Project {
     registerIcs(ics);
     const parts: PartData[] = [];
     const seen = new Set<string>();
+    const unknown = new Map<string, number>();
     this.parts.forEach((ymap, id) => {
       const raw = ymap.toJSON() as Omit<PartData, 'id'>;
-      if (!PARTS[raw.type]) return;
+      if (!PARTS[raw.type]) {
+        unknown.set(String(raw.type), (unknown.get(String(raw.type)) ?? 0) + 1);
+        return;
+      }
       const json = JSON.stringify(raw);
       seen.add(id);
       const hit = this.cache.get(id);
@@ -217,6 +223,7 @@ export class Project {
     // Protoboards debajo, placas encima, el resto en orden de creación.
     const layer = (p: PartData) => (PARTS[p.type].category === 'Protoboards' ? 0 : PARTS[p.type].category === 'Placas' ? 1 : 2);
     parts.sort((a, b) => layer(a) - layer(b) || Number(this.parts.get(a.id)?.get('z') ?? 0) - Number(this.parts.get(b.id)?.get('z') ?? 0));
+    this.hidden = [...unknown].map(([type, count]) => ({ type, count }));
     this.snap = ics.length ? { parts, wires, ics } : { parts, wires };
     this.stale = false;
     return this.snap;

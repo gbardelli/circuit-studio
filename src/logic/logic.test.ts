@@ -4,7 +4,7 @@ import { fixture } from '../test/electrical';
 import { icParts, icIssues, packagePins, registerIcs } from './ic';
 import { LogicSim, icDependencies, truthTable } from './sim';
 import { IC_PREFIX, type LogicNode, type LogicSheet, type LogicWire } from './types';
-import { elementDef } from './elements';
+import { elementDef, ttColumns, ttEvaluate, ttPreset, ttSize } from './elements';
 
 let seq = 0;
 function sheet(id: string, kind: 'main' | 'ic', nodes: Omit<LogicNode, 'x' | 'y' | 'rot'>[], wires: [string, string, string, string][], meta: Partial<LogicSheet> = {}): LogicSheet {
@@ -226,5 +226,75 @@ describe('integrado propio como pieza DIP virtual', () => {
     registerIcs([]);
     expect(PARTS[`${IC_PREFIX}ha`]).toBeUndefined();
     expect(icParts([halfAdder])).toHaveLength(1);
+  });
+});
+
+describe('compuerta por tabla de verdad', () => {
+  const none = () => undefined;
+  const run = (props: Record<string, string | number>, inputs: Record<string, 0 | 1>) => {
+    const ins = Object.keys(inputs);
+    const outs = Number(props.outputs ?? 1);
+    const nodes: Omit<LogicNode, 'x' | 'y' | 'rot'>[] = [
+      ...ins.map((id) => ({ id, kind: 'in', props: { label: id } })),
+      { id: 't', kind: 'tabla', props },
+      ...Array.from({ length: outs }, (_, j) => ({ id: `o${j}`, kind: 'out', props: { label: `o${j}` } })),
+    ];
+    const wires: [string, string, string, string][] = [
+      ...ins.map((id, i): [string, string, string, string] => [id, 'Y', 't', `I${i + 1}`]),
+      ...Array.from({ length: outs }, (_, j): [string, string, string, string] => ['t', outs === 1 ? 'Y' : `Y${j + 1}`, `o${j}`, 'A']),
+    ];
+    const sim = new LogicSim(sheet('m', 'main', nodes, wires), none);
+    for (const [id, v] of Object.entries(inputs)) sim.setSource(id, v);
+    return Array.from({ length: outs }, (_, j) => sim.value(`o${j}`, 'A'));
+  };
+  const presets = (name: string) => [0, 1].flatMap((a) => [0, 1].map((b) => run({ inputs: 2, outputs: 1, table: ttPreset(name, 2) }, { a: a as 0 | 1, b: b as 0 | 1 })[0]));
+
+  it('las tablas de las compuertas básicas dan sus funciones', () => {
+    expect(ttPreset('and', 2)).toBe('0001');
+    expect(ttPreset('or', 2)).toBe('0111');
+    expect(ttPreset('nand', 2)).toBe('1110');
+    expect(ttPreset('nor', 2)).toBe('1000');
+    expect(ttPreset('xor', 2)).toBe('0110');
+    expect(ttPreset('xnor', 2)).toBe('1001');
+    expect(ttPreset('not', 1)).toBe('10');
+    expect(presets('and')).toEqual([0, 0, 0, 1]);
+    expect(presets('or')).toEqual([0, 1, 1, 1]);
+    expect(presets('xor')).toEqual([0, 1, 1, 0]);
+  });
+
+  it('una tabla editada a mano se comporta como dice su tabla, con varias salidas', () => {
+    // Semisumador: suma = XOR, acarreo = AND
+    const props = { inputs: 2, outputs: 2, table: '0110;0001' };
+    expect(run(props, { a: 1, b: 1 })).toEqual([0, 1]);
+    expect(run(props, { a: 1, b: 0 })).toEqual([1, 0]);
+  });
+
+  it('con entradas sin valor solo sale X si la tabla depende de ellas', () => {
+    expect(ttEvaluate(['0001'], [0, 2])).toEqual([0]); // AND con un 0 conocido
+    expect(ttEvaluate(['0001'], [1, 2])).toEqual([2]);
+    expect(ttEvaluate(['0111'], [1, 2])).toEqual([1]); // OR con un 1 conocido
+  });
+
+  it('la tabla se normaliza al tamaño y el elemento la dibuja con todas sus filas', () => {
+    expect(ttColumns({ inputs: 2, outputs: 2, table: '01' })).toEqual(['0100', '0000']);
+    expect(ttSize({ inputs: 2, outputs: 1 }).h).toBeGreaterThanOrEqual(60);
+    expect(ttSize({ inputs: 4, outputs: 1 }).h).toBeGreaterThan(ttSize({ inputs: 2, outputs: 1 }).h);
+  });
+});
+
+describe('pulsador activo en bajo', () => {
+  it('vale 1 en reposo y 0 al pulsarlo; el normal, al revés', () => {
+    const mk = (props: Record<string, number | string>) => {
+      const s = sheet('m', 'main', [{ id: 'b', kind: 'button', props }, { id: 'o', kind: 'out', props: { label: 'o' } }], [['b', 'Y', 'o', 'A']]);
+      return new LogicSim(s, () => undefined);
+    };
+    const low = mk({ label: 'P', activeLow: 1 });
+    expect(low.value('o', 'A')).toBe(1);
+    low.setSource('b', 0);
+    expect(low.value('o', 'A')).toBe(0);
+    const high = mk({ label: 'P' });
+    expect(high.value('o', 'A')).toBe(0);
+    high.setSource('b', 1);
+    expect(high.value('o', 'A')).toBe(1);
   });
 });

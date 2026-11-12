@@ -11,7 +11,7 @@
 //   vuelve hacia atrás se une por etiquetas de red con nombre, no con un cable que cruce la hoja.
 import { pinKey, type Netlist } from '../core/netlist';
 import { snap, toWorld, type CircuitSnapshot, type PartData, type Props, type Rotation, type Vec } from '../core/types';
-import { PARTS } from '../parts';
+import { PARTS, isNote } from '../parts';
 import { SCH_PREFIX } from '../parts/symbols';
 import type { PinRole } from '../parts/types';
 
@@ -178,7 +178,7 @@ function boxRows(p: PartData, shown: string[]) {
 let lastAuto = new Map<string, Vec>();
 
 export function buildSchematic(snapshot: CircuitSnapshot, netlist: Netlist): Schematic {
-  const visible = snapshot.parts.filter((p) => PARTS[p.type] && PARTS[p.type].category !== 'Protoboards');
+  const visible = snapshot.parts.filter((p) => PARTS[p.type] && PARTS[p.type].category !== 'Protoboards' && !isNote(p.type));
   const byId = new Map(visible.map((p) => [p.id, p]));
 
   // ── Redes: pines con algo al otro lado, con los alias internos de una pieza juntos ──────

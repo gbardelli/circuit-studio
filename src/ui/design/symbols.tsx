@@ -1,7 +1,7 @@
 // Dibujo de los elementos del modo diseño (símbolos de forma distintiva IEEE 91) en coordenadas
 // locales, antes de girar. Colores de valor: 1 verde claro, 0 verde oscuro, X azul, error rojo.
 import { memo } from 'react';
-import { noteFontSize, noteLineHeight, noteLines, SEGMENT_PINS } from '../../logic/elements';
+import { noteFontSize, noteLineHeight, noteLines, SEGMENT_PINS, ttColumns, ttInPinId, ttInputs, ttNames, ttOutPinId, ttOutputs, ttRows } from '../../logic/elements';
 import type { Bit } from '../../logic/types';
 import type { Placed } from './geometry';
 
@@ -136,11 +136,66 @@ function SevenSeg({ value, mask }: { value?: number | null; mask?: number }) {
   );
 }
 
+
+/** Puerta por tabla de verdad: la tabla se dibuja dentro del símbolo y la fila activa se ilumina con las entradas actuales. */
+function TruthSymbol({ placed, st }: { placed: Placed; st: SymbolState }) {
+  const { node, w, h } = placed;
+  const p = node.props;
+  const n = ttInputs(p);
+  const m = ttOutputs(p);
+  const rows = ttRows(p);
+  const columns = ttColumns(p);
+  const inNames = ttNames(p, 'in');
+  const outNames = ttNames(p, 'out');
+  const values = Array.from({ length: n }, (_, i) => st.pin(ttInPinId(i)));
+  const known = values.every((v) => v !== 2);
+  const active = known ? values.reduce<number>((acc, v) => acc * 2 + (v === 1 ? 1 : 0), 0) : -1;
+  const x0 = 17;
+  const step = 18;
+  const colX = (c: number) => x0 + c * step;
+  const sep = colX(n) - step / 2 + 3;
+  const title = String(p.label ?? '');
+  return (
+    <g>
+      {Array.from({ length: n }, (_, i) => <Stub key={`i${i}`} x1={0} y1={10 + i * 20} x2={10} y2={10 + i * 20} v={st.pin(ttInPinId(i))} />)}
+      {Array.from({ length: m }, (_, j) => <Stub key={`o${j}`} x1={w - 10} y1={10 + j * 20} x2={w} y2={10 + j * 20} v={st.pin(ttOutPinId(p, j))} />)}
+      <rect x={10} y={0} width={w - 20} height={h} rx={3} fill={BODY} stroke={INK} strokeWidth={2} />
+      {title && (
+        <text x={w / 2} y={-5} textAnchor="middle" fontFamily={FONT} fontSize={8.5} fontWeight={600} fill={INK}>
+          {title}
+        </text>
+      )}
+      <g fontFamily={MONO} fontSize={7} fontWeight={600} fill={MUTED} textAnchor="middle">
+        {inNames.map((t, i) => <text key={`hi${i}`} x={colX(i)} y={11}>{t}</text>)}
+        {outNames.map((t, j) => <text key={`ho${j}`} x={colX(n + j)} y={11}>{t}</text>)}
+      </g>
+      <line x1={14} y1={15} x2={w - 14} y2={15} stroke={MUTED} strokeWidth={0.6} opacity={0.6} />
+      <line x1={sep} y1={4} x2={sep} y2={h - 4} stroke={MUTED} strokeWidth={0.6} opacity={0.6} />
+      {active >= 0 && <rect x={13} y={17 + active * 10} width={w - 26} height={10} rx={2} fill="rgba(74,222,128,.14)" />}
+      <g fontFamily={MONO} fontSize={7.5} textAnchor="middle">
+        {Array.from({ length: rows }, (_, r) => (
+          <g key={r}>
+            {Array.from({ length: n }, (_, i) => (
+              <text key={i} x={colX(i)} y={24.5 + r * 10} fill={MUTED}>{(r >> (n - 1 - i)) & 1}</text>
+            ))}
+            {columns.map((col, j) => (
+              <text key={`c${j}`} x={colX(n + j)} y={24.5 + r * 10} fill={active === r && col[r] === '1' ? VALUE_COLOR[1] : INK} fontWeight={active === r ? 700 : 500}>
+                {col[r]}
+              </text>
+            ))}
+          </g>
+        ))}
+      </g>
+    </g>
+  );
+}
+
 export const LogicSymbol = memo(function LogicSymbol({ placed, st }: { placed: Placed; st: SymbolState }) {
   const { node, w, h, pins } = placed;
   const k = node.kind;
   const label = String(node.props.label ?? '');
   if (['and', 'or', 'nand', 'nor', 'xor', 'xnor', 'not', 'buf', 'tri'].includes(k)) return <Gate kind={k} h={h} st={st} />;
+  if (k === 'tabla') return <TruthSymbol placed={placed} st={st} />;
   if (k === 'in' || k === 'button' || k === 'clock' || k === 'const') {
     const v = k === 'const' ? (Number(node.props.value) ? 1 : 0) : st.source ?? st.pin('Y');
     return (

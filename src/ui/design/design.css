@@ -500,3 +500,15 @@
   height: auto;
   padding: 7px 10px;
 }
+
+/* Editor de tabla de verdad */
+.d-truth-presets { display: flex; flex-wrap: wrap; gap: 4px; margin: 6px 0 8px; }
+.d-truth { border-collapse: collapse; width: 100%; font-variant-numeric: tabular-nums; font-size: 12px; }
+.d-truth th, .d-truth td { padding: 2px 6px; text-align: center; border-bottom: 1px solid #ffffff10; }
+.d-truth th { color: #adb7c5; font-weight: 600; }
+.d-truth .out { border-left: 1px solid #ffffff18; }
+.d-truth .d-cell { min-width: 26px; padding: 1px 6px; border-radius: 5px; border: 1px solid #3a414b; background: #1a1e23; color: #cbd3df; font: inherit; cursor: pointer; }
+.d-truth .d-cell.on { border-color: #4ade80; color: #4ade80; background: rgba(74, 222, 128, .12); }
+.d-truth .d-cell:focus-visible { outline: 2px solid var(--accent, #6aa7ff); outline-offset: 1px; }
+
+.d-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: #cbd3df; cursor: pointer; }

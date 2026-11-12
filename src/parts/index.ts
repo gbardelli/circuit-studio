@@ -16,6 +16,9 @@ import { nextion } from './nextion';
 import { gigaDisplayShield } from './gigaDisplay';
 import { levelConverter, levelConverter8 } from './levelConverter';
 import { breadboardPower } from './breadboardPower';
+import { note } from './note';
+import { dfplayer, speaker50 } from './dfplayer';
+export { isNote } from './note';
 
 export const PART_LIST: PartDef[] = [
   arduinoUno,
@@ -38,6 +41,8 @@ export const PART_LIST: PartDef[] = [
   gigaDisplayShield,
   relay,
   buzzer,
+  dfplayer,
+  speaker50,
   servo,
   dcMotor,
   pushbutton,
@@ -65,6 +70,7 @@ export const PART_LIST: PartDef[] = [
   aaPack,
   multimeter,
   oscilloscope,
+  note,
 ];
 
 export const PARTS: Record<string, PartDef> = Object.fromEntries(PART_LIST.map((d) => [d.type, d]));

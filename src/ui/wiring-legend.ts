@@ -106,7 +106,19 @@ export function connectionLegend(
         count: 1,
       });
   }
-  return [...byColor.values()]
+  // Los colores que comparten nombre (los siete segmentos de un display, por ejemplo) forman una sola entrada.
+  const merged = new Map<string, LegendEntry & { count: number }>();
+  for (const e of byColor.values()) {
+    const key = e.label ? `label:${e.label}` : `color:${e.color}`;
+    const into = merged.get(key);
+    if (!into) merged.set(key, { ...e, colors: [...e.colors] });
+    else {
+      into.colors.push(...e.colors);
+      into.count += e.count;
+      into.names = [...new Set([...(into.names ?? []), ...(e.names ?? [])])];
+    }
+  }
+  return [...merged.values()]
     .map((e) => ({ ...e, names: (e.names ?? []).sort() }))
     .sort((a, b) => Number(!a.label) - Number(!b.label) || b.count - a.count || a.color.localeCompare(b.color));
 }

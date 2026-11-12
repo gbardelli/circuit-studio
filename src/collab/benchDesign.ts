@@ -25,9 +25,11 @@ export function insertBenchDesign(design: DesignDoc, sheet: string, template: Te
   const snap = templateSnapshot(template);
   const nets = buildNetlist(snap, PARTS);
   const net = (part: string, pin: string) => nets.netOf.get(pinKey(part, pin));
-  const supply = snap.parts.find((p) => p.type === 'bench-supply');
-  const vccNet = supply && net(supply.id, '+');
-  const gndNet = supply && net(supply.id, '-');
+  // La fuente puede ser la de banco o el módulo MB102 clavado en los rieles.
+  const supply = snap.parts.find((p) => p.type === 'bench-supply' || p.type === 'mb102-power');
+  const mb102 = supply?.type === 'mb102-power';
+  const vccNet = supply && net(supply.id, mb102 ? 'TP' : '+');
+  const gndNet = supply && net(supply.id, mb102 ? 'TN' : '-');
   const parts = new Map(snap.parts.map((p) => [p.id, p]));
   const boardOf = (id: string) => {
     // Placa en la que está clavada la pieza (por su primera patilla insertada).

@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Diode, NMOS, Resistor } from '../core/solver';
 import type { PartDef, RenderProps } from './types';
+import { realisticTtl } from './chips';
 
 // SparkFun BOB-12009: BSS138 gates at LV, 10 kΩ pull-ups on both sides.
 // Order follows the manufacturer's PCB: channel 1/2, supply, ground, channel 3/4.
@@ -79,13 +80,26 @@ export const levelConverter8: PartDef = {
   bounds: () => ({ x: -7, y: -7, w: 104, h: TXS_ROW + 14 }), reference: 'GND', model: 'SPICE', thumbScale: 0.9,
   sim(ctx) {
     const elements = [];
-    const oe = ctx.net('OE'), va = ctx.net('VA'), vb = ctx.net('VB');
+    const oe = ctx.net('OE'), va = ctx.net('VA'), vb = ctx.net('VB'), gnd = ctx.net('GND');
+    // Con OE en bajo el chip real desactiva sus pull-ups y deja las patillas en alta impedancia.
+    let enabled = true, dirty = false;
+    const rpu = () => (enabled || !realisticTtl.on ? Math.max(100, Number(ctx.props.pullUp ?? 40_000)) : 1e9);
     for (let i = 1; i <= 8; i++) {
       const a = ctx.net(`A${i}`), b = ctx.net(`B${i}`);
-      elements.push(new Resistor(va, a, () => 40_000), new Resistor(vb, b, () => 40_000),
+      elements.push(new Resistor(va, a, rpu), new Resistor(vb, b, rpu),
         new NMOS(b, oe, a, 1.0, .1), new Diode(a, b, 1e-12, 1.1));
     }
-    return { elements };
+    return {
+      elements,
+      changed: () => { const d = dirty; dirty = false; return d; },
+      tracker: {
+        sample(v) {
+          const on = (oe < 0 ? 0 : v[oe]) - (gnd < 0 ? 0 : v[gnd]) > 1.0;
+          if (on !== enabled) { enabled = on; dirty = true; }
+        },
+        read: () => ({}),
+      },
+    };
   },
   Render: TxsRender,
 };

@@ -42,7 +42,7 @@ export function suggestWireColor(pinId: string): string {
 }
 
 export function partBounds(p: PartData) {
-  const b = PARTS[p.type].bounds(p.props);
+  const b = PARTS[p.type]?.bounds(p.props) ?? { x: 0, y: 0, w: 80, h: 40 };
   const corners = [
     { x: b.x, y: b.y },
     { x: b.x + b.w, y: b.y },
@@ -55,7 +55,7 @@ export function partBounds(p: PartData) {
 }
 
 export function pinWorld(p: PartData, pinId: string): Vec | null {
-  const pin = PARTS[p.type].pins(p.props).find((q) => q.id === pinId);
+  const pin = PARTS[p.type]?.pins(p.props).find((q) => q.id === pinId);
   return pin ? toWorld(p, pin) : null;
 }
 

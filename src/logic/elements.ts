@@ -70,6 +70,8 @@ export interface ElementDef {
 }
 
 const num = (v: unknown, d: number) => (Number.isFinite(Number(v)) ? Number(v) : d);
+/** Valor de reposo de un pulsador: 0, o 1 si es activo en bajo. */
+export const buttonIdle = (p: Props): Bit => (num(p.activeLow, 0) ? 1 : 0);
 const inv = (b: Bit): Bit => (b === X ? X : b ? 0 : 1);
 
 // ── Puertas ─────────────────────────────────────────────────────────────────────
@@ -119,6 +121,110 @@ function unary(kind: string, name: string, invert: boolean, key: string, descrip
   };
 }
 
+
+// ── Compuerta por tabla de verdad ───────────────────────────────────────────────
+// El elemento se define por su tabla y la conserva: la tabla se guarda en el documento y se dibuja dentro del símbolo.
+// Las filas van en orden binario con I1 como bit más significativo (00, 01, 10, 11 para dos entradas) y cada salida
+// guarda una cadena de 2^n caracteres «0» o «1»; las salidas se separan con «;».
+export const TT_MAX_IN = 4;
+export const TT_MAX_OUT = 8;
+const clampInt = (v: unknown, lo: number, hi: number, d: number) => Math.max(lo, Math.min(hi, Math.round(num(v, d))));
+export const ttInputs = (p: Props) => clampInt(p.inputs, 1, TT_MAX_IN, 2);
+export const ttOutputs = (p: Props) => clampInt(p.outputs, 1, TT_MAX_OUT, 1);
+export const ttRows = (p: Props) => 1 << ttInputs(p);
+const letters = 'ABCDEFGH';
+/** Nombres de las columnas: los del usuario separados por comas o, si faltan, A, B, C… para entradas y Y, Y2… para salidas. */
+export function ttNames(p: Props, kind: 'in' | 'out'): string[] {
+  const n = kind === 'in' ? ttInputs(p) : ttOutputs(p);
+  const given = String(kind === 'in' ? p.inNames ?? '' : p.outNames ?? '').split(',').map((x) => x.trim().slice(0, 6));
+  return Array.from({ length: n }, (_, i) => given[i] || (kind === 'in' ? letters[i] : i === 0 ? 'Y' : `Y${i + 1}`));
+}
+export const ttInPinId = (i: number) => `I${i + 1}`;
+export const ttOutPinId = (p: Props, j: number) => (ttOutputs(p) === 1 ? 'Y' : `Y${j + 1}`);
+/** Una cadena de 0/1 por salida, normalizada al tamaño actual (lo que falta se rellena con 0). */
+export function ttColumns(p: Props): string[] {
+  const rows = ttRows(p);
+  const parts = String(p.table ?? '').split(';');
+  return Array.from({ length: ttOutputs(p) }, (_, j) => (parts[j] ?? '').replace(/[^01]/g, '0').padEnd(rows, '0').slice(0, rows));
+}
+export const ttEncode = (columns: string[]) => columns.join(';');
+/** Tablas de las compuertas básicas para n entradas. */
+export function ttPreset(name: string, n: number): string {
+  const rows = 1 << n;
+  const bit = (i: number): number => {
+    const ones = i.toString(2).split('').filter((c) => c === '1').length;
+    switch (name) {
+      case 'and': return i === rows - 1 ? 1 : 0;
+      case 'or': return i === 0 ? 0 : 1;
+      case 'nand': return i === rows - 1 ? 0 : 1;
+      case 'nor': return i === 0 ? 1 : 0;
+      case 'xor': return ones % 2;
+      case 'xnor': return 1 - (ones % 2);
+      case 'not': return i === 0 ? 1 : 0;
+      default: return i; // buf
+    }
+  };
+  return Array.from({ length: rows }, (_, i) => bit(i)).join('');
+}
+export const TT_PRESETS: { id: string; label: string; inputs: number }[] = [
+  { id: 'and', label: 'AND', inputs: 2 }, { id: 'or', label: 'OR', inputs: 2 }, { id: 'nand', label: 'NAND', inputs: 2 },
+  { id: 'nor', label: 'NOR', inputs: 2 }, { id: 'xor', label: 'XOR', inputs: 2 }, { id: 'xnor', label: 'XNOR', inputs: 2 },
+  { id: 'not', label: 'NOT', inputs: 1 }, { id: 'buf', label: 'Buffer', inputs: 1 },
+];
+/** Salida de la tabla para entradas conocidas; con entradas sin valor, X salvo que todas las filas posibles coincidan. */
+export function ttEvaluate(columns: string[], inputs: Bit[]): Bit[] {
+  const n = inputs.length;
+  const rows = 1 << n;
+  const candidates: number[] = [];
+  for (let r = 0; r < rows; r++) {
+    let ok = true;
+    for (let i = 0; i < n && ok; i++) {
+      const want = (r >> (n - 1 - i)) & 1;
+      if (inputs[i] !== X && inputs[i] !== want) ok = false;
+    }
+    if (ok) candidates.push(r);
+  }
+  return columns.map((col) => {
+    const first = col[candidates[0]];
+    return candidates.every((r) => col[r] === first) ? (first === '1' ? 1 : 0) : X;
+  });
+}
+const truthElement: ElementDef = {
+  kind: 'tabla',
+  name: 'Compuerta por tabla de verdad',
+  group: 'Puertas',
+  description: 'Una puerta definida por su tabla de verdad: la tabla se guarda con el elemento y se ve siempre dentro del símbolo. Elige AND, OR, NOT… o edita las casillas de salida.',
+  keywords: ['tabla', 'tabla de verdad', 'truth', 'table', 'puerta', 'compuerta', 'and', 'or', 'not', 'logica'],
+  key: 't',
+  defaults: { label: 'AND', inputs: 2, outputs: 1, inNames: 'A,B', outNames: 'Y', table: ttPreset('and', 2) },
+  fields: [
+    { key: 'label', label: 'Nombre', kind: 'text' },
+    { key: 'inputs', label: 'Entradas', kind: 'number', min: 1, max: TT_MAX_IN },
+    { key: 'outputs', label: 'Salidas', kind: 'number', min: 1, max: TT_MAX_OUT },
+    { key: 'inNames', label: 'Nombres de entradas', kind: 'text' },
+    { key: 'outNames', label: 'Nombres de salidas', kind: 'text' },
+  ],
+  size: (p) => ttSize(p),
+  pins: (p) => {
+    const { w } = ttSize(p);
+    return [
+      ...Array.from({ length: ttInputs(p) }, (_, i) => ({ id: ttInPinId(i), x: 0, y: 10 + i * 20, dir: 'in' as const, label: ttNames(p, 'in')[i] })),
+      ...Array.from({ length: ttOutputs(p) }, (_, j) => ({ id: ttOutPinId(p, j), x: w, y: 10 + j * 20, dir: 'out' as const, label: ttNames(p, 'out')[j] })),
+    ];
+  },
+  behavior: (p) => {
+    const columns = ttColumns(p);
+    return { step: (v) => ttEvaluate(columns, v) };
+  },
+};
+/** Tamaño del símbolo: ancho para las columnas y alto para las filas de la tabla (10 por fila) más la cabecera. */
+export function ttSize(p: Props) {
+  const cols = ttInputs(p) + ttOutputs(p);
+  const w = Math.max(80, Math.ceil((24 + cols * 18) / 10) * 10);
+  const h = Math.max(20 * Math.max(ttInputs(p), ttOutputs(p)) + 10, Math.ceil((22 + ttRows(p) * 10 + 8) / 10) * 10);
+  return { w, h };
+}
+
 // ── Entradas y salidas ──────────────────────────────────────────────────────────
 /** Entradas del display de 7 segmentos, de arriba abajo. */
 export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
@@ -151,10 +257,13 @@ const ELEMENTS: ElementDef[] = [
     kind: 'button',
     name: 'Pulsador',
     group: 'Entradas y salidas',
-    description: 'Vale 1 mientras lo mantienes pulsado.',
-    keywords: ['pulsador', 'boton', 'button', 'momentaneo'],
-    defaults: { label: '' },
-    fields: [{ key: 'label', label: 'Nombre', kind: 'text' }],
+    description: 'Vale 1 mientras lo mantienes pulsado. Con «Activo en bajo» vale 1 en reposo y 0 mientras lo pulsas, como un pulsador con resistencia a VCC.',
+    keywords: ['pulsador', 'boton', 'button', 'momentaneo', 'activo en bajo'],
+    defaults: { label: '', activeLow: 0 },
+    fields: [
+      { key: 'label', label: 'Nombre', kind: 'text' },
+      { key: 'activeLow', label: 'Activo en bajo (0 al pulsar)', kind: 'toggle' },
+    ],
     size: () => ({ w: 40, h: 20 }),
     pins: () => SOURCE_PIN,
     behavior: (_p, _c, env) => source(env),
@@ -235,6 +344,7 @@ const ELEMENTS: ElementDef[] = [
   gate('xnor', 'XNOR', xor, true, '', 'XOR negada: sale 1 si un número par de entradas vale 1.'),
   unary('not', 'NOT', true, 'v', 'Inversor: sale lo contrario de su entrada.'),
   unary('buf', 'Buffer', false, '', 'Repite su entrada. Útil para separar ramas de un circuito.'),
+  truthElement,
   {
     kind: 'tri',
     name: 'Buffer triestado',
@@ -310,9 +420,10 @@ const ELEMENTS: ElementDef[] = [
     kind: 'srlatch',
     name: 'Latch SR',
     group: 'Biestables',
-    description: 'S pone Q a 1 y R a 0; sin ninguna, recuerda. S = R = 1 no está permitido.',
+    description: 'S pone Q a 1 y R a 0; sin ninguna, recuerda. S = R = 1 no está permitido. Al arrancar vale X (desconocido) salvo que elijas un estado inicial.',
     keywords: ['latch', 'sr', 'set', 'reset', 'cerrojo', 'memoria'],
-    defaults: {},
+    defaults: { init: 2 },
+    fields: [{ key: 'init', label: 'Estado inicial', kind: 'select', options: [{ value: '2', label: 'X · desconocido' }, { value: '0', label: '0' }, { value: '1', label: '1' }] }],
     size: () => ({ w: 60, h: 40 }),
     pins: () => [
       { id: 'S', x: 0, y: 10, dir: 'in' },
@@ -320,8 +431,8 @@ const ELEMENTS: ElementDef[] = [
       { id: 'Q', x: 60, y: 10, dir: 'out' },
       { id: 'QN', x: 60, y: 30, dir: 'out', label: 'Q̅' },
     ],
-    behavior: () => {
-      let q: Bit = X;
+    behavior: (p) => {
+      let q: Bit = ([0, 1].includes(num(p.init, 2)) ? num(p.init, 2) : X) as Bit;
       return {
         step: ([s, r]) => {
           if (s === 1 && r === 1) q = X;

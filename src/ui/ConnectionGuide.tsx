@@ -1,11 +1,10 @@
 import { X } from "lucide-react";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { pinKey, type Netlist } from "../core/netlist";
 import type { CircuitSnapshot, WireData, Vec } from "../core/types";
 import { wirePoints } from "./geometry";
-import { useEditor } from "./context";
 import { namedPins } from "./readableConnections";
-import { connectionLegend, renameLegendEntry, type LegendEntry } from "./wiring-legend";
+import { type LegendEntry } from "./wiring-legend";
 import { ConnectionEndpoint } from "./ConnectionEndpoint";
 import { WIRE_COLORS } from "./geometry";
 import { HintButton } from "./Overlays";
@@ -81,7 +80,6 @@ export function ConnectionGuide({
   wire?: WireData;
   onClear: () => void;
 }) {
-  const { project } = useEditor();
   const guide = useRef<HTMLElement>(null);
   useLayoutEffect(() => {
     const node = guide.current,
@@ -103,11 +101,6 @@ export function ConnectionGuide({
       canvas.style.removeProperty("--connection-guide-height");
     };
   }, []);
-  const rawLegend = project.meta.get("wiring.legend");
-  const legend = useMemo(
-    () => connectionLegend(snapshot, netlist, rawLegend),
-    [snapshot, netlist, rawLegend],
-  );
   const net = wire && wireNet(wire, netlist);
   let name = "Conexión";
   if (net !== undefined) {
@@ -130,7 +123,7 @@ export function ConnectionGuide({
   return (
     <aside
       ref={guide}
-      className={`connection-guide ${wire ? "is-focused" : ""} ${legend.length ? "has-legend" : ""}`}
+      className={`connection-guide ${wire ? "is-focused" : ""}`}
       aria-label="Guía de conexiones"
     >
       <div
@@ -172,24 +165,6 @@ export function ConnectionGuide({
         className="connection-guide-idle"
         aria-hidden={wire ? true : undefined}
       >
-        {legend.length > 0 && (
-          <div className="connection-legend">
-            {legend.map((entry) => (
-              <LegendItem
-                key={entry.color}
-                entry={entry}
-                editable={!project.readOnly}
-                onRecolor={(from, to) => project.recolorWires(from, to)}
-                onRename={(label) =>
-                  project.setMeta(
-                    "wiring.legend",
-                    renameLegendEntry(project.meta.get("wiring.legend"), entry.colors, label),
-                  )
-                }
-              />
-            ))}
-          </div>
-        )}
         <span className="connection-help">
           Los cruces de cables no crean una conexión.
         </span>
@@ -199,7 +174,7 @@ export function ConnectionGuide({
 }
 
 /** Entrada de la leyenda: un clic la renombra en el sitio (Enter guarda, Esc cancela, vacío = automático). */
-function LegendItem({ entry, editable, onRename, onRecolor }: { entry: LegendEntry & { count?: number }; editable: boolean; onRename: (label: string) => void; onRecolor: (from: string, to: string) => void }) {
+export function LegendItem({ entry, editable, onRename, onRecolor }: { entry: LegendEntry & { count?: number }; editable: boolean; onRename: (label: string) => void; onRecolor: (from: string, to: string) => void }) {
   const [editing, setEditing] = useState(false);
   // Cada muestra de color es un selector: cambiarla recolorea todos los cables de ese color.
   const tones = (

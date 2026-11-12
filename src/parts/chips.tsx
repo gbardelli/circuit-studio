@@ -3,7 +3,7 @@
 // es común: entradas de alta impedancia, salidas en contrafase hacia su propia alimentación y
 // un retardo de propagación de 1 µs para que las cadenas de puertas y los contadores se comporten.
 import { memo } from 'react';
-import { Diode, Resistor, type Element } from '../core/solver';
+import { Diode, Resistor, VSource, type Element } from '../core/solver';
 import type { PinDef, Props } from '../core/types';
 import type { PartDef, RenderProps, SimContext } from './types';
 
@@ -35,6 +35,8 @@ export interface ChipSpec<S = Record<string, number>> {
   openDrain?: boolean;
   /** Salidas con resistencia interna a VCC (Ω) en lugar de transistor de subida, como el 7448. */
   pullUp?: number;
+  /** Salida TTL: el nivel alto solo llega a ≈3,4 V (par Darlington con diodo) y no empuja por encima de eso. */
+  ttlHigh?: boolean;
   /** Alimentación de la que salen los niveles altos (si no es vcc). */
   rail?: string;
   init(): S;
@@ -45,6 +47,12 @@ export interface ChipSpec<S = Record<string, number>> {
 
 const R_ON = 40;
 const R_OFF = 1e9;
+const TTL_HIGH_SOURCE = 3.95;
+/**
+ * Modelo eléctrico fiel de las entradas y salidas TTL (nivel alto de ≈3,4 V, IIH e IIL). Está apagado por defecto: el
+ * simulador usa niveles ideales. Se enciende para estudios de niveles, como work/test-resistors.ts.
+ */
+export const realisticTtl = { on: false };
 const PITCH = 10;
 const ROW = 30; // 0,3": cruza justo el canal central de la protoboard
 
@@ -161,10 +169,26 @@ function chipSim<S>(spec: ChipSpec<S>) {
 
     const elements: Element[] = [];
     if (spec.vcc) elements.push(new Resistor(vcc, gnd, () => 100_000)); // consumo en reposo
-    for (const name of inputs) elements.push(new Resistor(net(name), gnd, () => 10_000_000));
+    for (const name of inputs) {
+      if (realisticTtl.on && spec.ttlHigh && spec.vcc) {
+        // Entrada TTL: ≈20 µA hacia dentro en alto (IIH) y ≈0,3 mA hacia fuera en bajo (IIL, por la resistencia de base
+        // y la unión emisor-base). Por eso una pull-down de varios kΩ no baja de 0,8 V y una entrada al aire no es fiable.
+        const x = ctx.node();
+        elements.push(new Resistor(net(name), gnd, () => 150_000));
+        elements.push(new Resistor(vcc, x, () => 13_000));
+        elements.push(new Diode(x, net(name), 1e-12, 1.1));
+      } else elements.push(new Resistor(net(name), gnd, () => 10_000_000));
+    }
     for (const o of spec.outputs) {
       const n = net(o);
-      if (!spec.openDrain) elements.push(new Resistor(n, rail, () => (levels[o] === true ? (spec.pullUp ?? R_ON) : R_OFF)));
+      if (spec.openDrain) {
+        // solo tira a tierra
+      } else if (realisticTtl.on && spec.ttlHigh && spec.pullUp === undefined) {
+        // TTL: fuente de ≈3,95 V con 100 Ω y un diodo hacia la patilla → ≈3,4 V en vacío y sin empujar si algo la sube más.
+        const x = ctx.node();
+        elements.push(new VSource(x, gnd, () => (levels[o] === true ? TTL_HIGH_SOURCE : 0), () => 100));
+        elements.push(new Diode(x, n, 1e-12, 1.1));
+      } else elements.push(new Resistor(n, rail, () => (levels[o] === true ? (spec.pullUp ?? R_ON) : R_OFF)));
       elements.push(new Resistor(n, gnd, () => (levels[o] === false ? (spec.openDrain ? 8 : R_ON) : R_OFF)));
     }
     if (spec.extra) elements.push(...spec.extra(net, () => levels, () => lastIo));
@@ -1119,7 +1143,7 @@ const tlc555Def = timer555({
 
 // ── Catálogo ────────────────────────────────────────────────────────────────────
 // Legacy packages in the course diagrams. TTL thresholds do not apply to HC parts.
-const LEGACY = { ...TTL, inputThresholds: { low: 0.8, high: 2 }, minSupply: 4.5 };
+const LEGACY = { ...TTL, inputThresholds: { low: 0.8, high: 2 }, minSupply: 4.5, ttlHigh: true };
 const LS = { ...LEGACY, minSupply: 4.75 };
 const asLS = <S,>(spec: ChipSpec<S>, type = spec.type.replace('hc','ls'), part = spec.part.replace('HC','LS')): ChipSpec<S> => ({
   ...spec, ...LS, type, part,

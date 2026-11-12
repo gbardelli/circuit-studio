@@ -3019,3 +3019,24 @@ body.lib-dragging * {
 .reference-brand { display: block; flex: 0 0 auto; width: 92px; height: 32px; padding: 5px 6px; border-radius: 5px; background: #fff; object-fit: contain; }
 .reference-brand-dark { background: #15181e; }
 .reference-example { color: var(--text-2); font-size: 11px; line-height: 1.3; }
+
+/* Aviso: el proyecto tiene piezas que esta versión de la app no conoce (no se dibujan, pero siguen guardadas). */
+.hidden-parts-notice {
+  position: fixed;
+  left: 50%;
+  top: 64px;
+  transform: translateX(-50%);
+  z-index: 60;
+  display: grid;
+  gap: 2px;
+  max-width: 620px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid #c98a1b;
+  background: #2b2310;
+  color: #f4dfae;
+  font-size: 12.5px;
+  line-height: 1.4;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
+}
+.hidden-parts-notice strong { color: #ffd27a; font-size: 13px; }

@@ -30,20 +30,24 @@ import { mountedPosition } from '../parts/stack';
 import { WIRE_COLORS, nearestWireColor } from '../ui/geometry';
 
 const tinker = (label: string) => WIRE_COLORS.find((c) => c.label === label)!.value;
-/** Cada grupo de señales del ascensor con un color de Tinkercad. */
+/**
+ * Cada grupo de señales con un color de Tinkercad bien distinto de los demás y con pocos cables:
+ * lo interno de un bloque (codificador de sensores, comparador) no comparte color con lo que
+ * entra o sale de él, para que no se junten en una mancha del mismo tono.
+ */
 const GROUP_COLOR: Record<string, string> = {
-  Cabina: 'Azul', Llamadas: 'Amarillo', Destino: 'Morado', 'Piso actual': 'Turquesa', Sensores: 'Verde',
-  Control: 'Rosa', Cuenta: 'Marrón', Relojes: 'Marrón', Reinicio: 'Gris',
+  Cabina: 'Azul', Pedidos: 'Amarillo', Destino: 'Morado', 'Piso actual': 'Turquesa', Sensores: 'Verde',
+  'Sensores internos': 'Marrón', Control: 'Rosa', 'Reloj y reinicio': 'Gris',
 };
 const GROUP_NAMES = [
   { label: 'Cabina', names: ['PP1', 'PP2', 'PP3', 'PP4'] },
-  { label: 'Llamadas', names: ['LL1', 'LL2', 'LL3', 'LL4'] },
-  { label: 'Destino', names: ['SEL0', 'SEL1', 'SEL2', 'DEST0', 'DEST1', 'DEST2', '/PED1', '/PED2', '/PED3', '/PED4', 'PED2_O_PED3', 'PED3_O_PED1_HABILITADO'] },
+  { label: 'Pedidos', names: ['LL1', 'LL2', 'LL3', 'LL4', '/PED1', '/PED2', '/PED3', '/PED4', 'PED2_O_PED3', 'PED3_O_PED1_HABILITADO'] },
+  { label: 'Destino', names: ['SEL0', 'SEL1', 'SEL2', 'DEST0', 'DEST1', 'DEST2'] },
   { label: 'Piso actual', names: ['PISO0', 'PISO1', 'PISO2'] },
-  { label: 'Sensores', names: ['SP1', 'SP2', 'SP3', 'SP4', 'SEN0', 'SEN1', 'SEN2', 'SEN01', '/SEN0', '/SEN1', '/SEN2', '/SEN01', 'SENSOR', '/SENSOR', 'CAPTURA_PISO', 'SEN2_O_SEN3', 'SEN_P4'] },
+  { label: 'Sensores', names: ['SP1', 'SP2', 'SP3', 'SP4', 'SEN0', 'SEN1', 'SEN2', 'SENSOR', 'CAPTURA_PISO'] },
+  { label: 'Sensores internos', names: ['SEN01', '/SEN0', '/SEN1', '/SEN2', '/SEN01', '/SENSOR', 'SEN2_O_SEN3', 'SEN_P4'] },
   { label: 'Control', names: ['OCUPADO', '/OCUPADO', 'ACEPTAR', '/ACEPTAR', 'MANTENER', 'OCUPADO_SIG', 'VÁLIDO', 'VÁLIDO_SIG', 'SOLICITUD', 'LLEGÓ', '/LLEGÓ', 'SUBIR', 'BAJAR', 'PISO>DEST', 'PISO<DEST', 'DEST=PISO'] },
-  { label: 'Relojes', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ'] },
-  { label: 'Reinicio', names: ['RESET', '/RESET'] },
+  { label: 'Reloj y reinicio', names: ['CLK', 'CLK_1HZ', '/CLK_1HZ', 'RESET', '/RESET'] },
 ];
 /** Nombres de la leyenda: [color de Tinkercad, qué lleva]. */
 const LEGEND: [string, string][] = [
@@ -51,14 +55,13 @@ const LEGEND: [string, string][] = [
   ['Negro', 'GND'],
   ['Naranja', '3,3 V del GIGA'],
   ['Azul', 'Pulsadores de cabina y su codificador'],
-  ['Amarillo', 'Llamadas desde la pantalla'],
-  ['Verde', 'Sensores de planta y su codificador'],
+  ['Amarillo', 'Pedidos y llamadas desde la pantalla'],
   ['Morado', 'Piso solicitado (destino)'],
   ['Turquesa', 'Piso actual'],
-  ['Rosa', 'Control: ocupado, aceptar, llegó'],
-  ['Marrón', 'Reloj (NE555)'],
-  ['Gris', 'Segmentos de los displays'],
-  ['Blanco', 'Otras señales'],
+  ['Verde', 'Sensores de planta'],
+  ['Rosa', 'Control y comparador: ocupado, aceptar, llegó, subir, bajar'],
+  ['Marrón', 'Interior del codificador de sensores'],
+  ['Gris', 'Displays, reloj y reinicio'],
 ];
 const TINKERCAD_SIGNALS: Record<string, string> = Object.fromEntries(
   GROUP_NAMES.flatMap((g) => g.names.map((n) => [n, tinker(GROUP_COLOR[g.label])])),
@@ -94,15 +97,15 @@ export function elevatorClassTemplate(): Template {
   const r = new Bench();
   const [B1, B2, B3, B4] = ['b1', 'b2', 'b3', 'b4'];
   r.board(B1, 0, 0, '1 · Pulsadores, prioridad y piso actual');
-  r.board(B2, 0, 360, '2 · Control, destino y su display');
-  r.board(B3, 0, 720, '3 · Sensores, piso actual y comparación');
-  r.board(B4, 0, 1180, '4 · Interfaz con el GIGA · 2 × TXS0108E');
+  r.board(B2, 0, 520, '2 · Control, destino y su display');
+  r.board(B3, 0, 1040, '3 · Sensores, piso actual y comparación');
+  r.board(B4, 0, 1680, '4 · Interfaz con el GIGA · 2 × TXS0108E');
   // Placa 4: riel de arriba a 5 V (lado B de los TXS) y riel de abajo a 3,3 V del GIGA (lado A).
   r.auxiliaryBottomRail = B4;
   for (const p of r.parts) if (p.type === 'breadboard-full') p.props = { ...p.props, topVoltage: 5, bottomVoltage: p.key === B4 ? 3.3 : 5 };
   // El GIGA queda junto a la placa 4: sus cables a los TXS son cortos y no cruzan las demás.
-  r.loose('giga', 'arduino-giga', -470, 1190, { label: 'Arduino GIGA R1 WiFi · pantalla' });
-  const board = { id: '', type: 'arduino-giga', x: -470, y: 1190, rot: 0 as const, props: {} };
+  r.loose('giga', 'arduino-giga', -470, 1690, { label: 'Arduino GIGA R1 WiFi · pantalla' });
+  const board = { id: '', type: 'arduino-giga', x: -470, y: 1690, rot: 0 as const, props: {} };
   const screen = mountedPosition({ id: '', type: 'giga-display-shield', x: 0, y: 0, rot: 0, props: {} }, board);
   r.loose('screen', 'giga-display-shield', screen.x, screen.y, { label: 'GIGA Display Shield · estado del ascensor' });
   // Los módulos se clavan a caballo del canal: fila VB/B1–B8/GND en «d» y fila VA/A1–A8/OE en «g».
@@ -117,10 +120,10 @@ export function elevatorClassTemplate(): Template {
   };
 
   // ── Alimentación: fuente de protoboard a 5 V ──────────────────────────────
+  // Módulo MB102 clavado en los rieles del extremo izquierdo de la placa 1, con los dos puentes a 5 V.
+  // Va antes de los puentes entre placas para reservar sus cuatro agujeros de riel.
+  r.plugPower('supply', B1, 1, { on: true, top: 5, bottom: 5, label: 'MB102 · fuente de protoboard · 5 V' });
   r.chainRails([B1, B2, B3, B4], WIRE.v5);
-  r.loose('supply', 'bench-supply', -520, 120, { voltage: 5, current: 1, label: 'Fuente de protoboard · 5 V' });
-  r.wire(['supply', '+'], r.railHole(B1, 'tp', 5), WIRE.v5);
-  r.wire(['supply', '-'], r.railHole(B1, 'tn', 8), WIRE.gnd);
   // GIGA: masa común y su 3V3 al riel de abajo de la placa 4 (lado A de los TXS).
   r.wire(['giga', 'GND.2'], r.railHole(B4, 'bn', 3), WIRE.gnd);
   r.wire(['giga', '3V3'], r.railHole(B4, 'bp', 5), WIRE.v33);
@@ -289,30 +292,30 @@ export function elevatorClassTemplate(): Template {
   r.wire(['u13', '3B'], ['u21', '2B'], WIRE.sensor);
   r.wire(['u21', '2B'], ['u21', '3B'], WIRE.sensor);
   // SEN0: SP1 (U10.1) · SP2' (U21.1) → U10.2 → NAND con SP3' (U9.3) → AND con SP4' (U21.2).
-  r.wire(['u10', '1Y'], ['u21', '1A'], WIRE.sensor);
-  r.wire(['u21', '1Y'], ['u10', '2A'], WIRE.sensor);
-  r.wire(['u10', '2Y'], ['u9', '3A'], WIRE.sensor);
-  r.wire(['u9', '3Y'], ['u21', '2A'], WIRE.sensor);
+  r.wire(['u10', '1Y'], ['u21', '1A'], WIRE.encoder);
+  r.wire(['u21', '1Y'], ['u10', '2A'], WIRE.encoder);
+  r.wire(['u10', '2Y'], ['u9', '3A'], WIRE.encoder);
+  r.wire(['u9', '3Y'], ['u21', '2A'], WIRE.encoder);
   // SEN1: (SP2 + SP3) (U9.1) · SP4' (U21.3).
-  r.wire(['u9', '1Y'], ['u21', '3A'], WIRE.sensor);
+  r.wire(['u9', '1Y'], ['u21', '3A'], WIRE.encoder);
   // SENSOR = NAND(SP1'·SP2', SP3'·SP4') (U13 puertas 1 y 3, U9 puerta 4).
-  r.wire(['u13', '1Y'], ['u9', '4A'], WIRE.sensor);
-  r.wire(['u13', '3Y'], ['u9', '4B'], WIRE.sensor);
+  r.wire(['u13', '1Y'], ['u9', '4A'], WIRE.encoder);
+  r.wire(['u13', '3Y'], ['u9', '4B'], WIRE.encoder);
   // Tiempo de mantenimiento del latch: SENSOR cambia tras 2 puertas; cada bit de datos, tras 4 o 5.
   // SEN0 ya va por 5 puertas; SEN1 pasa por dos inversores (U10.3–4) y SEN2 por dos inversores
   // (U10.5–6) y una AND usada como buffer (U21.4).
-  r.wire(['u21', '2Y'], ['u11', '1D'], WIRE.current);
-  r.wire(['u21', '3Y'], ['u10', '3A'], WIRE.current);
-  r.wire(['u10', '3Y'], ['u10', '4A'], WIRE.current);
-  r.wire(['u10', '4Y'], ['u11', '2D'], WIRE.current);
-  r.wire(['u9', '2Y'], ['u10', '5A'], WIRE.current);
-  r.wire(['u10', '5Y'], ['u10', '6A'], WIRE.current);
-  r.wire(['u10', '6Y'], ['u21', '4A'], WIRE.current);
-  r.wire(['u21', '4A'], ['u21', '4B'], WIRE.current);
-  r.wire(['u21', '4Y'], ['u11', '3D'], WIRE.current);
+  r.wire(['u21', '2Y'], ['u11', '1D'], WIRE.encoder);
+  r.wire(['u21', '3Y'], ['u10', '3A'], WIRE.encoder);
+  r.wire(['u10', '3Y'], ['u10', '4A'], WIRE.encoder);
+  r.wire(['u10', '4Y'], ['u11', '2D'], WIRE.encoder);
+  r.wire(['u9', '2Y'], ['u10', '5A'], WIRE.encoder);
+  r.wire(['u10', '5Y'], ['u10', '6A'], WIRE.encoder);
+  r.wire(['u10', '6Y'], ['u21', '4A'], WIRE.encoder);
+  r.wire(['u21', '4A'], ['u21', '4B'], WIRE.encoder);
+  r.wire(['u21', '4Y'], ['u11', '3D'], WIRE.encoder);
   gnd(['u11', '4D']);
-  r.wire(['u9', '4Y'], ['u11', 'LE12'], WIRE.sensor);
-  r.wire(['u11', 'LE12'], ['u11', 'LE34'], WIRE.sensor);
+  r.wire(['u9', '4Y'], ['u11', 'LE12'], WIRE.encoder);
+  r.wire(['u11', 'LE12'], ['u11', 'LE34'], WIRE.encoder);
   // Comparador: A = piso actual, B = destino. Cascada fija en «iguales».
   for (let bit = 0; bit < 3; bit++) {
     r.wire(['u8', `${bit + 1}Q`], ['u12', `B${bit}`], WIRE.dest);
@@ -382,7 +385,7 @@ export function elevatorClassTemplate(): Template {
     level: 'Avanzado',
     category: 'Lógica secuencial',
     sketch: ELEVATOR_CLASS_GIGA,
-  }, TINKERCAD_SIGNALS);
+  }, TINKERCAD_SIGNALS, { tidy: true });
   // 5 V (alimentación principal) en rojo y 3,3 V del GIGA en naranja; lo demás, al color de Tinkercad más cercano.
   // Los siete segmentos de cada display van en gris: así no se confunden con los colores de función.
   const segments = new Set(Object.values(SEGMENT_COLORS));

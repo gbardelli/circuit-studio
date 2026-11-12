@@ -21,6 +21,7 @@ import { useStartupTask } from './Startup';
 import { useAutoVersions } from './History';
 import { AssemblyStage } from './AssemblyStage';
 import { WorkbenchPanel, WorkbenchRail } from './Workbench';
+import { useDFPlayerAudio } from './dfplayerAudio';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -159,6 +160,7 @@ function replaceWith(project: Project, t: NonNullable<ReturnType<typeof findTemp
 export function EditorShell() {
   const { project, engine } = useEditor();
   const snapshot = useSnapshot();
+  useDFPlayerAudio(engine, project.room, snapshot);
   const toast = useUi((s) => s.toast);
   const compactPanel = useUi((s) => s.compactPanel);
   const guiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
@@ -180,10 +182,12 @@ export function EditorShell() {
 
   useEffect(() => {
     const t = setTimeout(() => {
-      rememberProject(project.room, project.name, snapshot);
+      // Con piezas ocultas (tipos que esta versión no conoce) la miniatura saldría incompleta: no se sobrescribe.
+      const complete = project.hidden.length === 0;
+      if (complete) rememberProject(project.room, project.name, snapshot);
       // Miniatura y nombre para el panel de circuitos (solo quien puede editar).
       if (CLOUD && !project.readOnly && project.synced) {
-        void api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ name: project.name, preview: snapshot }) }).catch(() => {});
+        void api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify(complete ? { name: project.name, preview: snapshot } : { name: project.name }) }).catch(() => {});
       }
     }, CLOUD ? 2500 : 600);
     return () => clearTimeout(t);
@@ -311,6 +315,12 @@ export function EditorShell() {
       </main>
       <Inspector />
       <StatusBar />
+      {project.hidden.length > 0 && (
+        <div className="hidden-parts-notice" role="alert">
+          <strong>{project.hidden.reduce((n, h) => n + h.count, 0)} pieza(s) no se muestran en esta versión de la app.</strong>
+          <span>{project.hidden.map((h) => `${h.type} ×${h.count}`).join(', ')}. Siguen guardadas en el proyecto: no uses «Restaurar» ni borres lo que ves hasta abrirlo con la versión que las incluye.</span>
+        </div>
+      )}
       {toast && (
         <div className="toast" role="status">
           {toast.tone === 'ok' ? <CheckCircle2 size={16} color="var(--green)" /> : <Info size={16} color="var(--accent-hi)" />}

@@ -1,6 +1,6 @@
 import type { CircuitSnapshot } from "../core/types";
 import type { LabState } from "../sim/session";
-import { PARTS } from "../parts";
+import { PARTS, isNote } from "../parts";
 import { formatSI } from '../core/units';
 export function download(name: string, text: string, type = "text/plain") {
   const url = URL.createObjectURL(new Blob([text], { type })),
@@ -47,6 +47,7 @@ export function materials(snapshot: CircuitSnapshot) {
     { name: string; reference: string; quantity: number; key: string }
   >();
   for (const p of snapshot.parts) {
+    if (isNote(p.type)) continue;
     const def = PARTS[p.type];
     const values = Object.entries(p.props)
       .filter(([key]) =>
