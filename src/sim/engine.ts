@@ -388,12 +388,25 @@ export class SimEngine {
     const signal = net(partId,def.mcu!.pinIds[runner.uartPins[port][direction === 'rx' ? 0 : 1]]);
     const ground = net(partId,def.ground![0]);
     if (signal === undefined || ground === undefined || signal === ground) return [];
+    const line = this.seriesNets(signal,ground,net);
     return [...this.parts.values()].filter(part => {
       const device = part.sim.uart;
-      return device && net(part.id,device.pins[direction === 'tx' ? 'rx' : 'tx']) === signal
-        && net(part.id,device.pins.ground) === ground && net(part.id,device.pins.supply) !== signal
+      return device && line.has(net(part.id,device.pins[direction === 'tx' ? 'rx' : 'tx'])!)
+        && net(part.id,device.pins.ground) === ground && !line.has(net(part.id,device.pins.supply)!)
         && device.powered(this.circuit!.v) && Math.abs(uart.baudRate/device.baud()-1) < .03;
     });
+  }
+
+  /** A serial line may cross one series resistor, like the 1 kΩ DFRobot recommends with 5 V boards. */
+  private seriesNets(signal: number, ground: number, net: (part: string, pin: string) => number | undefined) {
+    const line = new Set([signal]);
+    for (const part of this.parts.values()) {
+      if (part.type !== 'resistor' || Number(part.props.resistance) > 10_000) continue;
+      const [a,b] = [net(part.id,'1'),net(part.id,'2')];
+      const other = a === signal ? b : b === signal ? a : undefined;
+      if (other !== undefined && other !== ground) line.add(other);
+    }
+    return line;
   }
 
   private receiveUart() {

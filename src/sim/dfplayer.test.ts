@@ -53,4 +53,28 @@ void loop() {}`;
     expect(engine.getVisual('screen')).toMatchObject({ powered: true, playing: true, track: 1, volume: 23 });
     engine.stop();
   }, 90_000);
+
+  it('keeps the serial link through the recommended 1 kΩ series resistor', async () => {
+    const result = await compileSketch(`#include <DFRobotDFPlayerMini.h>
+DFRobotDFPlayerMini player;
+void setup() { Serial1.begin(9600); player.begin(Serial1, false, false); player.playMp3Folder(2); }
+void loop() {}`, 'arduino:avr:mega:cpu=atmega2560');
+    expect(result.ok, result.stderr).toBe(true);
+    const run = (resistance: number) => {
+      const snapshot = templateSnapshot(TOUCHSCREEN);
+      const screen = snapshot.parts.find(p => p.id === 'screen')!;
+      screen.type = 'dfplayer-mini';
+      snapshot.parts.push({ id: 'r', type: 'resistor', x: 300, y: 200, rot: 0, props: { resistance } });
+      const tx = snapshot.wires.find(w => w.a.pin === 'D18')!;
+      snapshot.wires.push({ ...tx, id: 'tx2', a: { part: 'r', pin: '2', x: 0, y: 0 } });
+      tx.b = { part: 'r', pin: '1', x: 0, y: 0 };
+      const engine = new SimEngine(); engine.update(snapshot); engine.setProgram('mcu', result.hex!);
+      engine.start({ manual: true }); engine.tick(3);
+      const visual = engine.getVisual('screen');
+      engine.stop();
+      return visual;
+    };
+    expect(run(1000)).toMatchObject({ playing: true, track: 2 });
+    expect(run(100_000)).toMatchObject({ playing: false });
+  }, 90_000);
 });
