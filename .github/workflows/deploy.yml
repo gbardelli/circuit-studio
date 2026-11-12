@@ -33,9 +33,9 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Tipos
         run: npx tsc --noEmit -p .
-      # Informativo: hoy falla una prueba conocida (src/sim/elevatorClass.test.ts, enlace ?new=elevator-class), así que no bloquea el despliegue.
+      - name: Instalar compilador Arduino
+        run: npm run setup:arduino
       - name: Pruebas
-        continue-on-error: true
         run: npx vitest run src/parts src/sim src/collab src/logic src/ui
       - name: No desplegar si algún proyecto usa piezas que esta versión no conoce
         run: |

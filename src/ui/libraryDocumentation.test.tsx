@@ -17,7 +17,7 @@ describe('library documentation', () => {
     act(() => renderer.root.findByProps({ 'aria-label': 'Buscar componentes' }).props.onChange({ target: { value: '74ls48' } }));
     const cards = renderer.root.findAllByProps({ className: 'card-main' });
     expect(cards.length).toBeGreaterThan(0);
-    expect(renderer.root.findAllByType('details')).toHaveLength(0);
+    expect(renderer.root.findAllByProps({ className: 'card-docs' }).length).toBeGreaterThan(0);
     act(() => cards[0].props.onClick());
     expect(useUi.getState().placing).toBe('74ls48');
   });

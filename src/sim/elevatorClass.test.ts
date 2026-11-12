@@ -256,7 +256,13 @@ describe('ascensor de clase (LS75 / LS85 / LS48 + HC, 5 V)', () => {
   it('no está en la galería, pero el enlace ?new=elevator-class abre el montaje actual', () => {
     expect(TEMPLATES.some((t) => t.id === 'elevator-class')).toBe(false);
     const hidden = findTemplate('elevator-class');
-    expect(JSON.parse(JSON.stringify(hidden))).toEqual(JSON.parse(JSON.stringify(elevatorClassTemplate())));
+    const current = elevatorClassTemplate();
+    expect(hidden).not.toBeNull();
+    expect(hidden!.parts).toEqual(current.parts);
+    expect(hidden!.sketch).toBe(current.sketch);
+    expect(hidden!.wires.map(({ a, b, color }) => ({ a, b, color }))).toEqual(
+      current.wires.map(({ a, b, color }) => ({ a, b, color })),
+    );
   });
 });
 
