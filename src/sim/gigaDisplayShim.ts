@@ -3,7 +3,7 @@
 // Adafruit_GFX, Arduino_GigaDisplayTouch y GigaDisplayRGB), así el mismo código compila para
 // el GIGA real con las librerías oficiales. Ver src/sim/gigaDisplay.ts para el protocolo.
 
-import { DFROBOT_FILES } from './dfrobotLibrary';
+import { DFROBOT_FILES } from './dfrobotLibrary.js';
 
 const GFX = `#pragma once
 // Simulador de Circuit Studio: sustituto de Arduino_GigaDisplay_GFX para el núcleo AVR.
