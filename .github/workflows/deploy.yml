@@ -29,7 +29,8 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # El lock se generó en Windows y le faltan dependencias opcionales de Linux: npm ci lo rechaza.
+      - run: npm install --no-audit --no-fund
       - name: Tipos
         run: npx tsc --noEmit -p .
       # Informativo: hoy falla una prueba conocida (src/sim/elevatorClass.test.ts, enlace ?new=elevator-class), así que no bloquea el despliegue.
