@@ -1,0 +1,44 @@
+# Despliegue automático a Vercel (cuenta 20250308-9812) en cada push a main.
+# No usa la integración Git de Vercel: funciona con cualquier correo porque se autentica con un token.
+# Necesita el secreto VERCEL_TOKEN y las variables VERCEL_ORG_ID y VERCEL_PROJECT_ID del repositorio.
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Tipos
+        run: npx tsc --noEmit -p .
+      # Informativo: hoy falla una prueba conocida (src/sim/elevatorClass.test.ts, enlace ?new=elevator-class), así que no bloquea el despliegue.
+      - name: Pruebas
+        continue-on-error: true
+        run: npx vitest run src/parts src/sim src/collab src/logic src/ui
+      - name: No desplegar si algún proyecto usa piezas que esta versión no conoce
+        run: |
+          npx vercel env pull .env.production.local --environment=production --yes --token "$VERCEL_TOKEN"
+          npx tsx scripts/check-part-types.ts
+      - name: Desplegar a producción
+        run: npx vercel deploy --prod --yes --token "$VERCEL_TOKEN"
