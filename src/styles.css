@@ -3040,3 +3040,40 @@ body.lib-dragging * {
   box-shadow: 0 8px 24px rgb(0 0 0 / 0.45);
 }
 .hidden-parts-notice strong { color: #ffd27a; font-size: 13px; }
+
+/* DFPlayer audio library */
+.audio-files { padding: 16px 12px; }
+.audio-files-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 13px; }
+.audio-files-heading h3 { color: var(--text); font-size: 13px; font-weight: 650; margin: 0 0 3px; }
+.audio-files-heading p { margin: 0; color: var(--text-3); font-size: 11px; line-height: 1.35; }
+.audio-files-count { flex: none; padding: 3px 7px; border: 1px solid var(--line); border-radius: 6px; color: var(--text-2); font-size: 10px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.audio-files-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; pointer-events: none; }
+.audio-empty { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px; padding: 18px 10px 16px; border: 1px dashed #3e454d; border-radius: 10px; background: #ffffff05; color: var(--text-2); transition: border-color 150ms ease, background-color 150ms ease; }
+.audio-empty.is-dragging { border-color: #85baff; background: #77aaff10; }
+.audio-empty-icon, .audio-track-icon { display: grid; place-items: center; flex: none; color: #b3c9e4; background: #a4c8f21a; border: 1px solid #aecbf127; }
+.audio-empty-icon { width: 36px; height: 36px; border-radius: 11px; margin-bottom: 6px; }
+.audio-empty strong { color: var(--text); font-size: 12px; font-weight: 600; }
+.audio-empty > span:last-child { font-size: 11px; line-height: 1.4; }
+.audio-upload { display: flex; align-items: center; justify-content: center; gap: 7px; width: 100%; min-height: 34px; margin-top: 10px; border: 1px solid #ffffff20; border-radius: 8px; background: linear-gradient(#30353d, #252930); color: #f3f5f7; font: 600 12px var(--font); cursor: pointer; box-shadow: inset 0 1px #ffffff0e, 0 1px 2px #0003; transition: background-color 120ms ease, transform 120ms ease; }
+.audio-upload:active { transform: scale(.985); }
+.audio-upload:disabled { cursor: wait; opacity: .55; }
+.audio-upload:focus-visible, .audio-track button:focus-visible { outline: 2px solid #9ecaff; outline-offset: 2px; }
+.audio-track-list { display: flex; flex-direction: column; max-height: 230px; overflow-y: auto; border: 1px solid var(--line); border-radius: 9px; background: #ffffff05; }
+.audio-track { display: flex; align-items: center; gap: 9px; min-width: 0; padding: 9px; }
+.audio-track + .audio-track { border-top: 1px solid var(--line); }
+.audio-track-icon { width: 32px; height: 32px; border-radius: 8px; }
+.audio-track-info { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+.audio-track-info strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-size: 11.5px; font-weight: 600; }
+.audio-track-info > span { color: var(--text-3); font-size: 10px; font-variant-numeric: tabular-nums; }
+.audio-track-remove { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); cursor: pointer; }
+.audio-track-confirm { display: flex; flex-direction: column; gap: 4px; align-items: flex-end; }
+.audio-track-confirm button { border: 0; padding: 2px; background: none; color: var(--text-2); font: 600 10px var(--font); cursor: pointer; }
+.audio-track-confirm button:first-child { color: #ff8d89; }
+.audio-files-format { margin: 9px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.4; }
+.audio-files-format span { color: var(--text-2); font-family: var(--mono, monospace); }
+.audio-files-privacy { display: flex; align-items: flex-start; gap: 7px; margin: 12px 0 0; color: var(--text-3); font-size: 10.5px; line-height: 1.45; }
+.audio-files-privacy svg { flex: none; margin-top: 1px; }
+.audio-files-message { margin: 9px 0 0; color: #9ed8b7; font-size: 11px; line-height: 1.4; }
+.audio-files-message.is-error { color: #ffaaa6; }
+@media (hover: hover) { .audio-upload:hover:not(:disabled) { background: #3a414a; } .audio-track-remove:hover { color: #ff9d99; background: #ff6b6b17; } }
+@media (prefers-reduced-motion: reduce) { .audio-upload, .audio-empty { transition: none; } .audio-upload:active { transform: none; } }
