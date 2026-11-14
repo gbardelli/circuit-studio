@@ -49,6 +49,8 @@
 .d-pin circle {
   transition: r 90ms var(--ease);
 }
+.d-note-dimensions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.d-note-dimensions .input { margin-top: 6px; width: 100%; }
 
 /* Barras flotantes: vista arriba al centro y simulación a la derecha; las hojas, en su propia fila
    debajo, para que nunca compitan con ellas por el ancho. */

@@ -27,7 +27,7 @@ type Drag =
   | { kind: 'wire'; from: PlacedPin & { node: string }; to: Vec; target: (PlacedPin & { node: string }) | null; moved: boolean }
   | { kind: 'marquee'; start: Vec; end: Vec; add: boolean }
   | { kind: 'pan'; sx: number; sy: number; vx: number; vy: number }
-  | { kind: 'press'; node: string }
+  | { kind: 'press'; node: string; start: Vec }
   | { kind: 'resize'; node: string; start: Vec; width: number; height: number; nextWidth: number; nextHeight: number; rot: Rotation };
 
 export function DesignCanvas() {
@@ -238,9 +238,10 @@ export function DesignCanvas() {
       const id = nodeEl.getAttribute('data-node')!;
       const node = byId.get(id)?.node;
       if (node?.kind === 'button') {
+        select([id]);
         sim.setSource(id, buttonIdle(node.props) ? 0 : 1);
         refresh();
-        setDrag({ kind: 'press', node: id });
+        setDrag({ kind: 'press', node: id, start: p });
         return;
       }
       let ids = selNodes;
@@ -257,7 +258,12 @@ export function DesignCanvas() {
     const p = world(e.clientX, e.clientY);
     setCursor(p);
     if (!drag) return;
-    if (drag.kind === 'pan') setViewport({ ...viewport, x: drag.vx + e.clientX - drag.sx, y: drag.vy + e.clientY - drag.sy });
+    if (drag.kind === 'press' && !ro && Math.hypot(p.x - drag.start.x, p.y - drag.start.y) > 5 / viewport.zoom) {
+      const btn = byId.get(drag.node)?.node;
+      sim.setSource(drag.node, btn ? buttonIdle(btn.props) : 0);
+      refresh();
+      setDrag({ kind: 'move', start: drag.start, ids: [drag.node], moved: true, dx: snap(p.x - drag.start.x), dy: snap(p.y - drag.start.y), node: drag.node });
+    } else if (drag.kind === 'pan') setViewport({ ...viewport, x: drag.vx + e.clientX - drag.sx, y: drag.vy + e.clientY - drag.sy });
     else if (drag.kind === 'move') {
       const dx = snap(p.x - drag.start.x);
       const dy = snap(p.y - drag.start.y);
@@ -499,6 +505,18 @@ export function DesignCanvas() {
               </g>
             );
           })}
+          {/* Los trazos de las patillas también forman parte visual del cable seleccionado. */}
+          {sheet.wires.flatMap((wire) => [wire.a, wire.b].map((ref, index) => {
+            const pin = pinWorld(ref);
+            if (!pin) return null;
+            const o = offset(ref.node);
+            const x = pin.at.x + o.x, y = pin.at.y + o.y;
+            const endX = x - pin.out.x * 10, endY = y - pin.out.y * 10;
+            return <g key={`${wire.id}-${index}`} data-wire={wire.id} className="d-wire">
+              <line x1={x} y1={y} x2={endX} y2={endY} stroke="transparent" strokeWidth={8} />
+              {selWires.includes(wire.id) && <line x1={x} y1={y} x2={endX} y2={endY} stroke="var(--accent)" strokeOpacity={0.45} strokeWidth={7} pointerEvents="none" />}
+            </g>;
+          }))}
           {/* Patillas: puntos de conexión, encima de todo para poder tirar de ellas. */}
           {allPins.map((pin) => {
             const o = offset(pin.node);

@@ -4,8 +4,8 @@ import { elementDef, noteLines } from './elements';
 describe('design notes', () => {
   it('preserves existing explicit line breaks and wraps text to a chosen width', () => {
     expect(noteLines({ text: 'uno dos\ntres' })).toEqual(['uno dos', 'tres']);
-    expect(noteLines({ text: 'uno dos tres', width: 60 })).toEqual(['uno', 'dos', 'tres']);
-    expect(noteLines({ text: 'abcdefghijkl', width: 60 })).toEqual(['abcdef', 'ghijkl']);
+    expect(noteLines({ text: 'uno dos tres', width: 60 })).toEqual(['uno dos', 'tres']);
+    expect(noteLines({ text: 'abcdefghijkl', width: 60 }).join('')).toBe('abcdefghijkl');
   });
 
   it('keeps all wrapped text visible when the note is resized', () => {

@@ -228,17 +228,28 @@ export function ttSize(p: Props) {
 // ── Entradas y salidas ──────────────────────────────────────────────────────────
 /** Entradas del display de 7 segmentos, de arriba abajo. */
 export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+let noteMeasure: CanvasRenderingContext2D | null | undefined;
+const noteTextWidth = (text: string, size: number) => {
+  if (noteMeasure === undefined) noteMeasure = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d');
+  if (noteMeasure) {
+    noteMeasure.font = `${size}px Geist, sans-serif`;
+    return noteMeasure.measureText(text).width;
+  }
+  return [...text].reduce((sum, c) => sum + (/[ilI.,'! ]/.test(c) ? 0.28 : /[MW@]/.test(c) ? 0.85 : 0.55) * size, 0);
+};
 /** Líneas de una nota (el texto admite saltos de línea). */
 export const noteLines = (p: Props) => {
   const lines = String(p.text ?? '').split(/\r?\n/);
   const width = Number(p.width);
   if (!Number.isFinite(width) || width <= 0) return lines;
-  const limit = Math.max(1, Math.floor((width - 16) / (7 * noteFontSize(p) / 9.5)));
+  const available = Math.max(1, width - 16), size = noteFontSize(p);
   return lines.flatMap((line) => {
     if (!line) return [''];
     const result: string[] = [];
     let rest = line;
-    while (rest.length > limit) {
+    while (noteTextWidth(rest, size) > available) {
+      let limit = 1;
+      while (limit < rest.length && noteTextWidth(rest.slice(0, limit + 1), size) <= available) limit++;
       const space = rest.lastIndexOf(' ', limit);
       const end = space > 0 ? space : limit;
       result.push(rest.slice(0, end));
@@ -483,11 +494,11 @@ const ELEMENTS: ElementDef[] = [
     group: 'Anotaciones',
     description: 'Texto para explicar una parte del circuito.',
     keywords: ['nota', 'texto', 'comentario', 'etiqueta', 'anotacion'],
-    defaults: { text: 'Nota' },
+    defaults: { text: 'Nota', width: 180 },
     fields: [{ key: 'text', label: 'Texto', kind: 'longtext' }, { key: 'fontSize', label: 'Tamaño del texto', kind: 'number', min: 10, max: 24, step: 1 }],
     size: (p) => {
       const lines = noteLines(p);
-      const autoWidth = Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 * noteFontSize(p) / 9.5 + 16) / 10) * 10);
+      const autoWidth = Math.max(40, Math.ceil((Math.max(...lines.map((l) => noteTextWidth(l, noteFontSize(p)))) + 16) / 10) * 10);
       return { w: Number(p.width) > 0 ? Math.max(60, Math.min(1200, Number(p.width))) : autoWidth, h: Math.max(Number(p.height) || 0, Math.ceil((lines.length * noteLineHeight(p) + 7) / 10) * 10) };
     },
     pins: () => [],
