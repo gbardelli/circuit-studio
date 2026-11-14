@@ -164,6 +164,9 @@ function chipSim<S>(spec: ChipSpec<S>) {
     let t = 0;
     let settle = -1;
     let dirty = false;
+    let burst = 0;
+    let lastChange = -1;
+    let deferred = false;
     let powered = false;
     let lastIo: IO | null = null;
 
@@ -229,15 +232,23 @@ function chipSim<S>(spec: ChipSpec<S>) {
         dirty = true;
         settle = t + 1e-6;
       }
+      // Tras aplicar una sola salida, las entradas leídas antes de resolver el circuito ya no valen.
+      if (deferred) {
+        for (const n of inputs) prev[n] = now[n];
+        return;
+      }
       const next = spec.evaluate(io, state);
-      for (const o of spec.outputs) {
-        const lv = next[o] ?? null;
-        if (levels[o] !== lv) {
-          levels = { ...levels, ...next };
-          dirty = true;
-          settle = t + 1e-6;
-          break;
-        }
+      const changing = spec.outputs.filter((o) => levels[o] !== (next[o] ?? null));
+      if (changing.length) {
+        // Un latch SR con dos NAND del mismo integrado que arranca simétrico conmuta para siempre en un
+        // modelo sin ruido, y cada cambio pide otra resolución a 1 µs: el tiempo no avanza. Un circuito
+        // real sale de ahí en nanosegundos; si la pieza no deja de conmutar, se aplica una salida por vez.
+        burst = t - lastChange < 1e-5 ? burst + 1 : 0;
+        lastChange = t;
+        deferred = burst > 4 && changing.length > 1;
+        levels = deferred ? { ...levels, [changing[0]]: next[changing[0]] ?? null } : { ...levels, ...next };
+        dirty = true;
+        settle = t + 1e-6;
       }
       for (const n of inputs) prev[n] = now[n];
     };
@@ -251,7 +262,10 @@ function chipSim<S>(spec: ChipSpec<S>) {
       nextEvent: () => (settle > t ? settle : null),
       // Reconcile newly solved inputs immediately. Otherwise each gate in a chain waits
       // for another integration segment, missing short sensor pulses despite its 1 µs event.
-      afterSolve: (v: Float64Array) => sample(v, 0),
+      afterSolve: (v: Float64Array) => {
+        deferred = false;
+        sample(v, 0);
+      },
       tracker: {
         sample,
         read: () => ({ powered }),
