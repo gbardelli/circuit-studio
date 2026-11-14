@@ -264,7 +264,7 @@ export const LogicSymbol = memo(function LogicSymbol({ placed, st }: { placed: P
   if (k === 'note')
     return (
       <g>
-        <rect x={0} y={0} width={w} height={h} rx={4} fill="var(--d-note)" />
+        <rect x={0} y={0} width={w} height={h} rx={4} fill={typeof node.props.color === 'string' && /^#[0-9a-f]{6}$/i.test(node.props.color) ? node.props.color : 'var(--d-note)'} fillOpacity={node.props.color ? 0.22 : 1} />
         <text fontFamily={FONT} fontSize={noteFontSize(node.props)} fill={INK} style={{ whiteSpace: 'pre' }}>
           {noteLines(node.props).map((line, i) => (
             <tspan key={i} x={8} y={13.5 * noteFontSize(node.props) / 9.5 + i * noteLineHeight(node.props)}>

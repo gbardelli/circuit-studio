@@ -229,7 +229,25 @@ export function ttSize(p: Props) {
 /** Entradas del display de 7 segmentos, de arriba abajo. */
 export const SEGMENT_PINS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
 /** Líneas de una nota (el texto admite saltos de línea). */
-export const noteLines = (p: Props) => String(p.text ?? '').split(/\r?\n/);
+export const noteLines = (p: Props) => {
+  const lines = String(p.text ?? '').split(/\r?\n/);
+  const width = Number(p.width);
+  if (!Number.isFinite(width) || width <= 0) return lines;
+  const limit = Math.max(1, Math.floor((width - 16) / (7 * noteFontSize(p) / 9.5)));
+  return lines.flatMap((line) => {
+    if (!line) return [''];
+    const result: string[] = [];
+    let rest = line;
+    while (rest.length > limit) {
+      const space = rest.lastIndexOf(' ', limit);
+      const end = space > 0 ? space : limit;
+      result.push(rest.slice(0, end));
+      rest = rest.slice(end).replace(/^ +/, '');
+    }
+    result.push(rest);
+    return result;
+  });
+};
 export const NOTE_LINE = 13;
 export const noteFontSize = (p: Props) => Math.max(9.5, Math.min(24, Number(p.fontSize) || 9.5));
 export const noteLineHeight = (p: Props) => Math.round(NOTE_LINE * noteFontSize(p) / 9.5);
@@ -469,7 +487,8 @@ const ELEMENTS: ElementDef[] = [
     fields: [{ key: 'text', label: 'Texto', kind: 'longtext' }, { key: 'fontSize', label: 'Tamaño del texto', kind: 'number', min: 10, max: 24, step: 1 }],
     size: (p) => {
       const lines = noteLines(p);
-      return { w: Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 * noteFontSize(p) / 9.5 + 16) / 10) * 10), h: Math.ceil((lines.length * noteLineHeight(p) + 7) / 10) * 10 };
+      const autoWidth = Math.max(40, Math.ceil((Math.max(...lines.map((l) => l.length)) * 7 * noteFontSize(p) / 9.5 + 16) / 10) * 10);
+      return { w: Number(p.width) > 0 ? Math.max(60, Math.min(1200, Number(p.width))) : autoWidth, h: Math.max(Number(p.height) || 0, Math.ceil((lines.length * noteLineHeight(p) + 7) / 10) * 10) };
     },
     pins: () => [],
     behavior: () => ({ step: () => [] }),

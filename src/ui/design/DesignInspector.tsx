@@ -117,6 +117,10 @@ function NodeInspector({ sheet, id }: { sheet: LogicSheet; id: string }) {
           )}
         </div>
       ))}
+      {node.kind === 'note' && <div className="insp-section"><h3>Color de la nota</h3>
+        <div className="swatches">{[{label:'Amarillo',value:'#e5b94f'},{label:'Verde',value:'#4cb989'},{label:'Azul',value:'#5799e8'},{label:'Violeta',value:'#a78bfa'},{label:'Rojo',value:'#e57676'},{label:'Gris',value:'#9aa4b2'}].map(c => <button key={c.value} className="swatch" style={{background:c.value}} title={c.label} aria-label={c.label} aria-pressed={node.props.color === c.value} disabled={project.readOnly} onClick={() => project.design.setProp(sheet.id,id,'color',c.value)} />)}</div>
+        <p className="insp-hint">Arrastra la esquina inferior derecha para cambiar el tamaño.</p>
+      </div>}
       {node.kind === 'tabla' && <TruthEditor sheetId={sheet.id} node={node} />}
       {isIc && (
         <div className="insp-section">

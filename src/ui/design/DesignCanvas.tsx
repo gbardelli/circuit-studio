@@ -2,7 +2,7 @@
 // para cambiarla; los relojes corren solos. Rueda: zoom; Mayús + rueda o espacio + arrastre: mover.
 import { AlertTriangle, Maximize, Minus, Pause, Play, Plus, RotateCcw, SkipForward } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent } from 'react';
-import type { Vec } from '../../core/types';
+import { rotate, type Rotation, type Vec } from '../../core/types';
 import { buttonIdle, elementDef } from '../../logic/elements';
 import { icDependencies } from '../../logic/sim';
 import { IC_PREFIX, MAIN_SHEET, X, type Bit, type LogicPinRef, type LogicSheet } from '../../logic/types';
@@ -27,7 +27,8 @@ type Drag =
   | { kind: 'wire'; from: PlacedPin & { node: string }; to: Vec; target: (PlacedPin & { node: string }) | null; moved: boolean }
   | { kind: 'marquee'; start: Vec; end: Vec; add: boolean }
   | { kind: 'pan'; sx: number; sy: number; vx: number; vy: number }
-  | { kind: 'press'; node: string };
+  | { kind: 'press'; node: string }
+  | { kind: 'resize'; node: string; start: Vec; width: number; height: number; nextWidth: number; nextHeight: number; rot: Rotation };
 
 export function DesignCanvas() {
   const { project } = useEditor();
@@ -47,7 +48,7 @@ export function DesignCanvas() {
   const pending = useRef<(PlacedPin & { node: string }) | null>(null);
   const ro = project.readOnly;
 
-  const placed = useMemo(() => sheet.nodes.map((n) => place(n, lookup)).filter((p): p is Placed => p !== null), [sheet, lookup]);
+  const placed = useMemo(() => sheet.nodes.map((n) => place(drag?.kind === 'resize' && drag.node === n.id ? { ...n, props: { ...n.props, width: drag.nextWidth, height: drag.nextHeight } } : n, lookup)).filter((p): p is Placed => p !== null), [sheet, lookup, drag]);
   const byId = useMemo(() => new Map(placed.map((p) => [p.node.id, p])), [placed]);
   const allPins = useMemo(() => placed.flatMap((p) => p.pins.map((pin) => ({ ...pin, node: p.node.id }))), [placed]);
   const wired = useMemo(() => {
@@ -198,6 +199,16 @@ export function DesignCanvas() {
     svgRef.current?.setPointerCapture(e.pointerId);
     if (placing) return; // se coloca al soltar
     const target = e.target as Element;
+    const resizeEl = target.closest('[data-resize-note]');
+    if (resizeEl && !ro) {
+      const id = resizeEl.getAttribute('data-resize-note')!;
+      const item = byId.get(id);
+      if (item) {
+        select([id]);
+        setDrag({ kind: 'resize', node: id, start: p, width: item.w, height: item.h, nextWidth: item.w, nextHeight: item.h, rot: item.node.rot });
+        return;
+      }
+    }
     // Un cable pendiente (clic en una patilla y clic en otra).
     if (pending.current) {
       const pin = nearestPin(p, `${pending.current.node}:${pending.current.id}`);
@@ -251,6 +262,9 @@ export function DesignCanvas() {
       const dx = snap(p.x - drag.start.x);
       const dy = snap(p.y - drag.start.y);
       if (dx !== drag.dx || dy !== drag.dy) setDrag({ ...drag, dx, dy, moved: drag.moved || dx !== 0 || dy !== 0 });
+    } else if (drag.kind === 'resize') {
+      const delta = rotate({ x: p.x - drag.start.x, y: p.y - drag.start.y }, ((360 - drag.rot) % 360) as Rotation);
+      setDrag({ ...drag, nextWidth: Math.max(60, Math.min(1200, snap(drag.width + delta.x))), nextHeight: Math.max(30, Math.min(1200, snap(drag.height + delta.y))) });
     } else if (drag.kind === 'wire') {
       const target = nearestPin(p, `${drag.from.node}:${drag.from.id}`);
       setDrag({ ...drag, to: p, target, moved: drag.moved || Math.hypot(p.x - drag.from.at.x, p.y - drag.from.at.y) > 4 });
@@ -296,6 +310,11 @@ export function DesignCanvas() {
           refresh();
           if (!ro) project.design.setProp(sheetId, n.id, 'value', v);
         }
+      }
+    } else if (drag.kind === 'resize') {
+      if (!ro && (drag.width !== drag.nextWidth || drag.height !== drag.nextHeight)) {
+        project.design.setProp(sheetId, drag.node, 'width', drag.nextWidth);
+        project.design.setProp(sheetId, drag.node, 'height', drag.nextHeight);
       }
     } else if (drag.kind === 'wire') {
       if (drag.target) finishWire(pinRef(drag.from), pinRef(drag.target));
@@ -476,6 +495,7 @@ export function DesignCanvas() {
                 {on && <rect x={-6} y={-6} width={p.w + 12} height={p.h + 12} rx={5} fill="var(--accent-soft)" stroke="var(--accent)" strokeWidth={1.2} />}
                 <rect x={0} y={0} width={p.w} height={p.h} fill="transparent" />
                 <LogicSymbol placed={p} st={stateFor(p)} />
+                {on && p.node.kind === 'note' && !ro && <g data-resize-note={p.node.id} style={{ cursor: 'nwse-resize' }}><rect x={p.w - 12} y={p.h - 12} width={20} height={20} fill="transparent" /><path d={`M ${p.w - 7} ${p.h} L ${p.w} ${p.h - 7} M ${p.w - 3} ${p.h + 1} L ${p.w + 1} ${p.h - 3}`} stroke="var(--accent)" strokeWidth={1.5} strokeLinecap="round" /></g>}
               </g>
             );
           })}
