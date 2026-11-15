@@ -12,10 +12,16 @@ describe('public view access',()=>{
     expect(response.status).toBe(200);expect(await response.json()).toMatchObject({role:'viewer',guest:true,members:[],owner_id:''});
     expect(mocks.roleFor).not.toHaveBeenCalled();
   });
-  it('does not disclose a private, revoked, edit-only or missing project to a guest',async()=>{
+  it('does not disclose a private, revoked or missing project to a guest',async()=>{
     mocks.publicViewRole.mockResolvedValue(null);
     const response=await GET(new Request('https://example.test/api/projects/private1'));
     expect(response.status).toBe(403);expect(mocks.sql).not.toHaveBeenCalled();
+  });
+  it('opens editing links anonymously with viewer permission and no membership',async()=>{
+    mocks.publicViewRole.mockResolvedValue('viewer');mocks.sql.mockResolvedValue([{id:'public123',name:'Circuit',link_access:'edit'}]);
+    const response=await GET(new Request('https://example.test/api/projects/public123'));
+    expect(await response.json()).toMatchObject({role:'viewer',guest:true,link_access:'edit',members:[]});
+    expect(mocks.roleFor).not.toHaveBeenCalled();
   });
   it('rejects anonymous writes even when the project is public',async()=>{
     mocks.publicViewRole.mockResolvedValue('viewer');

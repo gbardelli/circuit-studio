@@ -8,6 +8,7 @@ import { Sandbox } from '@vercel/sandbox';
 import { json, requireUser } from './_lib/auth.js';
 import { redis } from './_lib/redis.js';
 import { simLibraryFiles } from '../src/sim/gigaDisplayShim.js';
+import { isPublishedSketch } from './_lib/publishedSketch.js';
 
 export const maxDuration = 300;
 
@@ -54,19 +55,22 @@ async function ensureBase() {
 
 export async function POST(req: Request) {
   const user = await requireUser(req);
-  if (!user) return json({ ok: false, stdout: '', stderr: 'Inicia sesión para compilar.' }, 401);
-  const { source, fqbn = 'arduino:avr:uno' } = (await req.json().catch(() => ({}))) as { source?: string; fqbn?: string };
+  const { source, fqbn = 'arduino:avr:uno', projectId, boardId } = (await req.json().catch(() => ({}))) as { source?: string; fqbn?: string; projectId?: string; boardId?: string };
   const code = String(source ?? '');
   if (!FQBNS.includes(fqbn)) return json({ ok: false, stdout: '', stderr: `Placa no soportada: ${fqbn}` }, 400);
   if (code.length > MAX_SOURCE) return json({ ok: false, stdout: '', stderr: 'El sketch supera 200 KB.' }, 413);
+  if (!user && !(await isPublishedSketch(projectId, boardId, code, fqbn))) {
+    return json({ ok: false, stdout: '', stderr: 'Solo se puede simular el código actual de un circuito compartido. Recarga el enlace o pide acceso.' }, 403);
+  }
 
   const { pub } = await redis();
   const key = `hex:${createHash('sha256').update(fqbn).update('\0').update(code).digest('hex')}`;
   const cached = await pub.get(key);
   if (cached) return json(JSON.parse(cached));
 
-  // 20 compilaciones por minuto y usuario.
-  const rate = `compile:rate:${user.id}:${Math.floor(Date.now() / 60_000)}`;
+  // 20 uncached compilations per minute, per user or public project.
+  const actor = user?.id ?? `public:${projectId}`;
+  const rate = `compile:rate:${actor}:${Math.floor(Date.now() / 60_000)}`;
   if ((await pub.incr(rate)) > 20) return json({ ok: false, stdout: '', stderr: 'Demasiadas compilaciones seguidas. Espera un minuto.' }, 429);
   await pub.expire(rate, 120);
 

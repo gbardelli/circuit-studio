@@ -13,6 +13,7 @@ import { AlertCircle, Check, CheckCircle2, Code2, Eraser, Hash, Loader2, Maximiz
 import { compileSketch } from '../sim/compile';
 import { useEditor } from './context';
 import { useUi, type CodeTheme, type CodeView } from './store';
+import { PARTS } from '../parts';
 
 const themeSlot = new Compartment();
 const metricsSlot = new Compartment();
@@ -255,7 +256,7 @@ function applyPrefs(view: EditorView, prefs: CodeView) {
 }
 
 function CodeEditor({ partId, prefs }: { partId: string; prefs: CodeView }) {
-  const { project, detail } = useEditor();
+  const { project } = useEditor();
   const host = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const prefsRef = useRef(prefs);
@@ -302,7 +303,8 @@ function CodeEditor({ partId, prefs }: { partId: string; prefs: CodeView }) {
   const verify = async () => {
     if (!textRef.current) return;
     setBusy(true);
-    const r = await compileSketch(textRef.current.toString());
+    const part = project.snapshot().parts.find(p => p.id === partId);
+    const r = await compileSketch(textRef.current.toString(), part ? PARTS[part.type].mcu?.fqbn : undefined, { projectId: project.room, boardId: partId });
     setBusy(false);
     if (r.ok) {
       const size = r.stdout.match(/(\d+) bytes/)?.[1];
@@ -315,7 +317,7 @@ function CodeEditor({ partId, prefs }: { partId: string; prefs: CodeView }) {
   return (
     <div className="code-layout">
       <div className="code-toolbar">
-        <button className="btn sm" onClick={verify} disabled={busy || detail?.guest}>
+        <button className="btn sm" onClick={verify} disabled={busy || !project.synced}>
           {busy ? <Loader2 size={13} style={{ animation: 'spin 0.8s linear infinite' }} /> : <Check size={13} />}
           {busy ? 'Compilando' : 'Verificar'}
         </button>

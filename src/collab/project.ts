@@ -92,6 +92,7 @@ export class Project {
   private wireCache = new Map<string, { json: string; data: WireData }>();
   private snap: CircuitSnapshot = { parts: [], wires: [] };
   private stale = true;
+  private simulationProps = new Map<string, Props>();
   /** Piezas del documento que esta versión de la app no conoce: no se dibujan, pero siguen guardadas en el proyecto. */
   hidden: { type: string; count: number }[] = [];
   private listeners = new Set<() => void>();
@@ -100,7 +101,7 @@ export class Project {
   constructor(readonly room: string, readonly role: Role = 'owner') {
     this.user = role === 'viewer' && !sessionUser() ? { id: crypto.randomUUID(), name: 'Visitante', color: '#858c98' } : localUser();
     this.readOnly = role === 'viewer';
-    this.persistence = new IndexeddbPersistence(`circuit-studio:${room}`, this.doc);
+    this.persistence = new IndexeddbPersistence(`circuit-studio:${this.readOnly ? 'view:' : ''}${room}`, this.doc);
     const url = collabUrl();
     this.provider = url ? new WebsocketProvider(url, room, this.doc, { maxBackoffTime: 4000, connect: !CLOUD }) : null;
     if (this.provider && CLOUD) {
@@ -224,13 +225,29 @@ export class Project {
     const layer = (p: PartData) => (PARTS[p.type].category === 'Protoboards' ? 0 : PARTS[p.type].category === 'Placas' ? 1 : 2);
     parts.sort((a, b) => layer(a) - layer(b) || Number(this.parts.get(a.id)?.get('z') ?? 0) - Number(this.parts.get(b.id)?.get('z') ?? 0));
     this.hidden = [...unknown].map(([type, count]) => ({ type, count }));
-    this.snap = ics.length ? { parts, wires, ics } : { parts, wires };
+    const visibleParts = this.readOnly ? parts.map(p => this.simulationProps.has(p.id) ? { ...p, props: { ...p.props, ...this.simulationProps.get(p.id) } } : p) : parts;
+    this.snap = ics.length ? { parts: visibleParts, wires, ics } : { parts: visibleParts, wires };
     this.stale = false;
     return this.snap;
   }
 
   get name() {
     return String(this.meta.get('name') ?? 'Proyecto sin título');
+  }
+
+  /** Viewer controls affect only this simulation, never the shared Yjs document. */
+  setSimulationProp(id: string, key: string, value: number | boolean) {
+    if (!this.readOnly || !this.parts.has(id)) return;
+    this.simulationProps.set(id, { ...this.simulationProps.get(id), [key]: value });
+    this.stale = true;
+    this.emit();
+  }
+
+  clearSimulationProps() {
+    if (!this.simulationProps.size) return;
+    this.simulationProps.clear();
+    this.stale = true;
+    this.emit();
   }
 
   // ── Historial ────────────────────────────────────────────────────────────────

@@ -10,6 +10,8 @@ export interface CompileResult {
   missingToolchain?: boolean;
 }
 
+export interface PublishedBoard { projectId: string; boardId: string }
+
 // Tres niveles antes de ir al servidor, del más rápido al más lento:
 // 1. Esta pestaña (memoria), incluidas las compilaciones aún en curso: dos peticiones iguales
 //    esperan la misma respuesta.
@@ -47,7 +49,7 @@ function store(key: string, hex: string) {
   }
 }
 
-export function compileSketch(source: string, fqbn = 'arduino:avr:uno'): Promise<CompileResult> {
+export function compileSketch(source: string, fqbn = 'arduino:avr:uno', published?: PublishedBoard): Promise<CompileResult> {
   const id = `${fqbn}\n${source}`;
   const hit = memory.get(id);
   if (hit) return hit;
@@ -57,7 +59,7 @@ export function compileSketch(source: string, fqbn = 'arduino:avr:uno'): Promise
     if (prebuilt) return { ok: true, hex: prebuilt, stdout: '', stderr: '' };
     const local = stored(key);
     if (local) return local;
-    const result = await remote(source, fqbn);
+    const result = await remote(source, fqbn, published);
     if (result.ok && result.hex) store(key, result.hex);
     return result;
   })();
@@ -72,14 +74,14 @@ export function compileSketch(source: string, fqbn = 'arduino:avr:uno'): Promise
   return job;
 }
 
-async function remote(source: string, fqbn: string): Promise<CompileResult> {
+async function remote(source: string, fqbn: string, published?: PublishedBoard): Promise<CompileResult> {
   const token = await sessionToken();
   let res: Response;
   try {
     res = await fetch('/api/compile', {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : {}) },
-      body: JSON.stringify({ source, fqbn }),
+      body: JSON.stringify({ source, fqbn, ...published }),
     });
   } catch {
     return { ok: false, stdout: '', stderr: 'No se pudo contactar con el compilador.', missingToolchain: true };

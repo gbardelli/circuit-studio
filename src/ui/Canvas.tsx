@@ -733,7 +733,8 @@ export function Canvas() {
     (part: PartData, key: string, value: number | boolean) => {
       if(engine.lab.paused)return;
       const persistent = PARTS[part.type].fields?.some((f) => f.key === key);
-      if (persistent) project.setProp(part.id, key, value);
+      if (persistent && project.readOnly) project.setSimulationProp(part.id, key, value);
+      else if (persistent) project.setProp(part.id, key, value);
       else engine.setInput(part.id, key, value);
     },
     [project, engine],

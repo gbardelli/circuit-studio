@@ -36,7 +36,7 @@ jobs:
       - name: Instalar compilador Arduino
         run: npm run setup:arduino
       - name: Pruebas
-        run: npx vitest run src/parts src/sim src/collab src/logic src/ui
+        run: npx vitest run --dir src
       - name: No desplegar si algún proyecto usa piezas que esta versión no conoce
         run: |
           npx vercel env pull .env.production.local --environment=production --yes --token "$VERCEL_TOKEN"

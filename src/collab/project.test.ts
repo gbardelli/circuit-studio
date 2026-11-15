@@ -29,6 +29,31 @@ afterEach(() => {
 });
 
 describe('shared project operations', () => {
+  it('keeps viewer switch changes local and restores them when simulation stops', async () => {
+    const owner = open();
+    const viewer = open('viewer');
+    await Promise.all([synced(owner), synced(viewer)]);
+    const dip = owner.addPart('dip-switch-4', 100, 100);
+    exchange(owner, viewer);
+    const before = Y.encodeStateAsUpdate(viewer.doc);
+    viewer.setSimulationProp(dip, 's1', true);
+    expect(viewer.snapshot().parts.find(p => p.id === dip)?.props.s1).toBe(true);
+    expect(Y.encodeStateAsUpdate(viewer.doc)).toEqual(before);
+    exchange(owner, viewer);
+    expect(owner.snapshot().parts.find(p => p.id === dip)?.props.s1).toBe(false);
+    viewer.clearSimulationProps();
+    expect(viewer.snapshot().parts.find(p => p.id === dip)?.props.s1).toBe(false);
+  });
+
+  it('does not load private editor caches into a public viewer for the same room', async () => {
+    const room = crypto.randomUUID();
+    const owner = open('owner', room);
+    await synced(owner);
+    owner.addPart('led', 0, 0);
+    const viewer = open('viewer', room);
+    await synced(viewer);
+    expect(viewer.snapshot().parts).toHaveLength(0);
+  });
   it('merges concurrent component comments and preserves assembly metadata for viewers',async()=>{
     const a=open(),b=open(),viewer=open('viewer');await Promise.all([synced(a),synced(b),synced(viewer)]);
     a.setMeta('note:a',{id:'a',part:'u1',text:'Check CLK',author:'A',created:1,resolved:false});

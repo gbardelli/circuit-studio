@@ -1,8 +1,8 @@
 import { HintButton, PopoverPanel } from './Overlays';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { UserButton } from '@clerk/react';
-import { CLOUD, api, type LinkAccess } from '../cloud';
-import { AlertTriangle, Check, Code2, Copy, Cpu, Eye, Globe, HardDrive, Lock, Keyboard, Link2, Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
+import { CLOUD } from '../cloud';
+import { AlertTriangle, Code2, Cpu, Eye, HardDrive, Keyboard, Link2, Loader2, PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen, Play, Redo2, Square, Undo2, Users, Wifi, WifiOff } from 'lucide-react';
 import { compileSketch } from '../sim/compile';
 import { useConnection, useEditor, usePeers, useSimStatus, useSnapshot } from './context';
 import { Logo, Wordmark } from './Logo';
@@ -10,6 +10,7 @@ import { PARTS } from '../parts';
 import { useUi } from './store';
 import { HistoryIcon, HistoryPanel } from './History';
 import { ProjectFileMenu } from './ProjectFiles';
+import { SharePopover } from './SharePopover';
 
 export function TopBar() {
   const { project, engine, detail } = useEditor();
@@ -61,31 +62,38 @@ export function TopBar() {
   const toggleSim = async () => {
     if (simRunning) {
       engine.stop();
+      project.clearSimulationProps();
       setSim(false);
       return;
     }
+    if (starting || !project.synced) return;
     setStarting(true);
-    const boards = snapshot.parts.filter((p) => PARTS[p.type].mcu);
-    let noToolchain = false;
-    for (const b of boards) {
-      const r = await compileSketch(project.sketch(b.id).toString(), PARTS[b.type].mcu!.fqbn);
-      if (r.ok && r.hex) {
-        engine.setProgram(b.id, r.hex);
-      } else if (r.missingToolchain) {
-        noToolchain = true;
-        engine.setProgram(b.id, null);
-      } else {
-        setStarting(false);
-        openCode(b.id, 'code');
-        showToast('El código tiene errores. Revísalos en el panel.');
-        return;
+    try {
+      const boards = snapshot.parts.filter((p) => PARTS[p.type].mcu);
+      let noToolchain = false;
+      for (const b of boards) {
+        const r = await compileSketch(project.sketch(b.id).toString(), PARTS[b.type].mcu!.fqbn, { projectId: project.room, boardId: b.id });
+        if (r.ok && r.hex) {
+          engine.setProgram(b.id, r.hex);
+        } else if (r.missingToolchain) {
+          if (guest) { showToast('El compilador no está disponible. Inténtalo de nuevo; la simulación no se ha iniciado.'); return; }
+          noToolchain = true;
+          engine.setProgram(b.id, null);
+        } else {
+          setStarting(false);
+          openCode(b.id, 'code');
+          showToast(r.stderr.trim() || 'No se pudo compilar el programa. Revisa el panel de código.');
+          return;
+        }
       }
-    }
-    engine.update(project.snapshot());
-    engine.start();
-    setSim(true);
-    setStarting(false);
-    if (noToolchain) showToast('Sin compilador en el servidor: el Arduino alimenta, pero no ejecuta código.');
+      engine.update(project.snapshot());
+      engine.start();
+      setSim(true);
+      setStarting(false);
+      if (noToolchain) showToast('Sin compilador en el servidor: el Arduino alimenta, pero no ejecuta código.');
+    } catch {
+      showToast('No se pudo iniciar la simulación. Inténtalo de nuevo.');
+    } finally { setStarting(false); }
   };
 
   const share = async () => {
@@ -137,7 +145,7 @@ export function TopBar() {
             <Code2 size={14} /> Código
           </HintButton>
         )}
-        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || guest || guiding} title={guiding ? 'Cierra la guía de montaje para simular' : guest ? 'Inicia sesión para simular' : undefined}>
+        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || (!simRunning && !project.synced) || guiding} title={guiding ? 'Cierra la guía de montaje para simular' : !simRunning && !project.synced ? 'Cargando el circuito' : guest ? 'Simula en tu navegador sin modificar el original' : undefined}>
           {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
           {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
         </HintButton>
@@ -151,8 +159,8 @@ export function TopBar() {
 
       <div className="tb-right">
         {project.readOnly && (
-          <span className="pill" title="Este enlace permite explorar el circuito sin modificarlo">
-            <Eye size={12} /> Solo lectura
+          <span className="pill" title="Puedes simular y accionar los controles. Los cambios quedan solo en tu sesión.">
+            <Eye size={12} /> Ver y simular
           </span>
         )}
         {!guiding && <PanelToggle panel="inspector" />}
@@ -309,104 +317,5 @@ function Avatar({ name, color, image, me = false }: { name: string; color: strin
     <span className={`avatar ${me ? 'me' : ''}`} style={{ background: color }} title={name}>
       {image ? <img src={image} alt="" /> : name.slice(0, 2).toUpperCase()}
     </span>
-  );
-}
-
-const ACCESS: { value: LinkAccess; label: string; hint: string }[] = [
-  { value: 'edit', label: 'Pueden editar', hint: 'Cualquiera con cuenta y el enlace entra como editor.' },
-  { value: 'view', label: 'Pueden ver', hint: 'Cualquiera con el enlace puede verlo sin cuenta. Solo lectura.' },
-  { value: 'none', label: 'Restringido', hint: 'Solo quienes ya son miembros.' },
-];
-
-function SharePopover() {
-  const { project, detail } = useEditor();
-  const [access, setAccess] = useState<LinkAccess>(detail?.link_access ?? 'edit');
-  const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const ref = useRef<HTMLDivElement>(null);
-  const owner = detail?.role === 'owner';
-
-  const change = async (value: LinkAccess) => {
-    setBusy(true); setError(null);
-    try {
-      await api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: value }) });
-      setAccess(value);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
-  };
-  const [copiedEdit, setCopiedEdit] = useState(false);
-  const copyEdit = async () => {
-    setError(null);
-    try {
-      // Sin `view`: quien abre el enlace inicia sesión y entra con el rol que le corresponde.
-      const url = new URL(location.href); url.search = new URLSearchParams({ p: project.room }).toString(); url.hash = '';
-      await navigator.clipboard.writeText(url.href);
-      setCopiedEdit(true); setTimeout(() => setCopiedEdit(false), 1600);
-    } catch (e) { setError((e as Error).message); }
-  };
-  const copyView = async () => {
-    setBusy(true); setError(null);
-    try {
-      if (access !== 'view') {
-        if (!owner) throw new Error('El propietario debe activar «Pueden ver» para compartir sin cuenta.');
-        await api(`/api/projects/${project.room}`, { method: 'PATCH', body: JSON.stringify({ linkAccess: 'view' }) });
-        setAccess('view');
-      }
-      const url = new URL(location.href); url.search = new URLSearchParams({ p: project.room, view: '1' }).toString(); url.hash = '';
-      await navigator.clipboard.writeText(url.href);
-      setCopied(true); setTimeout(() => setCopied(false), 1600);
-    } catch (e) { setError((e as Error).message); }
-    finally { setBusy(false); }
-  };
-
-  return (
-    <div ref={ref} className="share-pop">
-      <div className="share-head">
-        <strong>Compartir</strong>
-        <span className="faint">{detail?.members.length ?? 1} miembros</span>
-      </div>
-      <div className="share-access">
-        {access === 'none' ? <Lock size={15} /> : <Globe size={15} />}
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontWeight: 500 }}>Con el enlace</div>
-          <div className="faint" style={{ fontSize: 12 }}>{ACCESS.find((a) => a.value === access)!.hint}</div>
-        </div>
-      </div>
-      {owner && (
-        <div className="segmented" role="group" aria-label="Acceso con el enlace">
-          {ACCESS.map((a) => (
-            <HintButton key={a.value} aria-pressed={access === a.value} disabled={busy} onClick={() => void change(a.value)}>
-              {a.label}
-            </HintButton>
-          ))}
-        </div>
-      )}
-      {error && <p role="alert" style={{ color: 'var(--red)', fontSize: 12 }}>{error}</p>}
-      <ul className="share-members">
-        {detail?.members.map((m) => (
-          <li key={m.id}>
-            <span className="avatar">{m.image ? <img src={m.image} alt="" /> : m.name.slice(0, 2).toUpperCase()}</span>
-            <span className="name">{m.name}</span>
-            <span className="faint">{m.role === 'owner' ? 'Propietario' : m.role === 'editor' ? 'Editor' : 'Lector'}</span>
-          </li>
-        ))}
-      </ul>
-      <HintButton
-        className="btn accent"
-        style={{ width: '100%', marginBottom: 6 }}
-        onClick={() => void copyEdit()}
-      >
-        {copiedEdit ? <Check size={14} /> : <Copy size={14} />} {copiedEdit ? 'Copiado' : 'Copiar enlace para editar'}
-      </HintButton>
-      <HintButton
-        className="btn"
-        style={{ width: '100%' }}
-        disabled={busy}
-        onClick={() => void copyView()}
-      >
-        {copied ? <Check size={14} /> : <Copy size={14} />} {copied ? 'Copiado' : busy ? 'Preparando enlace…' : 'Copiar enlace de visualización'}
-      </HintButton>
-    </div>
   );
 }

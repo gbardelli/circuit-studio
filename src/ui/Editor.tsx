@@ -57,7 +57,7 @@ export function Editor({ room, template }: { room: string; template: string | nu
 
   function open(detail: ProjectDetail | null) {
     const project = new Project(room, detail?.role ?? 'owner');
-    const engine = new SimClient(room);
+    const engine = new SimClient(detail?.role === 'viewer' ? `${room}:view` : room);
     setCtx({ project, engine, detail });
     let seeded = false;
     const seed = (synced: boolean) => {
