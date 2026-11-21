@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Cable, CircuitBoard, Moon, Sun } from 'lucide-react';
+import { Box, Cable, CircuitBoard, Focus, Hand, Moon, Move, Rotate3d, Sun, View, ZoomIn, type LucideIcon } from 'lucide-react';
+import { Loading3D } from '../Loading3D';
 import { buildNetlist, pinKey } from '../../core/netlist';
 import { toLocal, type PartData } from '../../core/types';
 import { PartProxy } from './interact';
@@ -26,6 +27,57 @@ const PRESETS: { id: Preset; label: string; key: string }[] = [
   { id: 'free', label: 'Libre', key: '3' },
 ];
 
+interface Gesture {
+  icon: LucideIcon;
+  action: string;
+  keys: string[];
+  /** Alternativa con otra combinación (p. ej. ⇧ + arrastrar para girar). */
+  alt?: string[];
+}
+
+const MOUSE: Gesture[] = [
+  { icon: Move, action: 'Mover', keys: ['Arrastrar'] },
+  { icon: Rotate3d, action: 'Girar', keys: ['Clic derecho'], alt: ['⇧', 'Arrastrar'] },
+  { icon: ZoomIn, action: 'Zoom', keys: ['Rueda'] },
+  { icon: Focus, action: 'Acercar', keys: ['Doble clic'] },
+  { icon: View, action: 'Vistas', keys: ['1', '2', '3'] },
+];
+const TOUCH: Gesture[] = [
+  { icon: Hand, action: 'Mover', keys: ['1 dedo'] },
+  { icon: Rotate3d, action: 'Girar e inclinar', keys: ['2 dedos'] },
+  { icon: ZoomIn, action: 'Zoom', keys: ['Pellizcar'] },
+  { icon: Focus, action: 'Acercar', keys: ['Doble toque'] },
+];
+
+/** Leyenda de gestos: icono, acción y teclas en chips, como en las herramientas de CAD. */
+function Legend({ dim }: { dim: boolean }) {
+  const [touch] = useState(() => typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches);
+  const items = touch ? TOUCH : MOUSE;
+  return (
+    <div className={`board3d-legend ${dim ? 'dim' : ''}`} role="note" aria-label="Controles de la vista 3D">
+      {items.map(({ icon: Icon, action, keys, alt }) => (
+        <div key={action} className="legend-item" title={`${action}: ${keys.join(" ")}${alt ? ` o ${alt.join(" + ")}` : ""}`}>
+          <Icon size={13} strokeWidth={1.75} aria-hidden />
+          <span className="legend-action">{action}</span>
+          <span className="legend-keys">
+            {keys.map((k) => (
+              <kbd key={k}>{k}</kbd>
+            ))}
+            {alt && (
+              <>
+                <span className="legend-or">o</span>
+                {alt.map((k) => (
+                  <kbd key={k}>{k}</kbd>
+                ))}
+              </>
+            )}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Vista 3D de la protoboard: mismo documento, misma selección; el lienzo 2D sigue montado debajo. */
 export default function Board3D() {
   const host = useRef<HTMLDivElement>(null);
@@ -50,12 +102,31 @@ export default function Board3D() {
   const assemblyWire = useUi((s) => s.assemblyWire);
   const pinnedSignal = useUi((s) => s.pinnedSignal);
   const netlist = useMemo(() => buildNetlist(scene, PARTS), [scene]);
+  const [vw, setVw] = useState<Viewer3D | null>(null);
+  const [ready, setReady] = useState(false);
+  const [loaderGone, setLoaderGone] = useState(false);
+  const [touched, setTouched] = useState(false);
+  useEffect(() => {
+    if (!ready) return;
+    const t = setTimeout(() => setLoaderGone(true), 260);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   useEffect(() => {
     if (!supported || !host.current) return;
+    // Primero se pinta el aviso de carga; el visor se construye en el fotograma siguiente.
+    let cancelled = false;
+    let created: { v: Viewer3D; proxy: PartProxy } | null = null;
+    let raf = requestAnimationFrame(() => {
+      raf = requestAnimationFrame(() => {
+        if (cancelled || !host.current) return;
+        created = build(host.current);
+      });
+    });
+    const build = (el: HTMLDivElement) => {
     const proxy = new PartProxy();
     const v: Viewer3D = new Viewer3D(
-      host.current,
+      el,
       {
         onPick(hit, additive) {
           const ui = useUi.getState();
@@ -85,6 +156,7 @@ export default function Board3D() {
           setHover((prev) => (prev?.part === hit?.part && prev?.wire === hit?.wire ? prev : hit));
         },
         onStats(s) {
+          if (s.firstFrame) setReady(true);
           const now = performance.now();
           if (now - lastStats.current > 400) {
             lastStats.current = now;
@@ -96,19 +168,27 @@ export default function Board3D() {
     );
     viewer.current = v;
     v.setTheme(theme);
-    v.setCircuit(scene);
+    v.setCircuit(live.current.scene);
     v.enter(useUi.getState().viewport);
     (window as unknown as { __cs3d?: Viewer3D }).__cs3d = v;
+    setVw(v);
+    return { v, proxy };
+    };
     return () => {
-      v.dispose();
-      proxy.dispose();
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      if (created) {
+        created.v.dispose();
+        created.proxy.dispose();
+      }
       viewer.current = null;
+      setVw(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supported]);
 
   useEffect(() => {
-    const v = viewer.current;
+    const v = vw;
     if (!v) return;
     v.setCircuit(scene);
     // LED y segmentos siguen a la simulación: cada pieza escucha solo su propio estado.
@@ -117,16 +197,16 @@ export default function Board3D() {
       return engine.subscribePart(id, () => viewer.current?.setVisual(id, engine.getVisual(id)));
     });
     return () => offs.forEach((off) => off());
-  }, [scene, engine]);
+  }, [scene, engine, vw]);
 
   useEffect(() => {
-    viewer.current?.setTheme(theme);
+    vw?.setTheme(theme);
     try {
       localStorage.setItem(THEME_KEY, theme);
     } catch {
       /* preferencia opcional */
     }
-  }, [theme]);
+  }, [theme, vw]);
 
   // Red que se comprueba: la del cable que guía el montaje, la del cable seleccionado o la de la señal fijada.
   const net = useMemo(() => {
@@ -154,7 +234,7 @@ export default function Board3D() {
       hoverWire: hover?.wire ?? null,
       net,
     });
-  }, [selection, wireSelection, assemblyWire, hover, net, scene]);
+  }, [selection, wireSelection, assemblyWire, hover, net, scene, vw]);
 
   // La guía de montaje y el panel de conexiones llevan la cámara al cable en curso.
   useEffect(() => {
@@ -197,7 +277,7 @@ export default function Board3D() {
 
   return (
     <div className={`board3d ${theme} ${leaving ? 'leaving' : ''}`}>
-      <div ref={host} className="board3d-host" aria-label="Montaje en 3D" role="img" />
+      <div ref={host} className="board3d-host" aria-label="Montaje en 3D" role="img" onPointerDownCapture={() => setTouched(true)} />
       {!supported && (
         <div className="board3d-fallback" role="alert">
           <Box size={28} />
@@ -232,9 +312,8 @@ export default function Board3D() {
           {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
         </button>
       </div>
-      <div className="board3d-hint" aria-hidden>
-        Arrastrar: mover · Clic derecho o ⇧: girar · Rueda: zoom · Doble clic: acercar · 1 2 3: vistas
-      </div>
+      {supported && !loaderGone && <Loading3D step="scene" leaving={ready} />}
+      <Legend dim={touched} />
       {perfVisible && stats && (
         <div className="board3d-stats" role="status">
           <span>1.er fotograma {Math.round(stats.firstFrame)} ms</span>

@@ -1274,3 +1274,17 @@
 @media(prefers-reduced-motion:reduce){.assembly-art,.workbench-resizer>span{transition:none!important}.workbench-flexible{animation:none!important}}
 .editor-canvas-slot{position:relative;display:flex;flex-direction:column;flex:1;min-height:0;min-width:0}.editor-canvas-slot.is-hidden{display:none}
 
+
+/* Carga de la vista 3D */
+.load3d{position:absolute;inset:0;z-index:8;display:grid;place-items:center;align-content:center;gap:14px;background:var(--canvas,#0b0c0e);animation:load3d-in .16s ease-out;transition:opacity .22s ease}
+.load3d.is-leaving{opacity:0;pointer-events:none}
+.load3d-card{display:flex;align-items:center;gap:12px;padding:12px 16px 12px 14px;border-radius:12px;background:var(--raised,#151619);border:1px solid var(--line-2,rgba(255,255,255,.1));box-shadow:0 12px 32px rgba(0,0,0,.35)}
+.load3d-ring{width:22px;height:22px;border-radius:50%;border:2px solid var(--line-2,rgba(255,255,255,.1));border-top-color:var(--accent,#3b9eff);animation:spin .8s linear infinite;will-change:transform}
+.load3d-text{display:grid;gap:2px}
+.load3d-text strong{font:600 13px var(--sans,inherit);color:var(--text,#f2f3f5);letter-spacing:-.01em}
+.load3d-text span{font:400 12px var(--sans,inherit);color:var(--text-3,#7b8089)}
+.load3d-steps{display:flex;gap:6px}
+.load3d-steps i{width:18px;height:3px;border-radius:2px;background:var(--line-2,rgba(255,255,255,.1));transition:background .2s}
+.load3d-steps i.on{background:var(--accent,#3b9eff)}
+@keyframes load3d-in{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.load3d-ring{animation-duration:2.4s}.load3d{animation:none}}

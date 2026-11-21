@@ -23,6 +23,7 @@ import { AssemblyStage } from './AssemblyStage';
 import { WorkbenchPanel, WorkbenchRail } from './Workbench';
 import { useDFPlayerAudio } from './dfplayerAudio';
 import { Board3D } from './view3d';
+import { Loading3D } from './Loading3D';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -308,7 +309,7 @@ export function EditorShell() {
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />
-        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}{view === 'board' && board3d && <Suspense fallback={null}><Board3D /></Suspense>}</div>
+        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}{view === 'board' && board3d && <Suspense fallback={<Loading3D />}><Board3D /></Suspense>}</div>
         {guiding&&!labFullscreen&&<AssemblyStage/>}
         <WorkbenchPanel />
         <Suspense fallback={null}>
