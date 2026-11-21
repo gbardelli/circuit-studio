@@ -77,6 +77,8 @@ function EmptyInspector() {
   const snapshot = useSnapshot();
   const peers = usePeers();
   const { project } = useEditor();
+  // Una persona aparece una vez aunque tenga varias pestañas abiertas (cada pestaña es un cliente).
+  const people = peers.filter((p, i) => p.user.id !== project.user.id && peers.findIndex((q) => q.user.id === p.user.id) === i);
   const select = useUi((s) => s.select);
   const groups = new Map<string, string[]>();
   for (const p of snapshot.parts.filter((q) => !isNote(q.type))) groups.set(p.type, [...(groups.get(p.type) ?? []), p.id]);
@@ -123,28 +125,45 @@ function EmptyInspector() {
         </div>
         <ul className="people">
           <ParticipantRow user={project.user} status="self"/>
-          {peers.map((p) => (
+          {people.map((p) => (
             <ParticipantRow key={p.clientId} user={p.user} status={p.drag ? 'moving' : p.selection?.length ? 'editing' : 'watching'}/>
           ))}
         </ul>
-        {peers.length === 0 && <p className="insp-hint">Comparte el enlace para editar a la vez.</p>}
+        {people.length === 0 && <p className="insp-hint">Comparte el enlace para editar a la vez.</p>}
       </div>
       {legend.length > 0 && (
         <div className="insp-card">
           <div className="insp-head">
             <h2>Colores de cables</h2>
           </div>
-          <div className="connection-legend insp-legend">
-            {legend.map((entry) => (
-              <LegendItem
-                key={entry.color}
-                entry={entry}
-                editable={!project.readOnly}
-                onRecolor={(from, to) => project.recolorWires(from, to)}
-                onRename={(label) => project.setMeta('wiring.legend', renameLegendEntry(project.meta.get('wiring.legend'), entry.colors, label))}
-              />
-            ))}
-          </div>
+          {/* Con nombre: una fila cada uno. Sin nombre: chips de muestra y número (se nombran con un clic). */}
+          {legend.some((e) => e.label) && (
+            <div className="connection-legend insp-legend">
+              {legend.filter((e) => e.label).map((entry) => (
+                <LegendItem
+                  key={entry.color}
+                  entry={entry}
+                  editable={!project.readOnly}
+                  onRecolor={(from, to) => project.recolorWires(from, to)}
+                  onRename={(label) => project.setMeta('wiring.legend', renameLegendEntry(project.meta.get('wiring.legend'), entry.colors, label))}
+                />
+              ))}
+            </div>
+          )}
+          {legend.some((e) => !e.label) && (
+            <div className="connection-legend legend-chips" role="list" aria-label="Colores sin nombre">
+              {legend.filter((e) => !e.label).map((entry) => (
+                <LegendItem
+                  key={entry.color}
+                  compact
+                  entry={entry}
+                  editable={!project.readOnly}
+                  onRecolor={(from, to) => project.recolorWires(from, to)}
+                  onRename={(label) => project.setMeta('wiring.legend', renameLegendEntry(project.meta.get('wiring.legend'), entry.colors, label))}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
     </>

@@ -73,11 +73,14 @@ export function ConnectionGuide({
   snapshot,
   netlist,
   wire,
+  pinned = false,
   onClear,
 }: {
   snapshot: CircuitSnapshot;
   netlist: Netlist;
   wire?: WireData;
+  /** El cable está seleccionado (no solo bajo el cursor): la tarjeta acepta clics. */
+  pinned?: boolean;
   onClear: () => void;
 }) {
   const guide = useRef<HTMLElement>(null);
@@ -123,7 +126,7 @@ export function ConnectionGuide({
   return (
     <aside
       ref={guide}
-      className={`connection-guide ${wire ? "is-focused" : ""}`}
+      className={`connection-guide ${wire ? "is-focused" : ""} ${wire && pinned ? "is-pinned" : ""}`}
       aria-label="Guía de conexiones"
     >
       <div
@@ -174,7 +177,7 @@ export function ConnectionGuide({
 }
 
 /** Entrada de la leyenda: un clic la renombra en el sitio (Enter guarda, Esc cancela, vacío = automático). */
-export function LegendItem({ entry, editable, onRename, onRecolor }: { entry: LegendEntry & { count?: number }; editable: boolean; onRename: (label: string) => void; onRecolor: (from: string, to: string) => void }) {
+export function LegendItem({ entry, editable, onRename, onRecolor, compact = false }: { entry: LegendEntry & { count?: number }; editable: boolean; onRename: (label: string) => void; onRecolor: (from: string, to: string) => void; compact?: boolean }) {
   const [editing, setEditing] = useState(false);
   // Cada muestra de color es un selector: cambiarla recolorea todos los cables de ese color.
   const tones = (
@@ -225,6 +228,17 @@ Redes: ${entry.names.slice(0, 12).join(", ")}${entry.names.length > 12 ? "…" :
         {tones}
         <span className={entry.label ? undefined : "legend-unnamed"}>{shown}</span>
         {count}
+      </span>
+    );
+  // Compacto (color sin nombre): solo muestra y número; el nombre se pone con un clic.
+  if (compact && !entry.label)
+    return (
+      <span className="legend-chip">
+        {tones}
+        <button type="button" className="legend-chip-count" aria-label={`Sin nombre, ${entry.count ?? 0} cables. Clic para ponerle nombre`} title={`${title}
+Clic para ponerle nombre`} onClick={() => setEditing(true)}>
+          {entry.count ?? 0}
+        </button>
       </span>
     );
   return (

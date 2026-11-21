@@ -1111,7 +1111,7 @@ export function Canvas() {
         </div>
       )}
 
-      {!sch && <ConnectionGuide snapshot={snapshot} netlist={netlist} wire={focusedWire} onClear={() => { select([], []); setHoverWire(null); }} />}
+      {!sch && <ConnectionGuide snapshot={snapshot} netlist={netlist} wire={focusedWire} pinned={wireSelection.length > 0} onClear={() => { select([], []); setHoverWire(null); }} />}
       <div className="float toolbar-float" role="toolbar" aria-label="Herramientas">
         {!sch && !project.readOnly && <button className="icon-btn" disabled={organizing} aria-label={organizing ? 'Ordenando conexiones' : 'Ordenar conexiones'} title="Separar etapas, colorear señales y ordenar cables · Se puede deshacer" onClick={() => {
           const before = project.snapshot(); setOrganizing(true);

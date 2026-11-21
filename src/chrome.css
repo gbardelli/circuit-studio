@@ -687,3 +687,61 @@
 .component-reference-source a { color: #9fc8ff; text-decoration: underline; text-underline-offset: 3px; }
 .component-reference-source a:focus-visible { outline: 2px solid #9fc8ff; outline-offset: 3px; }
 .component-reference-source small { font-size: 12px; }
+
+/* ── Guía de conexiones: tarjeta flotante que aparece solo al seguir un cable ──
+   En reposo no ocupa espacio (el lienzo recupera la franja inferior). Al pasar el cursor por
+   un cable es solo lectura (no captura el ratón, así no hay parpadeo si queda encima del
+   cable); al seleccionarlo, acepta clics. */
+.canvas-wrap.with-connections { padding-bottom: 0; }
+.canvas-wrap.with-connections .zoom-float { bottom: 12px; }
+.canvas-wrap .connection-guide {
+  --connection-guide-height: 0px;
+  position: absolute;
+  left: 50%;
+  right: auto;
+  bottom: 12px;
+  width: min(760px, calc(100% - 440px));
+  height: auto;
+  max-width: none;
+  padding: 10px 10px 10px 16px;
+  border: 1px solid var(--line-2, #ffffff1a);
+  border-top-color: #ffffff24;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--raised, #151619) 94%, transparent);
+  backdrop-filter: blur(14px) saturate(1.15);
+  box-shadow: 0 1px 0 #ffffff08 inset, 0 10px 30px -8px #000a, 0 2px 6px #0006;
+  opacity: 0;
+  transform: translate(-50%, 6px);
+  pointer-events: none;
+  transition: opacity 0.16s ease-out, transform 0.16s ease-out;
+}
+.canvas-wrap .connection-guide.is-focused { opacity: 1; transform: translate(-50%, 0); }
+.canvas-wrap .connection-guide.is-pinned { pointer-events: auto; }
+.canvas-wrap .connection-guide .connection-guide-idle { display: none; }
+@media (max-width: 1100px) {
+  .canvas-wrap .connection-guide { left: 12px; right: 12px; width: auto; bottom: 60px; transform: translateY(6px); }
+  .canvas-wrap .connection-guide.is-focused { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .canvas-wrap .connection-guide { transition: none; }
+}
+
+/* Colores de cable sin nombre: chips de muestra + número (similitud: misma forma, mismo tipo). */
+.connection-legend.legend-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0; padding: 2px 12px 14px; }
+.legend-chip { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px 0 8px; border-radius: 7px; background: var(--raised-2, #1b1c20); box-shadow: 0 0 0 1px var(--line, #ffffff10); transition: box-shadow 0.15s; }
+.legend-chip:hover { box-shadow: 0 0 0 1px var(--line-2, #ffffff1a); }
+.legend-chip .connection-tones { display: inline-flex; gap: 3px; padding: 0; }
+.legend-chip-count { padding: 0; border: 0; background: none; color: var(--text-2, #c3c7cd); font: 500 12px var(--sans, inherit); font-variant-numeric: tabular-nums; cursor: pointer; }
+.legend-chip-count:hover { color: var(--text, #fff); }
+.legend-chip-count:focus-visible { outline: 2px solid var(--accent, #6aa7ff); outline-offset: 3px; border-radius: 3px; }
+.legend-chips .legend-item.is-editing { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Aviso de versión nueva: discreto, abajo a la derecha, por encima del lienzo. */
+.update-notice { position: fixed; right: 16px; bottom: 40px; z-index: 80; display: flex; align-items: center; gap: 12px; max-width: min(440px, calc(100vw - 32px)); padding: 10px 8px 10px 14px; border-radius: 12px; background: var(--raised, #151619); border: 1px solid var(--line-2, #ffffff1a); border-top-color: #ffffff26; box-shadow: 0 1px 0 #ffffff08 inset, 0 12px 32px -8px #000b, 0 2px 6px #0006; animation: update-in 0.2s ease-out; }
+.update-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--accent, #3b9eff); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3b9eff) 22%, transparent); }
+.update-text { display: grid; gap: 1px; min-width: 0; }
+.update-text strong { font: 600 12.5px var(--sans, inherit); color: var(--text, #f2f3f5); }
+.update-text span { font: 400 12px var(--sans, inherit); color: var(--text-3, #7b8089); }
+.update-notice .btn { flex: none; gap: 6px; }
+@keyframes update-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .update-notice { animation: none; } }

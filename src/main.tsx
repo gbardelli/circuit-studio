@@ -7,6 +7,7 @@ import { Editor } from './ui/Editor';
 import { ErrorBoundary } from './ui/ErrorBoundary';
 import { Home } from './ui/Home';
 import { Startup } from './ui/Startup';
+import { UpdateNotice } from './ui/UpdateNotice';
 import './styles.css';
 import './workbench.css';
 import './chrome.css';
@@ -27,5 +28,6 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       {preview ? <Suspense fallback={<div role="status">Cargando vista preliminar…</div>}><AssemblyConcept/></Suspense> : <Startup cloud={CLOUD}>{CLOUD ? <CloudShell>{app}</CloudShell> : app}</Startup>}
     </ErrorBoundary>
+    <UpdateNotice />
   </StrictMode>,
 );
