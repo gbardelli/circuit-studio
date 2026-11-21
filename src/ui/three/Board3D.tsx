@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Cable, CircuitBoard, Focus, Hand, Moon, Move, Rotate3d, Sun, View, ZoomIn, type LucideIcon } from 'lucide-react';
 import { Loading3D } from '../Loading3D';
+import { SegmentIndicator } from '../SegmentIndicator';
 import { buildNetlist, pinKey } from '../../core/netlist';
 import { toLocal, type PartData } from '../../core/types';
 import { PartProxy } from './interact';
@@ -294,11 +295,14 @@ export default function Board3D() {
           <Box size={14} /> 3D
         </button>
         <span className="sep" aria-hidden />
-        {PRESETS.map((p) => (
-          <button key={p.id} className={preset === p.id ? 'on' : ''} aria-pressed={preset === p.id} onClick={() => go(p.id)} title={`${p.label} · ${p.key}`}>
-            {p.label} <kbd>{p.key}</kbd>
-          </button>
-        ))}
+        <span className="seg">
+          <SegmentIndicator />
+          {PRESETS.map((p) => (
+            <button key={p.id} className={preset === p.id ? 'on' : ''} aria-pressed={preset === p.id} onClick={() => go(p.id)} title={`${p.label} · ${p.key}`}>
+              {p.label} <kbd>{p.key}</kbd>
+            </button>
+          ))}
+        </span>
         <span className="sep" aria-hidden />
         <button
           className={checking ? 'on' : ''}

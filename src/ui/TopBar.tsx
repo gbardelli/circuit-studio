@@ -142,19 +142,23 @@ export function TopBar() {
       <div className="sim-controls">
         {board && (
           <HintButton className={`btn ghost sm ${codeOpen ? 'is-on' : ''}`} onClick={() => openCode(codeOpen ? null : board.id, 'code')} aria-pressed={codeOpen} title="Código del Arduino">
-            <Code2 size={14} /> Código
+            <Code2 size={14} /> <span className="btn-label">Código</span>
           </HintButton>
         )}
-        <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || (!simRunning && !project.synced) || guiding} title={guiding ? 'Cierra la guía de montaje para simular' : !simRunning && !project.synced ? 'Cargando el circuito' : guest ? 'Simula en tu navegador sin modificar el original' : undefined}>
-          {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
-          {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
-        </HintButton>
-        {simRunning && (
-          <span className="sim-readout">
-            <span className="mono">{t.toFixed(t < 10 ? 2 : 1)} s</span>
-            <span className={`speed mono ${status.speed < 0.9 ? 'slow' : ''}`}>{status.speed.toFixed(2)}×</span>
-          </span>
-        )}
+        {/* Transporte: el botón no se mueve al arrancar y el estado en vivo vive en la misma pieza. */}
+        <div className={`sim-transport ${simRunning ? 'is-live' : ''}`}>
+          <HintButton className={`sim-btn ${simRunning ? 'running' : ''}`} onClick={toggleSim} disabled={starting || (!simRunning && !project.synced) || guiding} title={guiding ? 'Cierra la guía de montaje para simular' : !simRunning && !project.synced ? 'Cargando el circuito' : guest ? 'Simula en tu navegador sin modificar el original' : undefined}>
+            {starting ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : simRunning ? <Square size={12} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
+            {starting ? 'Compilando' : simRunning ? 'Detener' : 'Simular'}
+          </HintButton>
+          {simRunning && (
+            <span className="sim-readout" title="Tiempo simulado · velocidad respecto al tiempo real">
+              <span className="live-dot" aria-hidden />
+              <span className="mono">{t.toFixed(t < 10 ? 2 : 1)} s</span>
+              <span className={`speed mono ${status.speed < 0.9 ? 'slow' : ''}`}>{status.speed.toFixed(2)}×</span>
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="tb-right">

@@ -11,6 +11,7 @@ import { UpdateNotice } from './ui/UpdateNotice';
 import './styles.css';
 import './workbench.css';
 import './chrome.css';
+import './depth.css';
 
 const params = new URLSearchParams(location.search);
 const AssemblyConcept = lazy(() => import('./previews/AssemblyConcept'));

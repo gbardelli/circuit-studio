@@ -1,0 +1,327 @@
+/* ════════════════════════════════════════════════════════════════════════════════
+   Material y movimiento
+   ─ Material (Apple): el peso del material marca la jerarquía. La estructura (cabecera,
+     paneles) es un material oscuro y pesado; el lienzo es el escenario, elevado y con
+     viñeta interior; lo que flota sobre el lienzo es cristal. Nunca cristal sobre cristal.
+   ─ Relieve (neumórfico sobrio): luz arriba, sombra interior abajo; al pulsar, el control
+     se hunde. Responde al presionar, no al soltar.
+   ─ Movimiento (Emil Kowalski): ease-out fuerte para entrar, curva de cajón para paneles,
+     todo < 250 ms, transform/opacity, hover solo con ratón, nada animado en atajos.
+   ════════════════════════════════════════════════════════════════════════════════ */
+:root {
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --t-press: 100ms;
+  --t-fast: 160ms;
+  --t-mid: 220ms;
+
+  /* Material de estructura: degradado vertical apenas perceptible y filo de luz arriba. */
+  --mat-chrome: linear-gradient(180deg, #141518 0%, #0f1012 100%);
+  --mat-chrome-edge: inset 0 1px 0 #ffffff0d, 0 0 0 1px #ffffff0a;
+  --mat-panel: linear-gradient(180deg, #16171a 0%, #111214 38%, #0f1012 100%);
+  --mat-panel-shadow: inset 0 1px 0 #ffffff10, inset 0 0 0 1px #ffffff09, 0 1px 1px #0006, 0 12px 28px -14px #000c;
+  /* Cristal: sobre el lienzo, con su filo brillante y sombra en capas. */
+  --glass: linear-gradient(180deg, rgba(36, 38, 43, 0.78) 0%, rgba(22, 23, 27, 0.82) 100%);
+  --glass-blur: blur(18px) saturate(1.6);
+  --glass-shadow: inset 0 1px 0 #ffffff1c, inset 0 0 0 1px #ffffff10, 0 1px 2px #0007, 0 10px 24px -10px #000d, 0 24px 48px -24px #000a;
+  /* Relieve de los controles. */
+  --relief: linear-gradient(180deg, #2b2d32 0%, #222428 100%);
+  --relief-hover: linear-gradient(180deg, #33363b 0%, #282a2f 100%);
+  --relief-shadow: inset 0 1px 0 #ffffff17, inset 0 -1px 0 #00000059, 0 0 0 1px #ffffff0b, 0 1px 2px #0008, 0 2px 6px -2px #0006;
+  --sunken-shadow: inset 0 1px 3px #000a, inset 0 0 0 1px #ffffff08, 0 1px 0 #ffffff08;
+}
+
+/* ── Fondo y marco ─────────────────────────────────────────────────────────── */
+.app {
+  background:
+    radial-gradient(1200px 420px at 50% -180px, rgba(80, 140, 255, 0.07), transparent 70%),
+    radial-gradient(900px 500px at 100% 120%, rgba(61, 220, 132, 0.035), transparent 70%),
+    #08090a;
+}
+.app .topbar {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent);
+  border-bottom-color: transparent;
+}
+.app .statusbar { background: transparent; border-top-color: transparent; }
+
+@media (min-width: 961px) {
+  /* Tres superficies separadas por un margen: biblioteca, escenario, inspector. */
+  .app > .library {
+    margin: 0 8px 8px 8px;
+    padding: 10px 8px 0 10px;
+    border-radius: 14px;
+    background: var(--mat-panel);
+    box-shadow: var(--mat-panel-shadow);
+    overflow: hidden;
+  }
+  .app > .inspector {
+    margin: 0 8px 8px 8px;
+    border: 0;
+    border-radius: 14px;
+    background: var(--mat-panel);
+    box-shadow: var(--mat-panel-shadow);
+  }
+  .app .workspace {
+    margin: 0 0 8px 0;
+    border: 0;
+    border-radius: 14px;
+    box-shadow: inset 0 1px 0 #ffffff0f, inset 0 0 0 1px #ffffff0c, 0 2px 4px #0008, 0 24px 60px -24px #000;
+  }
+  .app[data-lib='closed'] > .library, .app[data-insp='closed'] > .inspector { margin: 0; box-shadow: none; }
+}
+
+/* El escenario: el lienzo se lee hundido gracias a una viñeta interior suave. */
+.app .canvas-wrap {
+  background:
+    radial-gradient(1400px 900px at 50% 40%, transparent 55%, rgba(0, 0, 0, 0.32) 100%),
+    radial-gradient(900px 500px at 50% -10%, rgba(80, 140, 255, 0.04), transparent 60%),
+    var(--canvas);
+}
+.app .workbench-rail {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.008));
+  border-bottom: 1px solid #ffffff09;
+  box-shadow: 0 1px 0 #00000059;
+}
+
+/* ── Cristal flotante sobre el lienzo ──────────────────────────────────────── */
+.app .float,
+.board3d .float,
+.board3d-legend,
+.app .canvas-wrap .connection-guide,
+.probe-readout {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  border-color: transparent;
+}
+/* Los flotantes se materializan al aparecer: desenfoque + escala + opacidad. */
+.app .float, .board3d .float, .board3d-legend {
+  transition: opacity var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out), filter var(--t-mid) var(--ease-out);
+}
+@starting-style {
+  .app .float, .board3d .float { opacity: 0; filter: blur(6px); }
+}
+
+/* ── Controles en relieve ──────────────────────────────────────────────────── */
+.btn:not(.ghost):not(.primary):not(.accent):not(.danger),
+.topbar .btn:not(.ghost):not(.primary) {
+  background: var(--relief);
+  box-shadow: var(--relief-shadow);
+  transition: background var(--t-fast) ease, box-shadow var(--t-fast) ease, transform var(--t-press) var(--ease-out), color var(--t-fast) ease;
+}
+.btn.primary, .topbar .btn.primary {
+  background: linear-gradient(180deg, #ffffff 0%, #e3e5e9 100%);
+  color: #0c0d0f;
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #0000002e, 0 0 0 1px #0000004d, 0 1px 2px #0009, 0 4px 14px -6px rgba(255, 255, 255, 0.22);
+  transition: box-shadow var(--t-fast) ease, transform var(--t-press) var(--ease-out), filter var(--t-fast) ease;
+}
+.sim-btn:not(.running) {
+  background: linear-gradient(180deg, #ffffff 0%, #dfe2e6 100%);
+  box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #00000033, 0 0 0 1px #0000004d, 0 1px 2px #0009, 0 6px 18px -8px rgba(255, 255, 255, 0.28);
+}
+.sim-btn.running {
+  background: var(--relief);
+  box-shadow: var(--relief-shadow);
+}
+.icon-btn, .btn, .sim-btn, .view-float button, .workbench-tools > button, .lib-category, .bom button, .legend-chip, .board3d-bar button {
+  -webkit-tap-highlight-color: transparent;
+}
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(.ghost):not(.primary):not(.accent):not(.danger):hover:not(:disabled),
+  .topbar .btn:not(.ghost):not(.primary):hover:not(:disabled) { background: var(--relief-hover); }
+  .btn.primary:hover:not(:disabled), .sim-btn:not(.running):hover:not(:disabled) {
+    filter: brightness(1.03);
+    box-shadow: inset 0 1px 0 #fff, inset 0 -1px 0 #0000002e, 0 0 0 1px #0000004d, 0 1px 2px #0009, 0 6px 22px -6px rgba(255, 255, 255, 0.32);
+  }
+}
+/* Pulsar: el control se hunde al presionar (no al soltar). */
+.btn:active:not(:disabled),
+.sim-btn:active:not(:disabled),
+.topbar .btn:active:not(:disabled) {
+  transform: scale(0.97);
+  box-shadow: var(--sunken-shadow);
+  transition-duration: var(--t-press);
+}
+.icon-btn { transition: background var(--t-fast) ease, color var(--t-fast) ease, transform var(--t-press) var(--ease-out), box-shadow var(--t-fast) ease; }
+.icon-btn:active:not(:disabled) { transform: scale(0.92); box-shadow: var(--sunken-shadow); }
+.lib-category, .bom button, .legend-chip, .card {
+  transition: background var(--t-fast) ease, box-shadow var(--t-fast) ease, transform var(--t-press) var(--ease-out);
+}
+.lib-category:active, .bom button:active, .legend-chip:active { transform: scale(0.985); }
+
+/* Foco visible y animado (anillo que crece, no un borde que aparece de golpe). */
+:is(.btn, .icon-btn, .sim-btn, .lib-category, .view-float button, .workbench-tools > button):focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #08090a, 0 0 0 4px rgba(108, 182, 255, 0.85);
+  transition: box-shadow var(--t-fast) var(--ease-out);
+}
+
+/* ── Selectores segmentados con indicador deslizante ───────────────────────── */
+.has-indicator { isolation: isolate; }
+/* El indicador se mide respecto a su contenedor: los que no flotan necesitan posición propia. */
+.workbench-tools.has-indicator, .seg { position: relative; }
+.seg { position: relative; display: inline-flex; align-items: center; gap: 2px; }
+.seg-indicator {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: -1;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #34373d 0%, #2a2c31 100%);
+  box-shadow: inset 0 1px 0 #ffffff1f, inset 0 -1px 0 #0000004d, 0 0 0 1px #ffffff0d, 0 1px 3px #0009;
+  pointer-events: none;
+  transition: transform var(--t-mid) var(--ease-out), width var(--t-mid) var(--ease-out), opacity var(--t-fast) ease;
+}
+.has-indicator > .on, .has-indicator > .active, .has-indicator > [aria-selected='true'] {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+.has-indicator > button { position: relative; transition: color var(--t-fast) ease, transform var(--t-press) var(--ease-out); }
+.has-indicator > button:active { transform: scale(0.96); }
+
+/* ── Popovers, tooltips y menús: se materializan desde su origen ───────────── */
+.ui-popover, .ui-tooltip {
+  transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out), filter var(--t-fast) var(--ease-out);
+}
+.ui-popover[data-starting-style], .ui-popover[data-ending-style] { filter: blur(4px); }
+.ui-popover {
+  background: linear-gradient(180deg, rgba(42, 44, 50, 0.92) 0%, rgba(30, 32, 36, 0.94) 100%);
+  backdrop-filter: blur(22px) saturate(1.6);
+  -webkit-backdrop-filter: blur(22px) saturate(1.6);
+}
+.menu {
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  animation: none;
+  transition: opacity var(--t-fast) var(--ease-out), transform var(--t-fast) var(--ease-out), filter var(--t-fast) var(--ease-out);
+}
+@starting-style {
+  .menu { opacity: 0; transform: scale(0.97); filter: blur(3px); }
+}
+.toast {
+  background: var(--glass);
+  box-shadow: var(--glass-shadow);
+  animation: none;
+  transition: opacity var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out), filter var(--t-mid) var(--ease-out);
+}
+@starting-style {
+  .toast { opacity: 0; transform: translate(-50%, 10px) scale(0.98); filter: blur(4px); }
+}
+.update-notice {
+  background: var(--glass);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  border-color: transparent;
+}
+
+/* ── Inspector: el contenido nuevo entra con un fundido corto ──────────────── */
+.inspector > * {
+  transition: opacity var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out);
+}
+@starting-style {
+  .inspector > * { opacity: 0; transform: translateY(4px); }
+}
+.inspector .insp-card + .insp-card { border-top-color: #ffffff09; box-shadow: inset 0 1px 0 #00000040; }
+
+/* ── Biblioteca: tarjetas que entran en cascada y responden al ratón ───────── */
+.library .cards > * {
+  transition: opacity var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out), background var(--t-fast) ease, box-shadow var(--t-fast) ease;
+}
+@starting-style {
+  .library .cards > * { opacity: 0; transform: translateY(6px); }
+}
+.library .cards > *:nth-child(2) { transition-delay: 30ms, 30ms, 0ms, 0ms; }
+.library .cards > *:nth-child(3) { transition-delay: 60ms, 60ms, 0ms, 0ms; }
+.library .cards > *:nth-child(4) { transition-delay: 90ms, 90ms, 0ms, 0ms; }
+.library .cards > *:nth-child(5) { transition-delay: 120ms, 120ms, 0ms, 0ms; }
+.library .cards > *:nth-child(6) { transition-delay: 150ms, 150ms, 0ms, 0ms; }
+.library .cards > *:nth-child(n + 7) { transition-delay: 180ms, 180ms, 0ms, 0ms; }
+@media (hover: hover) and (pointer: fine) {
+  .library .card:hover {
+    background: linear-gradient(180deg, #ffffff0a, #ffffff03);
+    box-shadow: inset 0 1px 0 #ffffff0d, 0 0 0 1px #ffffff0f, 0 6px 16px -8px #000c;
+    transform: translateY(-1px);
+  }
+  .lib-category:hover { background: linear-gradient(180deg, #ffffff0a, #ffffff04); box-shadow: inset 0 1px 0 #ffffff0a; }
+  .lib-category:hover .lib-cat-mark { transform: translateY(-1px); }
+}
+.library .lib-category strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.library .lib-category > span:not(.lib-cat-mark) { min-width: 0; }
+.library .lib-cat-mark {
+  background: linear-gradient(180deg, #2a2c31, #1d1f23);
+  box-shadow: inset 0 1px 0 #ffffff14, inset 0 -1px 0 #0000004d, 0 0 0 1px #ffffff0a, 0 1px 2px #0007;
+  transition: transform var(--t-fast) var(--ease-out), color var(--t-fast) ease;
+}
+.library .search, .library input[type='search'] {
+  transition: box-shadow var(--t-fast) ease, background var(--t-fast) ease;
+}
+
+/* ── Transporte de simulación: el estado en vivo entra deslizándose ─────────── */
+.sim-transport { transition: background-color var(--t-mid) var(--ease-out), box-shadow var(--t-mid) var(--ease-out); }
+.sim-transport.is-live { background: var(--mat-chrome); box-shadow: var(--relief-shadow); }
+.sim-transport .sim-readout { transition: opacity var(--t-mid) var(--ease-out), transform var(--t-mid) var(--ease-out), filter var(--t-mid) var(--ease-out); }
+@starting-style {
+  .sim-transport .sim-readout { opacity: 0; transform: translateX(-6px); filter: blur(3px); }
+}
+
+/* ── Accesibilidad ─────────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .seg-indicator, .library .cards > *, .inspector > *, .menu, .toast, .ui-popover, .ui-tooltip,
+  .app .float, .board3d .float, .sim-transport .sim-readout {
+    transition-property: opacity !important;
+    transition-delay: 0ms !important;
+    transform: none;
+    filter: none !important;
+  }
+  .btn:active, .sim-btn:active, .icon-btn:active, .lib-category:active { transform: none !important; }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .app .float, .board3d .float, .board3d-legend, .menu, .toast, .ui-popover, .update-notice, .app .canvas-wrap .connection-guide, .probe-readout {
+    background: #1b1c20;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
+/* Una sola acción luminosa en la cabecera (Von Restorff): «Simular». Compartir va en relieve. */
+.topbar .tb-right .btn.primary {
+  background: var(--relief);
+  color: var(--text, #f5f6f7);
+  box-shadow: var(--relief-shadow);
+  filter: none;
+}
+@media (hover: hover) and (pointer: fine) {
+  .topbar .tb-right .btn.primary:hover:not(:disabled) { background: var(--relief-hover); box-shadow: var(--relief-shadow); filter: none; }
+}
+
+/* ── Portada: tarjetas con material y vida ───────────────────────────────────
+   Se elevan un píxel con una sombra más larga al pasar el ratón y se hunden al pulsar;
+   la miniatura se acerca muy poco (como mirar más de cerca), sin cambiar de tamaño la tarjeta. */
+.tpl, .blank-row {
+  background: var(--mat-panel);
+  box-shadow: var(--mat-panel-shadow);
+  transition: transform var(--t-mid) var(--ease-out), box-shadow var(--t-mid) var(--ease-out);
+}
+.tpl-art svg { transition: transform 400ms var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .tpl:hover, .blank-row:hover {
+    transform: translateY(-2px);
+    box-shadow: inset 0 1px 0 #ffffff14, inset 0 0 0 1px #ffffff12, 0 2px 4px #0008, 0 22px 40px -20px #000;
+  }
+  .tpl:hover .tpl-art svg { transform: scale(1.025); }
+}
+.tpl:active, .blank-row:active { transform: translateY(0) scale(0.99); transition-duration: var(--t-press); }
+.blank-plus {
+  background: var(--relief);
+  box-shadow: var(--relief-shadow);
+  transition: transform var(--t-fast) var(--ease-out), box-shadow var(--t-fast) ease;
+}
+@media (hover: hover) and (pointer: fine) {
+  .blank-row:hover .blank-plus { transform: rotate(90deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tpl, .blank-row, .tpl-art svg, .blank-plus { transition-property: box-shadow !important; transform: none !important; }
+}

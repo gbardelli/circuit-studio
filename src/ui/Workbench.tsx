@@ -18,6 +18,7 @@ import { Diagnostics } from "./Diagnostics";
 import { Assembly } from "./Assembly";
 import { Notes } from "./Notes";
 import { CommandPalette } from "./CommandPalette";
+import { SegmentIndicator } from "./SegmentIndicator";
 const TABS = [
   { id: "signals", name: "Señales", icon: Activity },
   { id: "diagnostics", name: "Diagnóstico", icon: ScanLine },
@@ -34,6 +35,7 @@ export function WorkbenchRail() {
         role="toolbar"
         aria-label="Herramientas de laboratorio"
       >
+        <SegmentIndicator />
         {TABS.map((t) => (
           <HintButton
             key={t.id}

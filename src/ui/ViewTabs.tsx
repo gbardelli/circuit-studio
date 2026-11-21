@@ -1,6 +1,7 @@
 import { Binary, Box, CircuitBoard, Workflow } from 'lucide-react';
 import { useUi, type View } from './store';
 import { load3d, view3dClock } from './view3d';
+import { SegmentIndicator } from './SegmentIndicator';
 
 const TABS: { view: View; label: string; Icon: typeof Binary; hint: string }[] = [
   { view: 'board', label: 'Protoboard', Icon: CircuitBoard, hint: 'Montaje físico con piezas reales' },
@@ -15,6 +16,7 @@ export function ViewTabs() {
   const setBoard3d = useUi((s) => s.setBoard3d);
   return (
     <div className="float view-float" role="tablist" aria-label="Vista">
+      <SegmentIndicator />
       {TABS.map(({ view: v, label, Icon, hint }) => (
         <button key={v} role="tab" aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => setView(v)} title={hint}>
           <Icon size={14} /> {label}
