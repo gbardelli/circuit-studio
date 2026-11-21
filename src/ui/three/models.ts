@@ -3,7 +3,7 @@ import type { PartDef } from '../../parts/types';
 import type { BuildCtx, Model } from './generic';
 import { buildCeramic, buildDiode, buildDip, buildElectrolytic, buildLed, buildResistor, buildSevenSeg, isDip } from './families';
 import {
-  buildBenchSupply, buildBuzzer, buildDipSwitch, buildInstrument, buildLdr, buildLedBar, buildPcbModule, buildPot, buildPushbutton, buildRgbLed,
+  buildBenchSupply, buildBuzzer, buildMb102, buildDipSwitch, buildInstrument, buildLdr, buildLedBar, buildPcbModule, buildPot, buildPushbutton, buildRgbLed,
   buildSlideSwitch, buildSpeaker, buildTethered, buildTo220, buildTo92, buildUltrasonic, skinnedFallback,
 } from './modules';
 
@@ -38,6 +38,7 @@ const BY_TYPE: Record<string, Builder> = {
   servo: buildTethered,
   'dc-motor': buildTethered,
   'bench-supply': buildBenchSupply,
+  'mb102-power': buildMb102,
   multimeter: buildInstrument,
   oscilloscope: buildInstrument,
   clock: buildInstrument,

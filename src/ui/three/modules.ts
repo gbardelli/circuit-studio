@@ -453,6 +453,117 @@ export function buildBenchSupply(def: PartDef, part: PartData, ctx: BuildCtx): M
   return { group, anchorY: () => top, top: 2 * MM + hBack, footprint: b, update: skin.update };
 }
 
+/**
+ * Fuente para protoboard MB102 (YwRobot): PCB negro apoyado en sus pines macho sobre los rieles y,
+ * en las mismas posiciones que su dibujo 2D, el USB-A, el jack DC, el pulsador de encendido con su
+ * LED, los dos reguladores AMS1117, los electrolíticos y los puentes amarillos de 3,3 / 5 V.
+ */
+export function buildMb102(def: PartDef, part: PartData, ctx: BuildCtx): Model {
+  const group = new THREE.Group();
+  const pins = def.pins(part.props);
+  const area: Bounds = { x: -122, y: -14, w: 128, h: 218 };
+  const bottom = ctx.onBoard ? 2.5 * MM : 6 * MM;
+  const T = 1.6 * MM;
+  const top = bottom + T;
+  const pcb = new THREE.Mesh(slab(rrect(area, 1 * MM), top, T, 0.3), std('#141816', 0.42, 0, { bumpMap: plasticNoise(), bumpScale: 0.12 }));
+  pcb.castShadow = pcb.receiveShadow = true;
+  group.add(pcb);
+  const skin = skinFor(def, part, area);
+  group.add(skinPlane(skin.tex, area, top, { roughness: 0.45 }));
+  maleHeaders(pins, group, 0, top, ctx);
+
+  // USB-A hembra: carcasa de acero con la boca hacia fuera (−x) y la lengüeta blanca.
+  const usb = body(-124, 18, 44, 30, top, 7 * MM, std('#cfd3d7', 0.25, 1), 0.3 * MM);
+  const mouth = new THREE.Mesh(new THREE.PlaneGeometry(26, 5.4 * MM).rotateY(-Math.PI / 2), std('#0c0d0e', 0.8));
+  mouth.position.set(-124.05, top + 3.5 * MM, 33);
+  const tongue = new THREE.Mesh(new THREE.BoxGeometry(8 * MM, 1.8 * MM, 18), std('#f1efe9', 0.5));
+  tongue.position.set(-124 + 4 * MM, top + 4.2 * MM, 33);
+  group.add(usb, mouth, tongue);
+
+  // Jack DC de 5,5 mm: cuerpo negro con la boca redonda hacia fuera.
+  const jack = body(-124, 150, 42, 30, top, 11 * MM, blackPlastic(), 0.6 * MM);
+  const bore = new THREE.Mesh(new THREE.CircleGeometry(3.2 * MM, 32).rotateY(-Math.PI / 2), std('#050505', 0.9));
+  bore.position.set(-124.05, top + 6 * MM, 165);
+  const pinC = new THREE.Mesh(new THREE.CylinderGeometry(1 * MM, 1 * MM, 6 * MM, 16).rotateZ(Math.PI / 2), std('#c9ccd0', 0.3, 1));
+  pinC.position.set(-124 + 3 * MM, top + 6 * MM, 165);
+  group.add(jack, bore, pinC);
+
+  // Pulsador de encendido con enclavamiento: cuerpo metálico y botón blanco que se hunde en ON.
+  const sw = body(-97, 95, 24, 20, top, 5.5 * MM, std('#b9bec4', 0.3, 1), 0.3 * MM);
+  const knob = new THREE.Mesh(new RoundedBoxGeometry(14, 3.4 * MM, 12, 2, 0.6 * MM), std('#f4f3ef', 0.45));
+  const knobY = (on: boolean) => top + 5.5 * MM + (on ? 0.6 : 2.2) * MM;
+  const on0 = part.props.on !== false;
+  knob.position.set(-85, knobY(on0), 105);
+  knob.castShadow = true;
+  group.add(sw, knob);
+
+  // LED de encendido (0805 verde) con su halo.
+  const ledMat = std('#2b6b3a', 0.25, 0, { emissive: new THREE.Color('#46e06b'), emissiveIntensity: on0 ? 2.6 : 0 });
+  const led = new THREE.Mesh(new RoundedBoxGeometry(2.2 * MM, 0.9 * MM, 1.4 * MM, 1, 0.2 * MM), ledMat);
+  led.position.set(-96, top + 0.45 * MM, 80);
+  group.add(led);
+
+  // Reguladores AMS1117 (SOT-223): cuerpo negro, aleta metálica y tres patas.
+  for (const y of [34, 102]) {
+    const tab = new THREE.Mesh(new THREE.BoxGeometry(14, 0.4 * MM, 10), std('#c9ccd0', 0.3, 1));
+    tab.position.set(-49, top + 0.2 * MM, y + 5);
+    const reg = body(-54, y + 5, 10, 13, top, 1.7 * MM, mats().epoxy, 0.15 * MM);
+    group.add(tab, reg);
+    for (const dx of [0, 4, 8]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(2, 0.3 * MM, 7), std('#c9ccd0', 0.3, 1));
+      leg.position.set(-52 + dx, top + 0.15 * MM, y + 20.5);
+      group.add(leg);
+    }
+  }
+
+  // Electrolíticos SMD: base negra y lata de aluminio con la cruz en la tapa.
+  for (const y of [60, 132]) {
+    const base = body(-75, y, 18, 20, top, 1.2 * MM, blackPlastic(), 0.2 * MM);
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 5.4 * MM, 32), std('#cfd3d7', 0.3, 1));
+    can.position.set(-66, top + 1.2 * MM + 2.7 * MM, y + 10);
+    can.castShadow = true;
+    const cross = new THREE.Mesh(new THREE.PlaneGeometry(12, 0.5 * MM).rotateX(-Math.PI / 2), std('#5b6168', 0.6, 0.6));
+    cross.position.set(-66, top + 6.62 * MM, y + 10);
+    const cross2 = cross.clone();
+    cross2.rotation.y = Math.PI / 2;
+    group.add(base, can, cross, cross2);
+  }
+
+  // Puentes de tensión: tira de tres pines y el puente amarillo sobre 5 V o 3,3 V.
+  const jumperFor = (key: 'top' | 'bottom', y: number) => {
+    const v = Number(part.props[key] ?? 5);
+    const strip = body(-67, y - 2 * MM / 2.54 * 2.54, 30, 2.5 * MM, top, 2.5 * MM, mats().header, 0.2 * MM);
+    strip.position.z = y;
+    group.add(strip);
+    for (const px of [-62, -52, -42]) {
+      const pin = new THREE.Mesh(new THREE.BoxGeometry(0.64 * MM, 6 * MM, 0.64 * MM), mats().gold);
+      pin.position.set(px, top + 2.5 * MM + 1.5 * MM, y);
+      group.add(pin);
+    }
+    if (Math.abs(v) < 0.01) return;
+    const cx = Math.abs(v - 3.3) < 0.01 ? -57 : -47;
+    const cap = new THREE.Mesh(new RoundedBoxGeometry(5 * MM, 6 * MM, 2.5 * MM, 2, 0.3 * MM), std('#f2c21c', 0.4));
+    cap.position.set(cx, top + 2.5 * MM + 3 * MM, y);
+    cap.castShadow = true;
+    group.add(cap);
+  };
+  jumperFor('top', 8);
+  jumperFor('bottom', 188);
+
+  return {
+    group,
+    anchorY: () => 0,
+    top: top + 11 * MM,
+    footprint: area,
+    update(v: Visual | null) {
+      const on = v ? Boolean(v.on) : on0;
+      ledMat.emissiveIntensity = on ? 2.6 : 0;
+      knob.position.y = knobY(on);
+      skin.update?.(v);
+    },
+  };
+}
+
 // ───────────────────────── Piezas con cables ─────────────────────────
 
 const TETHER: Record<string, { mm: number; color: string; leads: string[]; zone: number }> = {

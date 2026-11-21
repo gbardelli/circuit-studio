@@ -162,7 +162,7 @@ export class CircuitScene {
       b: this.anchor(w.b, ground),
       via: w.points.map((p) => ({ x: p.x, z: p.y })),
     }));
-    this.wires = buildWires(list, ground, JSON.stringify(fps));
+    this.wires = buildWires(list, ground);
     this.wires.group.traverse((n) => (n.userData.noPickPart = true));
     this.root.add(this.wires.group);
   }

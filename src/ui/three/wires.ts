@@ -21,12 +21,31 @@ export interface Footprint {
 }
 
 export const WIRE_R = 0.7 * MM;
+const SOLID_R = 0.55 * MM;
 const TIP_R = 0.32 * MM;
 /** Cabezal Dupont macho: carcasa de 2,54 mm × 14 mm y manguito de 2 mm por donde sale el cable. */
 const HOUSING = 14 * MM;
 const GAP = 0.7 * MM;
 const BOOT = 2.2 * MM;
 const HEAD = GAP + HOUSING + BOOT;
+
+/**
+ * Tres cables, como en una mesa real:
+ * - rígido cortado a mano (sin cabezal, pegado a la placa) para saltos cortos en la misma superficie;
+ * - jumper Dupont de 10 cm para distancias medias;
+ * - jumper Dupont de 20 cm para las largas.
+ * No hay más medidas: la longitud fija decide la altura del arco.
+ */
+export const SOLID_MAX = 30 * MM;
+export const DUPONT_SHORT = 100 * MM;
+export const DUPONT_LONG = 200 * MM;
+export type WireKind = 'solid' | 'dupont10' | 'dupont20';
+
+export function wireKind(w: Pick<WireInput, 'a' | 'b'>): WireKind {
+  const d = Math.hypot(w.a.x - w.b.x, w.a.z - w.b.z);
+  if (Math.abs(w.a.y - w.b.y) < 1 && d <= SOLID_MAX) return 'solid';
+  return d + Math.abs(w.a.y - w.b.y) <= DUPONT_SHORT * 0.7 ? 'dupont10' : 'dupont20';
+}
 
 /** Altura del obstáculo más alto bajo (x, z): protoboards, piezas y mesa. */
 export function surfaceAt(fps: Footprint[], floor: number) {
@@ -37,94 +56,88 @@ export function surfaceAt(fps: Footprint[], floor: number) {
   };
 }
 
-function resample(path: THREE.Vector3[], n: number) {
-  const lens = [0];
-  for (let i = 1; i < path.length; i++) lens.push(lens[i - 1] + path[i].distanceTo(path[i - 1]));
-  const total = lens[lens.length - 1] || 1;
-  const out: THREE.Vector3[] = [];
-  let j = 1;
-  for (let k = 0; k <= n; k++) {
-    const d = (k / n) * total;
-    while (j < lens.length - 1 && lens[j] < d) j++;
-    const t = (d - lens[j - 1]) / (lens[j] - lens[j - 1] || 1);
-    out.push(path[j - 1].clone().lerp(path[j], Math.min(1, Math.max(0, t))));
+/** Polilínea con codos de radio fijo (doblez de un cable rígido con alicates). */
+function bentPath(points: THREE.Vector3[], radius: number) {
+  const path = new THREE.CurvePath<THREE.Vector3>();
+  let start = points[0].clone();
+  for (let i = 1; i < points.length; i++) {
+    const p = points[i];
+    const next = points[i + 1];
+    if (!next) {
+      if (start.distanceTo(p) > 0.01) path.add(new THREE.LineCurve3(start, p.clone()));
+      break;
+    }
+    const inDir = p.clone().sub(points[i - 1]).normalize();
+    const outDir = next.clone().sub(p).normalize();
+    const r = Math.min(radius, p.distanceTo(points[i - 1]) / 2, next.distanceTo(p) / 2);
+    const c0 = p.clone().addScaledVector(inDir, -r);
+    const c1 = p.clone().addScaledVector(outDir, r);
+    if (start.distanceTo(c0) > 0.01) path.add(new THREE.LineCurve3(start, c0));
+    path.add(new THREE.QuadraticBezierCurve3(c0, p.clone(), c1));
+    start = c1;
   }
-  return { out, total };
+  return path;
 }
 
+/** Cable rígido: sube del hueco, se dobla y corre pegado a la placa por los codos del documento. */
+function solidCurve(w: WireInput, ground: (x: number, z: number) => number) {
+  const flat = [{ x: w.a.x, z: w.a.z }, ...w.via, { x: w.b.x, z: w.b.z }];
+  // Altura de apoyo: lo más alto que hay debajo de todo el recorrido.
+  let top = Math.max(w.a.y, w.b.y);
+  for (let i = 0; i < flat.length - 1; i++)
+    for (let t = 0; t <= 1; t += 0.1) top = Math.max(top, ground(flat[i].x + (flat[i + 1].x - flat[i].x) * t, flat[i].z + (flat[i + 1].z - flat[i].z) * t));
+  const h = top + SOLID_R + 0.35 * MM;
+  const pts = [
+    w.a.clone().add(new THREE.Vector3(0, 0.4 * MM, 0)),
+    ...flat.map((p) => new THREE.Vector3(p.x, h, p.z)),
+    w.b.clone().add(new THREE.Vector3(0, 0.4 * MM, 0)),
+  ];
+  return bentPath(pts, 0.9 * MM);
+}
+
+const cubic = (p0: THREE.Vector3, p1: THREE.Vector3, p2: THREE.Vector3, p3: THREE.Vector3) => new THREE.CubicBezierCurve3(p0, p1, p2, p3);
+
+/** Hacia dónde se recuestan los arcos: todos hacia el fondo, como un montaje bien peinado. */
+const LEAN = new THREE.Vector3(-0.25, 0, -1).normalize();
+
 /**
- * Cable rígido-flexible por Verlet: longitud con holgura, rigidez a flexión, gravedad y choque con
- * todo lo que hay debajo. Los extremos salen verticales del hueco, como un puente real.
+ * Jumper Dupont de longitud fija: arco redondo (Bézier cúbica) cuya altura se ajusta por bisección
+ * hasta que el cable mide lo que mide de verdad. Los arcos altos se recuestan un poco hacia el fondo.
  */
-export function settleWire(w: WireInput, ground: (x: number, z: number) => number): THREE.Vector3[] {
-  // Jumper Dupont: el cable nace en lo alto del cabezal y sigue vertical antes de curvarse.
-  const routed = w.via.length > 0;
-  const rise = HEAD + 3 * MM;
-  const up = (p: THREE.Vector3) => p.clone().add(new THREE.Vector3(0, rise, 0));
-  const a1 = up(w.a), b1 = up(w.b);
-  const via = w.via.map((v) => new THREE.Vector3(v.x, ground(v.x, v.z) + WIRE_R, v.z));
-  const path = [a1, ...via, b1];
-  const flat = Math.hypot(w.a.x - w.b.x, w.a.z - w.b.z);
-  const seg0 = resample(path, 8).total;
-  const n = Math.max(8, Math.min(90, Math.round(seg0 / 5)));
-  const { out: nodes, total } = resample(path, n);
-  const arch = routed ? 0 : Math.min(0.26 * flat, 26 * MM) + 3 * MM;
-  nodes.forEach((p, k) => (p.y += arch * Math.sin((Math.PI * k) / n)));
-  const slack = routed ? 1.02 : 1 + Math.min(0.1, 0.03 + 40 / (flat + 200));
-  const rest = (total * slack) / n;
-  const prev = nodes.map((p) => p.clone());
-  const fixed = (k: number) => k === 0 || k === n;
-  const tmp = new THREE.Vector3();
-  const g = routed ? 0.06 : 0.025;
-  for (let it = 0; it < 90; it++) {
-    for (let k = 1; k < n; k++) {
-      const p = nodes[k];
-      tmp.copy(p).sub(prev[k]).multiplyScalar(0.92);
-      prev[k].copy(p);
-      p.add(tmp);
-      p.y -= g;
-    }
-    for (let pass = 0; pass < 4; pass++) {
-      for (let k = 0; k < n; k++) {
-        const p = nodes[k], q = nodes[k + 1];
-        tmp.copy(q).sub(p);
-        const d = tmp.length() || 1e-6;
-        const diff = (d - rest) / d;
-        const wp = fixed(k) ? 0 : fixed(k + 1) ? 1 : 0.5;
-        const wq = fixed(k + 1) ? 0 : fixed(k) ? 1 : 0.5;
-        p.addScaledVector(tmp, diff * wp);
-        q.addScaledVector(tmp, -diff * wq);
-      }
-      // Rigidez: cada nodo tiende al punto medio de sus vecinos (alisa sin encoger la longitud).
-      for (let k = 1; k < n; k++) {
-        tmp.copy(nodes[k - 1]).add(nodes[k + 1]).multiplyScalar(0.5);
-        nodes[k].lerp(tmp, routed ? 0.12 : 0.22);
-      }
-      // Salida vertical del hueco: el segundo nodo queda encima del primero.
-      for (const [k, s] of [[1, 0], [n - 1, n]] as const) {
-        const anchor = nodes[s];
-        nodes[k].x += (anchor.x - nodes[k].x) * 0.6;
-        nodes[k].z += (anchor.z - nodes[k].z) * 0.6;
-        const lift = Math.min(rest * 0.7, rise);
-        if (nodes[k].y < anchor.y + lift) nodes[k].y = anchor.y + lift;
-      }
-      for (let k = 1; k < n; k++) {
-        const p = nodes[k];
-        const floor = ground(p.x, p.z) + WIRE_R;
-        if (p.y < floor) p.y = floor;
-      }
-    }
+function dupontCurve(w: WireInput, length: number, ground: (x: number, z: number) => number) {
+  const up = new THREE.Vector3(0, 1, 0);
+  const a = w.a.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0));
+  const b = w.b.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0));
+  const d = a.distanceTo(b);
+  const cable = Math.max(length, d * 1.05);
+  const axis = b.clone().sub(a);
+  axis.y = 0;
+  const flatD = axis.length();
+  // Lado hacia el que se recuesta el arco: perpendicular al tramo, el más cercano a LEAN.
+  let side = flatD > 1e-3 ? new THREE.Vector3(-axis.z, 0, axis.x).normalize() : LEAN.clone();
+  if (side.dot(LEAN) < 0) side.negate();
+  const build = (k: number) => {
+    const tilt = Math.min(0.85, 0.12 + Math.atan2(k, flatD + 20) * 0.6);
+    const dir = up.clone().multiplyScalar(Math.cos(tilt)).addScaledVector(side, Math.sin(tilt));
+    // El primer tramo sale vertical del cabezal; luego el arco se abre.
+    const p1 = a.clone().addScaledVector(up, k * 0.45).addScaledVector(dir, k * 0.55);
+    const p2 = b.clone().addScaledVector(up, k * 0.45).addScaledVector(dir, k * 0.55);
+    return cubic(a, p1, p2, b);
+  };
+  let lo = 0, hi = cable;
+  for (let i = 0; i < 22; i++) {
+    const mid = (lo + hi) / 2;
+    if (build(mid).getLength() < cable) lo = mid;
+    else hi = mid;
   }
-  // Alisado final: un cable real no hace ondas; se respeta el suelo y la salida vertical.
-  for (let it = 0, smooth = routed ? 3 : 24; it < smooth; it++) {
-    for (let k = 2; k < n - 1; k++) {
-      tmp.copy(nodes[k - 1]).add(nodes[k + 1]).multiplyScalar(0.5);
-      nodes[k].lerp(tmp, 0.5);
-      const floor = ground(nodes[k].x, nodes[k].z) + WIRE_R;
-      if (nodes[k].y < floor) nodes[k].y = floor;
-    }
+  const curve = build(lo);
+  // Muestras para el tubo; nada atraviesa lo que hay debajo.
+  const pts = curve.getPoints(64);
+  for (const p of pts) {
+    const floor = ground(p.x, p.z) + WIRE_R;
+    if (p.y < floor) p.y = floor;
   }
-  return [w.a.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0)), ...nodes, w.b.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0))];
+  return new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
 }
 
 const tipGeo = (() => {
@@ -137,7 +150,6 @@ const tipGeo = (() => {
 const headGeo = (() => {
   const body = new RoundedBoxGeometry(2.5 * MM, HOUSING, 2.5 * MM, 2, 0.25 * MM);
   body.translate(0, GAP + HOUSING / 2, 0);
-  // Ventana del enganche: una muesca poco profunda en una cara.
   const boot = new THREE.CylinderGeometry(0.95 * MM, 1.15 * MM, BOOT, 16, 1);
   boot.translate(0, GAP + HOUSING + BOOT / 2, 0);
   const g = mergeGeometries([body.toNonIndexed(), boot.toNonIndexed()])!;
@@ -152,25 +164,12 @@ const headMaterial = () =>
 export interface WireMeshes {
   group: THREE.Group;
   /** Rango de índices de cada cable en la malla fusionada (para seleccionar y resaltar). */
-  ranges: { id: string; start: number; end: number; vStart: number; vEnd: number; color: THREE.Color }[];
+  ranges: { id: string; start: number; end: number; vStart: number; vEnd: number; color: THREE.Color; kind: WireKind }[];
   mesh: THREE.Mesh | null;
 }
 
-/** Todos los cables en una sola malla con color por vértice; las puntas peladas, instanciadas. */
-const settled = new Map<string, THREE.Vector3[]>();
-/** Física cacheada: un cable solo se vuelve a asentar si cambian sus extremos, sus codos o lo que tiene debajo. */
-function settledWire(w: WireInput, ground: (x: number, z: number) => number, groundSig: string) {
-  const key = `${groundSig}|${w.a.toArray()}|${w.b.toArray()}|${JSON.stringify(w.via)}`;
-  let pts = settled.get(key);
-  if (!pts) {
-    pts = settleWire(w, ground);
-    if (settled.size > 2000) settled.clear();
-    settled.set(key, pts);
-  }
-  return pts;
-}
-
-export function buildWires(list: WireInput[], ground: (x: number, z: number) => number, groundSig = ''): WireMeshes {
+/** Todos los cables en una sola malla con color por vértice; cabezales y puntas, instanciados. */
+export function buildWires(list: WireInput[], ground: (x: number, z: number) => number): WireMeshes {
   const group = new THREE.Group();
   const geos: THREE.BufferGeometry[] = [];
   const ranges: WireMeshes['ranges'] = [];
@@ -181,10 +180,11 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
   heads.count = 0;
   const m = new THREE.Matrix4();
   for (const w of list) {
-    const pts = settledWire(w, ground, groundSig);
-    const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal', 0.5);
+    const kind = wireKind(w);
+    const curve = kind === 'solid' ? solidCurve(w, ground) : dupontCurve(w, kind === 'dupont10' ? DUPONT_SHORT : DUPONT_LONG, ground);
     const len = curve.getLength();
-    const geo = new THREE.TubeGeometry(curve, Math.max(12, Math.min(220, Math.round(len / 2.2))), WIRE_R, 10, false);
+    const r = kind === 'solid' ? SOLID_R : WIRE_R;
+    const geo = new THREE.TubeGeometry(curve as THREE.Curve<THREE.Vector3>, Math.max(16, Math.min(260, Math.round(len / 2))), r, 10, false);
     const color = new THREE.Color(w.color);
     const n = geo.attributes.position.count;
     const cols = new Float32Array(n * 3);
@@ -192,14 +192,17 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
     geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
     geos.push(geo);
     const count = geo.index!.count;
-    ranges.push({ id: w.id, start: idx, end: idx + count, vStart: vtx, vEnd: vtx + n, color });
+    ranges.push({ id: w.id, start: idx, end: idx + count, vStart: vtx, vEnd: vtx + n, color, kind });
     idx += count;
     vtx += n;
     for (const p of [w.a, w.b]) {
-      m.makeScale(1, 3.4 * MM, 1).setPosition(p.x, p.y - 2.4 * MM, p.z);
+      // Punta pelada: en el rígido apenas asoma; en el Dupont es el pin del cabezal.
+      m.makeScale(1, (kind === 'solid' ? 3 : 3.4) * MM, 1).setPosition(p.x, p.y - 2.4 * MM, p.z);
       tips.setMatrixAt(tips.count++, m);
-      m.makeTranslation(p.x, p.y, p.z);
-      heads.setMatrixAt(heads.count++, m);
+      if (kind !== 'solid') {
+        m.makeTranslation(p.x, p.y, p.z);
+        heads.setMatrixAt(heads.count++, m);
+      }
     }
   }
   let mesh: THREE.Mesh | null = null;
