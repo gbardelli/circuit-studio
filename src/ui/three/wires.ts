@@ -122,10 +122,13 @@ function dupontCurve(w: WireInput, length: number, ground: (x: number, z: number
     // El primer tramo sale vertical del cabezal; luego el arco se abre.
     const p1 = a.clone().addScaledVector(up, k * 0.45).addScaledVector(dir, k * 0.55);
     const p2 = b.clone().addScaledVector(up, k * 0.45).addScaledVector(dir, k * 0.55);
-    return cubic(a, p1, p2, b);
+    const c = cubic(a, p1, p2, b);
+    // 24 tramos bastan para medir el cable con error < 0,5 mm (200 por defecto es 8 veces más caro).
+    c.arcLengthDivisions = 24;
+    return c;
   };
   let lo = 0, hi = cable;
-  for (let i = 0; i < 22; i++) {
+  for (let i = 0; i < 16; i++) {
     const mid = (lo + hi) / 2;
     if (build(mid).getLength() < cable) lo = mid;
     else hi = mid;
@@ -152,7 +155,7 @@ const headGeo = (() => {
   body.translate(0, GAP + HOUSING / 2, 0);
   const boot = new THREE.CylinderGeometry(0.95 * MM, 1.15 * MM, BOOT, 16, 1);
   boot.translate(0, GAP + HOUSING + BOOT / 2, 0);
-  const g = mergeGeometries([body.toNonIndexed(), boot.toNonIndexed()])!;
+  const g = mergeGeometries([body.index ? body.toNonIndexed() : body, boot.index ? boot.toNonIndexed() : boot])!;
   g.userData.shared = true;
   return g;
 })();
@@ -184,7 +187,8 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
     const curve = kind === 'solid' ? solidCurve(w, ground) : dupontCurve(w, kind === 'dupont10' ? DUPONT_SHORT : DUPONT_LONG, ground);
     const len = curve.getLength();
     const r = kind === 'solid' ? SOLID_R : WIRE_R;
-    const geo = new THREE.TubeGeometry(curve as THREE.Curve<THREE.Vector3>, Math.max(16, Math.min(260, Math.round(len / 2))), r, 10, false);
+    // Un tramo cada ~1,5 mm basta para un arco suave; 8 lados para un cable de 1,4 mm.
+    const geo = new THREE.TubeGeometry(curve as THREE.Curve<THREE.Vector3>, Math.max(12, Math.min(96, Math.round(len / 6))), r, 8, false);
     const color = new THREE.Color(w.color);
     const n = geo.attributes.position.count;
     const cols = new Float32Array(n * 3);

@@ -627,7 +627,8 @@ const CAPS: Record<string, string> = { red: '#d63a2f', black: '#1e1f22', blue: '
 export function buildPushbutton(def: PartDef, part: PartData, ctx: BuildCtx): Model {
   const group = new THREE.Group();
   const pins = def.pins(part.props);
-  const large = def.type === 'pushbutton-large';
+  // El tamaño lo da la huella: un «pushbutton» con huella 5×5 es el pulsador grande de 12 × 12 mm.
+  const large = def.type === 'pushbutton-large' || part.props.footprint === '5x5';
   const S = (large ? 12 : 6) * MM;
   const xs = pins.map((p) => p.x), zs = pins.map((p) => p.y);
   const cx = (Math.min(...xs) + Math.max(...xs)) / 2, cz = (Math.min(...zs) + Math.max(...zs)) / 2;
