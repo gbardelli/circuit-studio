@@ -22,6 +22,7 @@ import { useAutoVersions } from './History';
 import { AssemblyStage } from './AssemblyStage';
 import { WorkbenchPanel, WorkbenchRail } from './Workbench';
 import { useDFPlayerAudio } from './dfplayerAudio';
+import { Board3D } from './view3d';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
@@ -165,6 +166,7 @@ export function EditorShell() {
   const compactPanel = useUi((s) => s.compactPanel);
   const guiding=useUi(s=>s.labPanel==='assembly'&&s.assemblyTab==='steps');
   const view = useUi((s) => s.view);
+  const board3d = useUi((s) => s.board3d);
   const labFullscreen=useUi(s=>s.labFullscreen);
   const collapsed = useUi((s) => s.collapsed);
   const setCompactPanel = useUi((s) => s.setCompactPanel);
@@ -306,7 +308,7 @@ export function EditorShell() {
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />
-        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}</div>
+        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}{view === 'board' && board3d && <Suspense fallback={null}><Board3D /></Suspense>}</div>
         {guiding&&!labFullscreen&&<AssemblyStage/>}
         <WorkbenchPanel />
         <Suspense fallback={null}>

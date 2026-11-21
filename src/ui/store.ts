@@ -73,6 +73,9 @@ export interface UiState {
   showFlow: boolean;
   setShowFlow(on: boolean): void;
   view: View;
+  /** Protoboard vista en 3D (solo en la vista de protoboard). */
+  board3d: boolean;
+  setBoard3d(on: boolean): void;
   compactPanel: 'library' | 'inspector' | null;
   setCompactPanel(panel: 'library' | 'inspector' | null): void;
   /** Paneles laterales recogidos en pantallas anchas (se recuerda en este navegador). */
@@ -184,6 +187,8 @@ export const useUi = create<UiState>((set) => ({
   showFlow: true,
   setShowFlow: (showFlow) => set({ showFlow }),
   view: 'board',
+  board3d: false,
+  setBoard3d: (board3d) => set({ board3d }),
   compactPanel: null,
   setCompactPanel: (compactPanel) => set({ compactPanel }),
   collapsed: readPanels(),
