@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { CircuitSnapshot } from '../../core/types';
 import { CircuitScene } from './scene';
 import { onSkinReady } from './skin';
@@ -34,6 +38,8 @@ export interface ViewerEvents {
   onPick(hit: { part?: string; wire?: string } | null, additive: boolean): void;
   onHover?(hit: { part?: string; wire?: string } | null): void;
   onStats?(s: Stats): void;
+  /** Toque sobre una pieza: si la pieza lo consume (pulsador, interruptor, mando), la cámara no se mueve. */
+  onPartPointerDown?(partId: string, point: THREE.Vector3, e: PointerEvent): boolean;
 }
 
 /** Visor 3D: una sola cámara que va de cenital a perspectiva; renderiza solo cuando algo cambia. */
@@ -53,6 +59,10 @@ export class Viewer3D {
   private table: THREE.Mesh;
   theme: Theme3D = 'dark';
   private ro: ResizeObserver;
+  private composer: EffectComposer;
+  private gtao: GTAOPass;
+  /** Calidad final (oclusión ambiental) solo cuando la imagen está quieta. */
+  ambientOcclusion = true;
   private offSkin: () => void;
   private width = 1;
   private height = 1;
@@ -73,7 +83,7 @@ export class Viewer3D {
     this.renderer.toneMapping = THREE.NeutralToneMapping;
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
     this.renderer.domElement.style.cssText = 'display:block;width:100%;height:100%;touch-action:none;outline:none';
     this.renderer.domElement.tabIndex = 0;
@@ -88,11 +98,16 @@ export class Viewer3D {
     this.key = new THREE.DirectionalLight('#fffaf2', 2.1);
     this.key.castShadow = true;
     this.key.shadow.mapSize.set(2048, 2048);
-    this.key.shadow.bias = -0.0004;
-    this.key.shadow.normalBias = 0.6;
+    this.key.shadow.bias = -0.0003;
+    this.key.shadow.normalBias = 0.5;
     this.key.shadow.radius = 4;
     this.scene.add(this.key, this.key.target);
-    this.scene.add(new THREE.HemisphereLight('#eef3ff', '#3a3530', 0.55));
+    // Relleno frío sin sombras desde el lado opuesto y un contraluz que recorta los bordes.
+    const fill = new THREE.DirectionalLight('#dce6ff', 0.22);
+    fill.position.set(0.7, 0.55, 0.8);
+    const rim = new THREE.DirectionalLight('#fff4e6', 0.3);
+    rim.position.set(0.2, 0.35, -1);
+    this.scene.add(fill, rim, new THREE.HemisphereLight('#eef3ff', '#3a3530', 0.18));
 
     this.table = new THREE.Mesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ roughness: 0.92 }));
     this.table.receiveShadow = true;
@@ -103,6 +118,15 @@ export class Viewer3D {
     this.setTheme('dark');
 
     this.offSkin = onSkinReady(() => this.invalidate());
+    // Oclusión ambiental (GTAO) en reposo: contacto oscuro bajo cada pieza, cable y pata.
+    this.composer = new EffectComposer(this.renderer);
+    this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.gtao = new GTAOPass(this.scene, this.camera, 512, 512);
+    this.gtao.updateGtaoMaterial({ radius: 26, distanceExponent: 1.4, thickness: 10, scale: 1.6, samples: 16, distanceFallOff: 1, screenSpaceRadius: false });
+    this.gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 5, rings: 2, samples: 16 });
+    this.gtao.blendIntensity = 1;
+    this.composer.addPass(this.gtao);
+    this.composer.addPass(new OutputPass());
     this.ro = new ResizeObserver(() => this.resize());
     this.ro.observe(host);
     this.resize();
@@ -122,8 +146,8 @@ export class Viewer3D {
     mat.color.set('#ffffff');
     mat.needsUpdate = true;
     this.fitLighting();
-    this.scene.environmentIntensity = theme === 'dark' ? 0.5 : 0.75;
-    this.key.intensity = theme === 'dark' ? 2.2 : 2.4;
+    this.scene.environmentIntensity = theme === 'dark' ? 0.32 : 0.45;
+    this.key.intensity = theme === 'dark' ? 3.1 : 3.3;
     this.invalidate();
   }
 
@@ -160,11 +184,22 @@ export class Viewer3D {
 
   /** Estado de la simulación en las piezas que lo muestran (LED, segmentos). */
   setVisual(partId: string, visual: import('../../parts/types').Visual | null) {
+    this.lastVisual.set(partId, visual);
     const e = this.circuit.parts.get(partId);
     if (!e?.model.update) return;
-    e.model.update(visual);
+    const o = this.overrides.get(partId);
+    e.model.update(o ? { ...(visual ?? {}), ...o } : visual);
     this.invalidate();
   }
+
+  /** Entrada local inmediata (botón pulsado): se ve al instante, sin esperar a la simulación. */
+  setInputOverride(partId: string, key: string, value: number | boolean) {
+    this.overrides.set(partId, { ...(this.overrides.get(partId) ?? {}), [key]: value });
+    this.setVisual(partId, this.lastVisual.get(partId) ?? null);
+  }
+
+  private lastVisual = new Map<string, import('../../parts/types').Visual | null>();
+  private overrides = new Map<string, Record<string, number | boolean>>();
 
   /** Piezas cuyo modelo refleja la simulación. */
   livePartIds() {
@@ -177,7 +212,8 @@ export class Viewer3D {
     const c = b.isEmpty() ? new THREE.Vector3() : b.getCenter(new THREE.Vector3());
     const size = b.isEmpty() ? 400 : Math.max(b.max.x - b.min.x, b.max.z - b.min.z, 200);
     const half = size * 0.75 + 60;
-    const dir = new THREE.Vector3(-0.45, 1, -0.6).normalize();
+    // Luz de estudio baja (≈38°) desde atrás a la izquierda: sombras largas hacia quien mira.
+    const dir = new THREE.Vector3(-0.75, 0.82, -0.62).normalize();
     this.key.position.copy(c).addScaledVector(dir, size * 2);
     this.key.target.position.copy(c);
     const sc = this.key.shadow.camera;
@@ -311,7 +347,8 @@ export class Viewer3D {
       this.renderer.shadowMap.needsUpdate = true;
       this.shadowsDirty = false;
     }
-    this.renderer.render(this.scene, this.camera);
+    if (this.ambientOcclusion && !again && !this.interacting) this.composer.render();
+    else this.renderer.render(this.scene, this.camera);
     const focusIds = new Set(this.focus.parts);
     if (this.focus.hoverPart) focusIds.add(this.focus.hoverPart);
     this.labels.update(this.circuit, this.camera, this.width, this.height, this.cam.dist, focusIds);
@@ -350,6 +387,8 @@ export class Viewer3D {
     this.width = Math.max(1, r.width);
     this.height = Math.max(1, r.height);
     this.renderer.setSize(this.width, this.height, false);
+    this.composer?.setPixelRatio(this.renderer.getPixelRatio());
+    this.composer?.setSize(this.width, this.height);
     this.camera.aspect = this.width / this.height;
     this.camera.updateProjectionMatrix();
     this.invalidate();
@@ -357,12 +396,16 @@ export class Viewer3D {
 
   /** Durante el gesto baja la resolución; al soltar, vuelve la nitidez completa. */
   private busy() {
-    if (!this.interacting) this.renderer.setPixelRatio(Math.min(this.dprFull, 1.25));
+    if (!this.interacting) {
+      this.renderer.setPixelRatio(Math.min(this.dprFull, 1.25));
+      this.composer.setPixelRatio(Math.min(this.dprFull, 1.25));
+    }
     this.interacting++;
     clearTimeout(this.idleTimer);
     this.idleTimer = setTimeout(() => {
       this.interacting = 0;
       this.renderer.setPixelRatio(this.dprFull);
+      this.composer.setPixelRatio(this.dprFull);
       this.invalidate();
     }, 160);
   }
@@ -384,6 +427,26 @@ export class Viewer3D {
     this.applyCamera();
     const p = new THREE.Vector3();
     return this.ray.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), p) ? p : null;
+  }
+
+  /** Pieza y punto exacto bajo el cursor (para trasladar el toque a su dibujo 2D). */
+  pickPoint(x: number, y: number): { part: string; point: THREE.Vector3 } | null {
+    this.camera.updateMatrixWorld();
+    this.ray.setFromCamera(this.ndc(x, y), this.camera);
+    for (const h of this.ray.intersectObject(this.circuit.root, true)) {
+      if (h.object.userData.wires) return null;
+      if (!h.object.userData.noPick && h.object.userData.part) return { part: h.object.userData.part as string, point: h.point };
+    }
+    return null;
+  }
+
+  /** Píxeles por unidad del documento en un punto de la escena (escala del toque). */
+  pixelsPerUnit(p: THREE.Vector3) {
+    const a = p.clone().project(this.camera), b = p.clone().add(new THREE.Vector3(10, 0, 0)).project(this.camera);
+    const c = p.clone().add(new THREE.Vector3(0, 0, 10)).project(this.camera);
+    const sx = Math.hypot((b.x - a.x) * this.width, (b.y - a.y) * this.height) / 2 / 10;
+    const sz = Math.hypot((c.x - a.x) * this.width, (c.y - a.y) * this.height) / 2 / 10;
+    return Math.max(0.5, (sx + sz) / 2);
   }
 
   pick(x: number, y: number): { part?: string; wire?: string } | null {
@@ -427,6 +490,10 @@ export class Viewer3D {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     el.addEventListener('pointerdown', (e) => {
       el.focus({ preventScroll: true });
+      if (e.button === 0 && !e.shiftKey && !e.altKey && pointers.size === 0 && this.events.onPartPointerDown) {
+        const hit = this.pickPoint(e.clientX, e.clientY);
+        if (hit && this.events.onPartPointerDown(hit.part, hit.point, e)) return;
+      }
       el.setPointerCapture(e.pointerId);
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       stopAnim();
@@ -559,6 +626,8 @@ export class Viewer3D {
     this.labels.dispose();
     this.circuit.dispose();
     this.scene.environment?.dispose();
+    this.gtao.dispose();
+    this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }

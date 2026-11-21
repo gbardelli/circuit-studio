@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Cable, CircuitBoard, Moon, Sun } from 'lucide-react';
 import { buildNetlist, pinKey } from '../../core/netlist';
+import { toLocal, type PartData } from '../../core/types';
+import { PartProxy } from './interact';
 import { PARTS } from '../../parts';
 import { useDisplaySnapshot, useEditor } from '../context';
 import { useUi } from '../store';
@@ -29,8 +31,11 @@ export default function Board3D() {
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<Viewer3D | null>(null);
   const snapshot = useDisplaySnapshot();
-  const { engine } = useEditor();
+  const { engine, project } = useEditor();
   const scene = useMemo(() => (snapshot.wires.some((w) => w.sch) ? { ...snapshot, wires: snapshot.wires.filter((w) => !w.sch) } : snapshot), [snapshot]);
+  const simRunning = useUi((s) => s.simRunning);
+  const live = useRef({ simRunning, scene });
+  live.current = { simRunning, scene };
   const [supported] = useState(webglAvailable);
   const [theme, setTheme] = useState<Theme3D>(readTheme);
   const [preset, setPreset] = useState<Preset>('iso');
@@ -48,7 +53,8 @@ export default function Board3D() {
 
   useEffect(() => {
     if (!supported || !host.current) return;
-    const v = new Viewer3D(
+    const proxy = new PartProxy();
+    const v: Viewer3D = new Viewer3D(
       host.current,
       {
         onPick(hit, additive) {
@@ -56,6 +62,23 @@ export default function Board3D() {
           if (!hit) return ui.select([], []);
           if (hit.part) ui.select(additive ? [...new Set([...ui.selection, hit.part])] : [hit.part], additive ? ui.wireSelection : []);
           else if (hit.wire) ui.select(additive ? ui.selection : [], additive ? [...new Set([...ui.wireSelection, hit.wire])] : [hit.wire]);
+        },
+        onPartPointerDown(partId, point, e): boolean {
+          const part = live.current.scene.parts.find((p) => p.id === partId);
+          const def = part && PARTS[part.type];
+          if (!part || !def || project.readOnly && !def.fields) return false;
+          // Mismo enrutado que el lienzo 2D: un ajuste guardado o una entrada de la simulación.
+          const onInput = (key: string, value: number | boolean) => {
+            if (engine.lab.paused) return;
+            const persistent = def.fields?.some((f) => f.key === key);
+            if (persistent && project.readOnly) project.setSimulationProp(part.id, key, value);
+            else if (persistent) project.setProp(part.id, key, value);
+            else engine.setInput(part.id, key, value);
+            viewer.current?.setInputOverride(part.id, key, value);
+          };
+          const visual = live.current.simRunning ? engine.getVisual(part.id) : null;
+          const local = toLocal(part as PartData, { x: point.x, y: point.z });
+          return proxy.press(def, part, visual, onInput, local, v.pixelsPerUnit(point), e);
         },
         onHover(hit) {
           if (host.current) host.current.style.cursor = hit ? 'pointer' : '';
@@ -78,6 +101,7 @@ export default function Board3D() {
     (window as unknown as { __cs3d?: Viewer3D }).__cs3d = v;
     return () => {
       v.dispose();
+      proxy.dispose();
       viewer.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

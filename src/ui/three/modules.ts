@@ -6,7 +6,7 @@ import { LED_COLORS } from '../../parts/outputs';
 import { MM, mats, plasticNoise } from './materials';
 import { body, femaleHeaders, legs, type BuildCtx, type Model } from './generic';
 import { slab } from './breadboard';
-import { partSkin, skinPlane } from './skin';
+import { liveSkin, partSkin, skinPlane } from './skin';
 
 // ───────────────────────── utilidades ─────────────────────────
 
@@ -202,6 +202,13 @@ function featureMesh(f: Feature, top: number) {
   return m;
 }
 
+/** Piel estática o en vivo según la pieza tenga simulación (pantallas, lecturas, LED de placa). */
+function skinFor(def: PartDef, part: PartData, area: Bounds) {
+  if (!def.sim) return { tex: partSkin(def, part, area), update: undefined };
+  const live = liveSkin(def, part, area);
+  return { tex: live.tex, update: (v: Visual | null) => live.update(v) };
+}
+
 // ───────────────────────── Placas y módulos ─────────────────────────
 
 /**
@@ -225,15 +232,16 @@ export function buildPcbModule(def: PartDef, part: PartData, ctx: BuildCtx, base
   pcb.castShadow = pcb.receiveShadow = true;
   group.add(pcb);
   const disp = DISPLAY_BODY[def.type];
+  const skin = skinFor(def, part, area);
   let top = pcbTop;
   if (disp) {
     const ins = { x: area.x + area.w * disp.inset * 0.5, y: area.y + area.h * disp.inset * 0.5, w: area.w * (1 - disp.inset), h: area.h * (1 - disp.inset) };
     group.add(body(ins.x, ins.y, ins.w, ins.h, pcbTop, disp.mm * MM, std('#1a1b1d', 0.4, 0.4)));
     top = pcbTop + disp.mm * MM;
     // La cara de la pantalla (y lo que dibuja el 2D) arriba del todo.
-    group.add(skinPlane(partSkin(def, part, area), area, top, { roughness: 0.25, metalness: 0.1 }));
+    group.add(skinPlane(skin.tex, area, top, { roughness: 0.25, metalness: 0.1 }));
   } else {
-    group.add(skinPlane(partSkin(def, part, area), area, pcbTop, { roughness: 0.5 }));
+    group.add(skinPlane(skin.tex, area, pcbTop, { roughness: 0.5 }));
   }
   for (const f of spec?.features ?? []) group.add(featureMesh(f, pcbTop));
   maleHeaders(legsList, group, base, pcbTop, ctx);
@@ -245,6 +253,7 @@ export function buildPcbModule(def: PartDef, part: PartData, ctx: BuildCtx, base
     anchorY: (p) => (p.kind === 'socket' ? socketTop : base),
     top: Math.max(top + 1, sockets.length ? socketTop : 0) - base,
     footprint: area,
+    update: skin.update,
   };
 }
 
@@ -282,7 +291,7 @@ export function buildUltrasonic(def: PartDef, part: PartData, ctx: BuildCtx): Mo
 // ───────────────────────── Instrumentos y fuentes ─────────────────────────
 
 const INSTRUMENT: Record<string, { mm: number; color: string }> = {
-  'bench-supply': { mm: 26, color: '#2b2e33' },
+
   multimeter: { mm: 14, color: '#f2c230' },
   oscilloscope: { mm: 32, color: '#2a2d31' },
   clock: { mm: 9, color: '#2b2e33' },
@@ -298,12 +307,150 @@ export function buildInstrument(def: PartDef, part: PartData, ctx: BuildCtx): Mo
   const H = spec.mm * MM;
   const shell = body(b.x, b.y, b.w, b.h, 0, H, std(spec.color, 0.5, 0, { bumpMap: plasticNoise(), bumpScale: 0.3 }), 3 * MM);
   group.add(shell);
-  group.add(skinPlane(partSkin(def, part, b), { x: b.x + 1.5, y: b.y + 1.5, w: b.w - 3, h: b.h - 3 }, H, { roughness: 0.4 }));
+  const inner = { x: b.x + 1.5, y: b.y + 1.5, w: b.w - 3, h: b.h - 3 };
+  const skin = skinFor(def, part, inner);
+  group.add(skinPlane(skin.tex, inner, H, { roughness: 0.4 }));
   const sockets = pins.filter((p) => p.kind === 'socket');
   const legsList = pins.filter((p) => p.kind === 'leg');
   const postTop = bindingPosts(sockets, group, H);
   if (legsList.length) group.add(legs(legsList, H * 0.2, ctx.onBoard ? -3 * MM : 0));
-  return { group, anchorY: (p) => (p.kind === 'socket' ? postTop : 0), top: H, footprint: b };
+  return { group, anchorY: (p) => (p.kind === 'socket' ? postTop : 0), top: H, footprint: b, update: skin.update };
+}
+
+/** Mando moleteado: falda estriada, tapa de aluminio y marca de posición. */
+function knurledKnob(radius: number, height: number, angle: number) {
+  const ribs = 36;
+  const shape = new THREE.Shape();
+  for (let i = 0; i <= ribs * 2; i++) {
+    const a = (i / (ribs * 2)) * Math.PI * 2;
+    const r = i % 2 ? radius : radius * 0.94;
+    if (i === 0) shape.moveTo(Math.cos(a) * r, Math.sin(a) * r);
+    else shape.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const skirt = new THREE.ExtrudeGeometry(shape, { depth: height * 0.7, bevelEnabled: true, bevelSize: 0.2 * MM, bevelThickness: 0.2 * MM, bevelSegments: 1 });
+  skirt.rotateX(-Math.PI / 2);
+  const sk = new THREE.Mesh(skirt, std('#1a1b1d', 0.42, 0, { bumpMap: plasticNoise(), bumpScale: 0.2 }));
+  sk.castShadow = sk.receiveShadow = true;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(radius * 0.82, radius * 0.88, height * 0.3, 40), std('#9aa1a8', 0.28, 1));
+  cap.position.y = height * 0.85;
+  cap.castShadow = true;
+  const mark = new THREE.Mesh(new THREE.BoxGeometry(0.5 * MM, 0.2 * MM, radius * 0.7), std('#f4f4f2', 0.4));
+  mark.position.set(0, height + 0.05 * MM, -radius * 0.42);
+  const turn = new THREE.Group();
+  turn.add(sk, cap, mark);
+  turn.rotation.y = -angle;
+  return turn;
+}
+
+/** Borne de laboratorio: tuerca hexagonal, capuchón de color con collarín y punta dorada. */
+function bindingPost(color: string) {
+  const g = new THREE.Group();
+  const nut = new THREE.Mesh(new THREE.CylinderGeometry(3.4 * MM, 3.4 * MM, 1.6 * MM, 6), std('#c6cacf', 0.3, 1));
+  nut.position.y = 0.8 * MM;
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(2.7 * MM, 3.1 * MM, 7 * MM, 32), std(color, 0.32, 0, { bumpMap: plasticNoise(), bumpScale: 0.15 }));
+  body.position.y = 1.6 * MM + 3.5 * MM;
+  const collar = new THREE.Mesh(new THREE.TorusGeometry(2.75 * MM, 0.35 * MM, 8, 32).rotateX(Math.PI / 2), std(color, 0.3));
+  collar.position.y = 1.6 * MM + 5.6 * MM;
+  const tip = new THREE.Mesh(new THREE.CylinderGeometry(1.1 * MM, 1.25 * MM, 1.4 * MM, 20), std('#e3c27a', 0.22, 1));
+  tip.position.y = 1.6 * MM + 7.7 * MM;
+  for (const m of [nut, body, tip]) m.castShadow = m.receiveShadow = true;
+  g.add(nut, body, collar, tip);
+  return { group: g, top: 1.6 * MM + 8.4 * MM };
+}
+
+/**
+ * Fuente de laboratorio: carcasa de aluminio en cuña con el panel inclinado hacia quien mira,
+ * pantalla bajo cristal, dos mandos moleteados en su posición y bornes en la repisa delantera.
+ * La proyección cenital coincide con el dibujo 2D (mismas x e y para cada elemento).
+ */
+export function buildBenchSupply(def: PartDef, part: PartData, ctx: BuildCtx): Model {
+  void ctx;
+  const group = new THREE.Group();
+  const b = def.bounds(part.props);
+  const pins = def.pins(part.props);
+  const x0 = b.x + 1, x1 = b.x + b.w - 1;
+  const zBack = b.y + 1, zFront = b.y + b.h - 2;
+  const ledge = -9; // inicio de la repisa de los bornes
+  const hFront = 9 * MM, hBack = 26 * MM;
+  const W = x1 - x0;
+  // Perfil lateral (z, y) extruido a lo ancho. La coordenada x del perfil es −z.
+  const prof = new THREE.Shape();
+  prof.moveTo(-zFront, 0);
+  prof.lineTo(-zFront, hFront);
+  prof.lineTo(-ledge, hFront);
+  prof.lineTo(-(ledge - 2), hFront + 1.2 * MM);
+  prof.lineTo(-(zBack + 8), hBack);
+  prof.lineTo(-zBack, hBack - 2 * MM);
+  prof.lineTo(-zBack, 0);
+  prof.closePath();
+  const shellGeo = new THREE.ExtrudeGeometry(prof, { depth: W - 2.4 * MM, bevelEnabled: true, bevelSize: 1.2 * MM, bevelOffset: -1.2 * MM, bevelThickness: 1.2 * MM, bevelSegments: 4, curveSegments: 4 });
+  shellGeo.rotateY(Math.PI / 2);
+  shellGeo.translate(x0 + 1.2 * MM, 2 * MM, 0);
+  const shell = new THREE.Mesh(shellGeo, std('#3a4048', 0.38, 0.75, { bumpMap: plasticNoise(), bumpScale: 0.08 }));
+  shell.castShadow = shell.receiveShadow = true;
+  group.add(shell);
+  for (const [x, z] of [[x0 + 8, zBack + 8], [x1 - 8, zBack + 8], [x0 + 8, zFront - 8], [x1 - 8, zFront - 8]]) {
+    const foot = new THREE.Mesh(new THREE.CylinderGeometry(2.6 * MM, 3 * MM, 2 * MM, 20), std('#0e0f10', 0.9));
+    foot.position.set(x, 1 * MM, z);
+    foot.castShadow = true;
+    group.add(foot);
+  }
+  // Panel inclinado: la serigrafía 2D proyectada sobre la pendiente.
+  const panelArea: Bounds = { x: -24, y: -112, w: 168, h: 104 };
+  const za = ledge - 2, zb = zBack + 8;
+  const heightAt = (z: number) => {
+    const t = Math.min(1, Math.max(0, (za - z) / (za - zb)));
+    return 2 * MM + hFront + 1.2 * MM + t * (hBack - hFront - 1.2 * MM) + 0.25;
+  };
+  const geo = new THREE.PlaneGeometry(panelArea.w, panelArea.h, 1, 12).rotateX(-Math.PI / 2);
+  const pos = geo.attributes.position;
+  for (let i = 0; i < pos.count; i++) pos.setY(i, heightAt(pos.getZ(i) + panelArea.y + panelArea.h / 2));
+  geo.computeVertexNormals();
+  const skin = skinFor(def, part, panelArea);
+  const panel = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: skin.tex, roughness: 0.5, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2 }));
+  panel.position.set(panelArea.x + panelArea.w / 2, 0, panelArea.y + panelArea.h / 2);
+  panel.receiveShadow = true;
+  group.add(panel);
+  const slope = Math.atan2(hBack - hFront - 1.2 * MM, za - zb);
+  // Pantalla: marco y cristal con un reflejo nítido sobre los dígitos.
+  const bezel = new THREE.Mesh(new RoundedBoxGeometry(156, 1 * MM, 44, 2, 0.4 * MM), std('#15171a', 0.5));
+  bezel.rotation.x = slope;
+  bezel.position.set(60, heightAt(-84) - 0.3 * MM, -84);
+  const glass = new THREE.Mesh(new THREE.PlaneGeometry(150, 38), new THREE.MeshPhysicalMaterial({ color: '#ffffff', roughness: 0.03, transparent: true, opacity: 0.1, clearcoat: 1, depthWrite: false }));
+  glass.rotation.x = -Math.PI / 2 + slope;
+  glass.position.set(60, heightAt(-84) + 0.5 * MM, -84);
+  group.add(glass);
+  // Mandos en las mismas posiciones que el 2D, girados según su valor.
+  const vset = Number(part.props.voltage ?? 5), iset = Number(part.props.current ?? 1);
+  const ang = (v: number, max: number) => ((-135 + 270 * Math.min(1, Math.max(0, v / max))) * Math.PI) / 180;
+  for (const [x, a] of [[18, ang(vset, 30)], [92, ang(iset, 5)]] as const) {
+    const tilt = new THREE.Group();
+    tilt.rotation.x = slope;
+    tilt.add(knurledKnob(12.5, 4.5 * MM, a));
+    tilt.position.set(x, heightAt(-38), -38);
+    group.add(tilt);
+  }
+  // Bornes en la repisa delantera, justo en los huecos del documento.
+  let top = 0;
+  for (const p of pins.filter((q) => q.kind === 'socket')) {
+    const post = bindingPost(/-|GND|COM/i.test(p.id) ? '#1b1c1e' : '#c8312a');
+    post.group.scale.setScalar(0.72);
+    post.top *= 0.72;
+    post.group.position.set(p.x, 2 * MM + hFront, p.y);
+    group.add(post.group);
+    top = 2 * MM + hFront + post.top;
+  }
+  // Rejilla de ventilación en los costados.
+  for (const side of [-1, 1]) {
+    for (let i = 0; i < 6; i++) {
+      const slot = new THREE.Mesh(new THREE.PlaneGeometry(40, 1 * MM), std('#0a0b0c', 0.9));
+      slot.rotation.y = side * (Math.PI / 2);
+      slot.position.set(side < 0 ? x0 - 0.15 : x1 + 0.15, 2 * MM + hFront + 2.5 * MM + i * 2.2 * MM, zBack + 40);
+      group.add(slot);
+    }
+  }
+  void bezel;
+  return { group, anchorY: () => top, top: 2 * MM + hBack, footprint: b, update: skin.update };
 }
 
 // ───────────────────────── Piezas con cables ─────────────────────────
@@ -326,9 +473,24 @@ export function buildTethered(def: PartDef, part: PartData, ctx: BuildCtx): Mode
   const H = spec.mm * MM;
   const lift = ctx.onBoard ? 0 : 0;
   const isMetal = def.type === 'dc-motor';
-  const shell = body(area.x, area.y, area.w, area.h, lift, H, std(spec.color, isMetal ? 0.3 : 0.45, isMetal ? 1 : 0), (isMetal ? 6 : 2) * MM);
-  group.add(shell);
-  group.add(skinPlane(partSkin(def, part, area), area, lift + H, { roughness: 0.45 }));
+  if (isMetal) {
+    // Motor de CC tumbado: lata de acero, tapa de plástico con terminales y eje con su casquillo.
+    const R = Math.min(area.w / 2, 10 * MM);
+    const cx = area.x + area.w / 2;
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(R, R, area.h * 0.78, 40).rotateX(Math.PI / 2), std('#c2c7cc', 0.26, 1));
+    can.position.set(cx, R, area.y + area.h * 0.39);
+    const capM = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.98, R * 0.98, area.h * 0.2, 40).rotateX(Math.PI / 2), std('#f2f0ea', 0.5));
+    capM.position.set(cx, R, area.y + area.h * 0.88);
+    const boss = new THREE.Mesh(new THREE.CylinderGeometry(R * 0.32, R * 0.32, 1.5 * MM, 24).rotateX(Math.PI / 2), std('#c2c7cc', 0.3, 1));
+    boss.position.set(cx, R, area.y - 0.6 * MM);
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1 * MM, 1 * MM, 9 * MM, 16).rotateX(Math.PI / 2), std('#e3e6e9', 0.15, 1));
+    shaft.position.set(cx, R, area.y - 5 * MM);
+    for (const m of [can, capM, boss, shaft]) m.castShadow = m.receiveShadow = true;
+    group.add(can, capM, boss, shaft);
+  } else {
+    group.add(body(area.x, area.y, area.w, area.h, lift, H, std(spec.color, 0.45, 0), 2 * MM));
+    group.add(skinPlane(partSkin(def, part, area), area, lift + H, { roughness: 0.45 }));
+  }
   // Cables: salen del borde inferior del cuerpo y bajan en curva a cada hueco.
   const exitZ = area.y + area.h;
   const d = ctx.onBoard ? -3 * MM : 0;
@@ -649,8 +811,9 @@ export function skinnedFallback(def: PartDef, part: PartData, ctx: BuildCtx): Mo
   const lift = ctx.onBoard && legsList.length ? 1.5 * MM : 0;
   const H = (def.category === 'Instrumentos' || def.category === 'Energía' ? 12 : 4) * MM;
   group.add(body(b.x, b.y, b.w, b.h, lift, H, std('#1f2124', 0.5), 1 * MM));
-  group.add(skinPlane(partSkin(def, part, b), b, lift + H, { roughness: 0.5 }));
+  const skin = skinFor(def, part, b);
+  group.add(skinPlane(skin.tex, b, lift + H, { roughness: 0.5 }));
   if (legsList.length) group.add(legs(legsList.filter((p) => insideBounds(p, b) || true), lift + 0.2, ctx.onBoard ? -3 * MM : 0, mats().tin));
   const socketTop = femaleHeaders(sockets, lift + H, group);
-  return { group, anchorY: (p) => (p.kind === 'socket' ? socketTop : lift), top: Math.max(lift + H, sockets.length ? socketTop : 0), footprint: b };
+  return { group, anchorY: (p) => (p.kind === 'socket' ? socketTop : lift), top: Math.max(lift + H, sockets.length ? socketTop : 0), footprint: b, update: skin.update };
 }

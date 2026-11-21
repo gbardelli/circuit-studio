@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { MM, mats } from './materials';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { MM, mats, plasticNoise } from './materials';
 
 export interface WireInput {
   id: string;
@@ -19,9 +20,13 @@ export interface Footprint {
   top: number;
 }
 
-export const WIRE_R = 0.68 * MM;
+export const WIRE_R = 0.7 * MM;
 const TIP_R = 0.32 * MM;
-const RISE = 3.2 * MM;
+/** Cabezal Dupont macho: carcasa de 2,54 mm × 14 mm y manguito de 2 mm por donde sale el cable. */
+const HOUSING = 14 * MM;
+const GAP = 0.7 * MM;
+const BOOT = 2.2 * MM;
+const HEAD = GAP + HOUSING + BOOT;
 
 /** Altura del obstáculo más alto bajo (x, z): protoboards, piezas y mesa. */
 export function surfaceAt(fps: Footprint[], floor: number) {
@@ -52,10 +57,9 @@ function resample(path: THREE.Vector3[], n: number) {
  * todo lo que hay debajo. Los extremos salen verticales del hueco, como un puente real.
  */
 export function settleWire(w: WireInput, ground: (x: number, z: number) => number): THREE.Vector3[] {
-  const flat0 = Math.hypot(w.a.x - w.b.x, w.a.z - w.b.z);
-  // Puentes cortos o con codos: preformados y planos sobre la placa, como los de un kit.
-  const routed = w.via.length > 0 || (flat0 <= 70 && Math.abs(w.a.y - w.b.y) < 1);
-  const rise = routed ? WIRE_R + 0.35 * MM : RISE;
+  // Jumper Dupont: el cable nace en lo alto del cabezal y sigue vertical antes de curvarse.
+  const routed = w.via.length > 0;
+  const rise = HEAD + 3 * MM;
   const up = (p: THREE.Vector3) => p.clone().add(new THREE.Vector3(0, rise, 0));
   const a1 = up(w.a), b1 = up(w.b);
   const via = w.via.map((v) => new THREE.Vector3(v.x, ground(v.x, v.z) + WIRE_R, v.z));
@@ -64,9 +68,9 @@ export function settleWire(w: WireInput, ground: (x: number, z: number) => numbe
   const seg0 = resample(path, 8).total;
   const n = Math.max(8, Math.min(90, Math.round(seg0 / 5)));
   const { out: nodes, total } = resample(path, n);
-  const arch = routed ? 0 : Math.min(0.22 * flat, 22 * MM) + 1.5 * MM;
+  const arch = routed ? 0 : Math.min(0.26 * flat, 26 * MM) + 3 * MM;
   nodes.forEach((p, k) => (p.y += arch * Math.sin((Math.PI * k) / n)));
-  const slack = routed ? 1.0 : 1 + Math.min(0.07, 0.02 + 30 / (flat + 200));
+  const slack = routed ? 1.02 : 1 + Math.min(0.1, 0.03 + 40 / (flat + 200));
   const rest = (total * slack) / n;
   const prev = nodes.map((p) => p.clone());
   const fixed = (k: number) => k === 0 || k === n;
@@ -120,7 +124,7 @@ export function settleWire(w: WireInput, ground: (x: number, z: number) => numbe
       if (nodes[k].y < floor) nodes[k].y = floor;
     }
   }
-  return [w.a.clone().add(new THREE.Vector3(0, 0.9 * MM, 0)), ...nodes, w.b.clone().add(new THREE.Vector3(0, 0.9 * MM, 0))];
+  return [w.a.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0)), ...nodes, w.b.clone().add(new THREE.Vector3(0, HEAD - 0.3 * MM, 0))];
 }
 
 const tipGeo = (() => {
@@ -129,6 +133,21 @@ const tipGeo = (() => {
   g.userData.shared = true;
   return g;
 })();
+
+const headGeo = (() => {
+  const body = new RoundedBoxGeometry(2.5 * MM, HOUSING, 2.5 * MM, 2, 0.25 * MM);
+  body.translate(0, GAP + HOUSING / 2, 0);
+  // Ventana del enganche: una muesca poco profunda en una cara.
+  const boot = new THREE.CylinderGeometry(0.95 * MM, 1.15 * MM, BOOT, 16, 1);
+  boot.translate(0, GAP + HOUSING + BOOT / 2, 0);
+  const g = mergeGeometries([body.toNonIndexed(), boot.toNonIndexed()])!;
+  g.userData.shared = true;
+  return g;
+})();
+
+let headMat: THREE.MeshStandardMaterial | null = null;
+const headMaterial = () =>
+  (headMat ??= new THREE.MeshStandardMaterial({ color: '#141516', roughness: 0.48, metalness: 0, bumpMap: plasticNoise(), bumpScale: 0.3 }));
 
 export interface WireMeshes {
   group: THREE.Group;
@@ -158,6 +177,8 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
   let idx = 0, vtx = 0;
   const tips = new THREE.InstancedMesh(tipGeo, mats().tin, Math.max(1, list.length * 2));
   tips.count = 0;
+  const heads = new THREE.InstancedMesh(headGeo, headMaterial(), Math.max(1, list.length * 2));
+  heads.count = 0;
   const m = new THREE.Matrix4();
   for (const w of list) {
     const pts = settledWire(w, ground, groundSig);
@@ -177,6 +198,8 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
     for (const p of [w.a, w.b]) {
       m.makeScale(1, 3.4 * MM, 1).setPosition(p.x, p.y - 2.4 * MM, p.z);
       tips.setMatrixAt(tips.count++, m);
+      m.makeTranslation(p.x, p.y, p.z);
+      heads.setMatrixAt(heads.count++, m);
     }
   }
   let mesh: THREE.Mesh | null = null;
@@ -191,6 +214,9 @@ export function buildWires(list: WireInput[], ground: (x: number, z: number) => 
   tips.instanceMatrix.needsUpdate = true;
   tips.castShadow = true;
   tips.userData.noPick = true;
-  group.add(tips);
+  heads.instanceMatrix.needsUpdate = true;
+  heads.castShadow = heads.receiveShadow = true;
+  heads.userData.noPick = true;
+  group.add(tips, heads);
   return { group, ranges, mesh };
 }
