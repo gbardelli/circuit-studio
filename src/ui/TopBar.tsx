@@ -164,8 +164,8 @@ export function TopBar() {
 
       <div className="tb-right">
         {project.readOnly && (
-          <span className="pill" title="Puedes simular y accionar los controles. Los cambios quedan solo en tu sesión.">
-            <Eye size={12} /> Ver y simular
+          <span className="pill readonly-pill" title="Ver y simular: puedes simular y accionar los controles. Los cambios quedan solo en tu sesión.">
+            <Eye size={12} aria-hidden /> <span className="readonly-pill-label">Ver y simular</span>
           </span>
         )}
         {!guiding && <PanelToggle panel="inspector" />}

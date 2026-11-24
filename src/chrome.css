@@ -783,3 +783,9 @@
   /* En anchos medios el logotipo basta para identificar la app: el nombre del circuito gana sitio. */
   .topbar .brand > span { display: none; }
 }
+
+/* Modo lector: Simular va centrado; por debajo de 1280 px la etiqueta queda solo como icono para no taparlo. */
+@media (max-width: 1279px) {
+  .readonly-pill { padding: 0; width: 22px; justify-content: center; }
+  .readonly-pill-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
