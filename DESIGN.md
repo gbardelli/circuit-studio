@@ -28,9 +28,13 @@ Rules for new CSS: no raw hex values, pixel font sizes or ad-hoc curves. If a va
 
 ## Brand and startup
 
-The PWM mark stands freely above a 62 px Instrument Sans wordmark (40 px on small screens), with Regular 400 for circuit and Bold 700 for studio. A static charcoal radial field and faint grain supply depth. The composition enters once in 280 ms using only opacity and a 6 px transform; a 14 px loading caption and indeterminate 2 px track appear only while real tasks are pending. The boot document and React share the composition, and React offsets the entrance by document age to avoid replaying it. No animated SVG strokes, terminal flashes or blur. Self-host the Latin variable Instrument Sans WOFF2 (Fontsource 5.3.0, OFL) and preload it in the document head. The same 400/700 contrast and family apply to the home and editor wordmarks.
+The startup screen never adds waiting time. It stays exactly as long as the session, project and view code take, then fades out in 220 ms while its content zooms slightly towards the viewer, so the app appears to arrive. Its content enters after 180 ms, so fast loads show only the background. The thin progress track appears only after 700 ms of real loading.
 
-The first-session introduction lasts 520ms, followed by a 140ms fade. Actual authentication and project loading run concurrently and determine when the loading screen can leave. Input skips the decorative introduction. Returning visitors and reduced-motion users get no decorative delay. The pre-JavaScript document shares the same composition, typography and mark geometry.
+The composition is the PWM mark beside a 28 px Instrument Sans wordmark (Regular 400 "circuit", Bold 700 "studio") on a charcoal radial field. The signal is traced once, and a soft mint halo breathes behind it while loading. Only transform and opacity animate. Reduced motion removes all of it except a static track. The boot document in index.html and `BrandScene` share the same markup and must change together. Self-host the Latin variable Instrument Sans WOFF2 (Fontsource 5.3.0, OFL) and preload it.
+
+## 3D view
+
+Entering 3D is one continuous move. While the engine and scene load, the 2D board stays visible under a small glass status pill. The first 3D frame is rendered from the same top-down framing and scale as the 2D canvas and fades in over it in 200 ms. Only then does the camera tilt to the isometric view, and the 3D controls follow 220 ms later. Leaving reverses this: the camera returns to top-down, and the view fades into 2D at the end.
 
 ## Workbench interaction
 

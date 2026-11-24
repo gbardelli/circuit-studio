@@ -251,11 +251,17 @@ export class Viewer3D {
     return { x: this.width / 2 - c.tx * zoom, y: this.height / 2 - c.tz * zoom, zoom };
   }
 
+  /** Arranca en el mismo encuadre cenital que el lienzo 2D: el primer fotograma coincide con él. */
   enter(vp: { x: number; y: number; zoom: number }) {
     const top = this.fromViewport(vp);
     this.cam = { ...top };
     this.goal = { ...top };
-    this.preset('iso', top);
+    this.invalidate();
+  }
+
+  /** Tras el fundido sobre el 2D, la cámara se inclina a la vista isométrica. */
+  reveal() {
+    this.preset('iso', this.cam);
   }
 
   exit(done: () => void) {

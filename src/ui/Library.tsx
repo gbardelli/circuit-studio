@@ -5,7 +5,6 @@ import { DesignPalette } from './design/DesignPalette';
 import type { PartDef } from '../parts/types';
 import { scorePart } from '../parts/search';
 import { MANUFACTURER_REFERENCES } from '../parts/manufacturerReferences';
-import { ComponentReferences } from './ComponentReferences';
 import { useUi } from './store';
 import { CATALOG_SECTIONS, catalogGroups, partLabel, type CatalogSection } from './catalog';
 
@@ -121,9 +120,9 @@ function PartLibrary() {
         {!section && !searching && <nav className="lib-categories" aria-label="Categorías de componentes">
           {CATALOG_SECTIONS.map((item) => {
             const Icon = SECTION_ICON[item.id];
-            return <button key={item.id} className="lib-category" onClick={() => navigate(item.id)}>
-              <span className="lib-cat-mark"><Icon size={16} strokeWidth={1.7} /></span>
-              <span><strong>{item.name}</strong><small>{item.description}</small></span>
+            return <button key={item.id} className="lib-category" onClick={() => navigate(item.id)} title={item.description}>
+              <span className="lib-cat-mark"><Icon size={14} strokeWidth={1.8} /></span>
+              <span><strong>{item.name}</strong></span>
               <span className="lib-cat-end"><em>{counts[item.id]}</em><ChevronRight size={14} /></span>
             </button>;
           })}
@@ -171,10 +170,6 @@ const PartCard = memo(function PartCard({
           {label.detail && <span className="card-detail">{label.detail}</span>}
         </span>
       </button>
-      {MANUFACTURER_REFERENCES[def.type]?.length > 0 && <details className="card-docs" onPointerDown={event => event.stopPropagation()}>
-        <summary>Documentación</summary>
-        <ComponentReferences type={def.type} />
-      </details>}
       <button className={`fav ${fav ? 'on' : ''}`} onClick={onFav} aria-label={fav ? 'Quitar de favoritos' : 'Añadir a favoritos'} aria-pressed={fav}>
         <Star size={12} fill={fav ? 'currentColor' : 'none'} />
       </button>

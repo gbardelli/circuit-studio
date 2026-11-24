@@ -601,7 +601,7 @@ input[type='range']::-moz-range-thumb {
 .lib-category { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 58px; padding: 8px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; color: var(--text-2); }
 .lib-category:hover { background: var(--hover); }
 .lib-cat-mark { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 8px; background: rgba(255,255,255,0.04); color: var(--text); }
-.lib-category > span:not(.lib-cat-mark) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lib-category > span:not(.lib-cat-mark):not(.lib-cat-end) { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .lib-category strong { font-size: var(--fs-md); font-weight: 600; letter-spacing: -0.015em; color: var(--text); }
 .lib-category small { font-size: var(--fs-sm); line-height: 1.35; color: var(--text-3); }
 .lib-category em { margin: 0; font-style: normal; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); color: var(--text-3); }
@@ -2896,15 +2896,7 @@ body.lib-dragging * {
 
 .lib-maker-filter { display: grid; gap: 5px; margin-top: 10px; color: var(--text-2); font-size: var(--fs-sm); }
 .lib-maker-filter select { width: 100%; }
-.card-docs { padding: 0 8px 8px; font-size: var(--fs-sm); color: var(--text-2); }
-.card-docs summary { cursor: pointer; padding: 5px 0; list-style: none; color: var(--text-2); }
-.card-docs summary::-webkit-details-marker { display: none; }
-.card-docs summary span { color: var(--text-3); margin-left: 4px; }
-.card-docs summary:hover, .card-docs a:hover { color: var(--text); }
-.card-docs-list { display: grid; gap: 8px; padding: 6px 0; line-height: 1.4; overflow-wrap: anywhere; }
-.card-docs-list small { font-size: var(--fs-xs); color: var(--text-3); }
-.card-docs-list a { color: #9fc8ff; text-decoration: underline; text-underline-offset: 3px; }
-.card-docs summary:focus-visible, .card-docs a:focus-visible, .lib-maker-filter select:focus-visible { outline: 2px solid #9fc8ff; outline-offset: 2px; }
+.lib-maker-filter select:focus-visible { outline: 2px solid #9fc8ff; outline-offset: 2px; }
 
 .reference-list { display: grid; gap: 8px; }
 .reference-intro, .reference-empty { margin: 0; color: var(--text-2); font-size: var(--fs-sm); line-height: 1.45; }
@@ -2915,42 +2907,17 @@ body.lib-dragging * {
 .reference-item a { display: inline-flex; gap: 5px; align-items: center; justify-self: start; color: #a8cfff; font-size: var(--fs-sm); text-decoration: none; line-height: 1.3; }
 .reference-item a:hover { text-decoration: underline; text-underline-offset: 3px; }
 .reference-item a:focus-visible { outline: 2px solid #9fc8ff; outline-offset: 3px; }
-.card-docs .reference-intro { margin: 4px 0; }
-.card-docs .reference-item { padding: 8px; }
-/* Give documentation the full library width so manufacturer names remain legible. */
-.cards:has(.card-docs[open]) .card:has(.card-docs[open]) { grid-column: 1 / -1; }
-.card:has(.card-docs[open]) .card-main { flex-direction: row; align-items: center; gap: 10px; padding-right: 32px; }
-.card:has(.card-docs[open]) .card-main .thumb { flex: 0 0 64px; width: 64px; height: 52px; }
-.card:has(.card-docs[open]) .card-meta { min-width: 0; }
-.card:has(.card-docs[open]) .reference-list { padding-bottom: 4px; }
 
 .lib-location h2 { font-size: var(--fs-lg); }
-.lib-category { min-height: 62px; padding: 10px 8px; }
-.lib-category strong { font-size: var(--fs-md); }
-.lib-category small { font-size: var(--fs-sm); }
 .lib-family { min-height: 36px; font-size: var(--fs-md); }
 .lib-maker-filter { margin-top: 0; font-size: var(--fs-sm); }
-.lib-section h3 { color: var(--text-2); font-size: var(--fs-md); }
 .lib-count { margin-left: auto; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.card-name { font-size: var(--fs-md); }
-.card-detail { font-size: var(--fs-sm); }
-.card-docs { font-size: var(--fs-sm); }
-.card-docs summary { min-height: 32px; display: flex; align-items: center; gap: 4px; }
 .lib-empty-filters { display: grid; justify-items: start; gap: 12px; }
 
-/* Two-column component catalog, separate from documentation in the inspector. */
-.library .cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .library .card { min-width: 0; border-radius: 8px; }
-.library .card-main { min-height: 140px; flex-direction: column; align-items: stretch; gap: 6px; padding: 8px 8px 10px; }
-.library .card-main .thumb { width: 100%; height: 68px; }
-.library .card-meta { min-width: 0; gap: 4px; }
-.library .card-name { font-size: var(--fs-md); line-height: 1.3; }
-.library .card-detail { font-size: var(--fs-sm); line-height: 1.35; -webkit-line-clamp: 2; }
 .library .fav { top: 6px; right: 6px; width: 28px; height: 28px; }
 .library .card:active { transform: none; }
 .library .card-main:focus-visible, .library .fav:focus-visible, .library .lib-category:focus-visible { outline: 2px solid #9fc8ff; outline-offset: -2px; }
-.library .lib-category { min-height: 54px; }
-.library .lib-section + .lib-section { margin-top: 18px; }
 .reference-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .reference-logo { display: block; width: 34px; height: 28px; object-fit: contain; flex: 0 0 auto; }
 

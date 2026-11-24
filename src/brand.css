@@ -1,32 +1,48 @@
-/* Shared by the boot document and React; the logo font is preloaded from this origin. */
+/* Arranque. Compartido por el documento de index.html y React; la fuente del logo se precarga.
+   Reglas: nada de esperas decorativas; en cargas rápidas no se llega a ver (el contenido entra a
+   los 180 ms); la barra solo aparece si de verdad tarda (700 ms); al salir, la app «llega» con un
+   leve zoom. Solo transform y opacity. */
 @font-face { font-family: 'Instrument Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('/fonts/InstrumentSans-Latin-Variable.woff2') format('woff2'); }
 .brand-screen {
-  position: fixed; inset: 0; z-index: var(--z-startup,60);
+  position: fixed; inset: 0; z-index: var(--z-startup, 60);
   display: grid; place-items: center; overflow: hidden; isolation: isolate;
-  color: #edf1f6; background: radial-gradient(ellipse at 50% 43%,#1a1e25 0%,#101318 42%,#090b0e 80%);
-  pointer-events: auto;
+  color: #edf1f6; background: radial-gradient(ellipse 70% 60% at 50% 46%, #15181d 0%, #0c0e11 55%, #08090a 100%);
 }
-.brand-grain {
-  position: absolute; inset: 0; opacity: .018; pointer-events: none;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Cpath fill='%23fff' filter='url(%23n)' d='M0 0h180v180H0z'/%3E%3C/svg%3E");
-  background-size: 180px 180px;
+.brand-content {
+  display: grid; justify-items: center; gap: 28px;
+  animation: brand-arrive 420ms cubic-bezier(.23, 1, .32, 1) both;
+  animation-delay: calc(180ms + var(--brand-arrival-delay, 0ms));
 }
-.brand-content { position: relative; display: grid; grid-template-rows: auto 40px; justify-items: center; gap: 32px; padding: 24px; animation: brand-arrive 280ms cubic-bezier(.23,1,.32,1) both; animation-delay: var(--brand-arrival-delay,0ms); }
-.brand-lockup { display: flex; flex-direction: column; align-items: center; gap: 24px; }
-.brand-signal { flex: none; width: 68px; height: 44px; color: #8edbb7; overflow: visible; }
-.brand-name { font: 400 clamp(40px,10vw,62px)/1.1 'Instrument Sans',system-ui,sans-serif; letter-spacing: -.045em; white-space: nowrap; text-shadow: 0 1px 0 #ffffff0a,0 2px 8px #0002; }
+.brand-lockup { display: flex; align-items: center; gap: 14px; }
+.brand-mark { position: relative; display: grid; place-items: center; width: 44px; height: 44px; }
+/* Halo suave detrás de la señal: respira mientras carga. */
+.brand-mark::before {
+  content: ''; position: absolute; inset: -14px; border-radius: 50%;
+  background: radial-gradient(closest-side, #8edbb733, transparent);
+  animation: brand-breathe 2400ms ease-in-out infinite;
+  animation-delay: calc(600ms + var(--brand-arrival-delay, 0ms));
+}
+.brand-signal { position: relative; width: 40px; height: 26px; color: #8edbb7; overflow: visible; }
+/* La señal se traza una vez al entrar. */
+.brand-signal path { stroke-dasharray: 1; stroke-dashoffset: 1; animation: brand-trace 700ms cubic-bezier(.65, 0, .35, 1) forwards; animation-delay: calc(200ms + var(--brand-arrival-delay, 0ms)); }
+.brand-name { font: 400 28px/1 'Instrument Sans', system-ui, sans-serif; letter-spacing: -.035em; white-space: nowrap; }
 .brand-name b { font-weight: 700; }
-.brand-loading { display: grid; justify-items: center; align-content: start; gap: 11px; font: 400 14px/20px system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; letter-spacing: .01em; color: #b1bbc9; }
-.brand-loading:not([data-loading]) { visibility: hidden; }
-.brand-indicator { display: block; position: relative; width: 92px; height: 2px; border-radius: 2px; background: #ffffff10; overflow: hidden; }
-.brand-loading[data-loading] .brand-indicator::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 32px; border-radius: inherit; background: #b3c4d6; animation: brand-wait 1100ms linear infinite; }
-.brand-screen-leaving { pointer-events: none; animation: brand-out 140ms cubic-bezier(.23,1,.32,1) both; }
-@keyframes brand-arrive { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
-@keyframes brand-wait { from { transform: translateX(-34px); } to { transform: translateX(94px); } }
-@keyframes brand-out { from { opacity: 1; } to { opacity: 0; } }
-@media(max-width:440px) { .brand-content { gap: 28px; padding: 20px; } .brand-lockup { gap: 20px; } .brand-signal { width: 60px; height: 40px; } }
-@media(prefers-reduced-motion:reduce) {
-  .brand-screen,.brand-screen *,.brand-screen *::after { animation: none !important; }
-  .brand-loading[data-loading] .brand-indicator::after { transform: translateX(30px); opacity: .65; }
+.brand-indicator { position: relative; display: block; width: 96px; height: 2px; border-radius: 2px; background: #ffffff0f; overflow: hidden; opacity: 0; }
+.brand-indicator[data-loading] { animation: brand-show 300ms ease-out both; animation-delay: calc(700ms + var(--brand-arrival-delay, 0ms)); }
+.brand-indicator[data-loading]::after { content: ''; position: absolute; inset: 0 auto 0 0; width: 36px; border-radius: inherit; background: linear-gradient(90deg, transparent, #b3c4d6, transparent); animation: brand-wait 1200ms cubic-bezier(.65, 0, .35, 1) infinite; }
+.brand-screen-leaving { pointer-events: none; animation: brand-out 220ms cubic-bezier(.23, 1, .32, 1) both; }
+.brand-screen-leaving .brand-content { animation: brand-zoom 220ms cubic-bezier(.23, 1, .32, 1) both; }
+@keyframes brand-arrive { from { opacity: 0; transform: translateY(4px) scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes brand-trace { to { stroke-dashoffset: 0; } }
+@keyframes brand-breathe { 0%, 100% { opacity: .35; transform: scale(.92); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes brand-show { to { opacity: 1; } }
+@keyframes brand-wait { from { transform: translateX(-40px); } to { transform: translateX(100px); } }
+@keyframes brand-out { to { opacity: 0; } }
+@keyframes brand-zoom { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(1.06); } }
+@media (max-width: 440px) { .brand-name { font-size: 24px; } .brand-lockup { gap: 12px; } }
+@media (prefers-reduced-motion: reduce) {
+  .brand-screen, .brand-screen *, .brand-screen *::before, .brand-screen *::after { animation: none !important; }
+  .brand-signal path { stroke-dashoffset: 0; }
+  .brand-indicator[data-loading] { opacity: .65; }
   .brand-screen-leaving { opacity: 0; }
 }

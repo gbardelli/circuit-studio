@@ -109,8 +109,13 @@ export default function Board3D() {
   const [touched, setTouched] = useState(false);
   useEffect(() => {
     if (!ready) return;
-    const t = setTimeout(() => setLoaderGone(true), 260);
-    return () => clearTimeout(t);
+    // Primero el 3D aparece fundido sobre el 2D en el mismo encuadre; luego la cámara se inclina.
+    const tilt = setTimeout(() => viewer.current?.reveal(), 200);
+    const gone = setTimeout(() => setLoaderGone(true), 260);
+    return () => {
+      clearTimeout(tilt);
+      clearTimeout(gone);
+    };
   }, [ready]);
 
   useEffect(() => {
@@ -277,7 +282,7 @@ export default function Board3D() {
   }, []);
 
   return (
-    <div className={`board3d ${theme} ${leaving ? 'leaving' : ''}`}>
+    <div className={`board3d ${theme} ${ready ? 'is-ready' : ''} ${leaving ? 'leaving' : ''}`}>
       <div ref={host} className="board3d-host" aria-label="Montaje en 3D" role="img" onPointerDownCapture={() => setTouched(true)} />
       {!supported && (
         <div className="board3d-fallback" role="alert">

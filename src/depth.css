@@ -226,13 +226,42 @@
   .lib-category:hover { background: linear-gradient(180deg, var(--wa-5), var(--wa-2)); box-shadow: inset 0 1px 0 var(--wa-5); }
   .lib-category:hover .lib-cat-mark { transform: translateY(-1px); }
 }
-.library .lib-category strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Categorías: una línea por categoría, la descripción va en el tooltip. Menos texto, más aire. */
+.library .lib-categories { gap: var(--space-0-5); margin-bottom: var(--space-6); }
+.library .lib-category { min-height: 36px; padding: 0 var(--space-2); gap: var(--space-2-5, 10px); border-radius: var(--radius-md); }
 .library .lib-category > span:not(.lib-cat-mark) { min-width: 0; }
+.library .lib-category strong { font-size: var(--fs-md); font-weight: var(--fw-medium); color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color var(--dur-fast) ease; }
+.library .lib-category em { font-size: var(--fs-xs); color: var(--text-tertiary); opacity: .8; }
 .library .lib-cat-mark {
-  background: linear-gradient(180deg, #2a2c31, #1d1f23);
-  box-shadow: inset 0 1px 0 var(--wa-8), inset 0 -1px 0 var(--ba-3), 0 0 0 1px var(--wa-5), 0 1px 2px var(--ba-5);
-  transition: transform var(--t-fast) var(--ease-out), color var(--t-fast) ease;
+  width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--text-tertiary);
+  background: linear-gradient(180deg, #24262b, #1b1d21);
+  box-shadow: inset 0 1px 0 var(--wa-6), 0 0 0 1px var(--wa-4), 0 1px 1px var(--ba-4);
+  transition: transform var(--dur-fast) var(--ease-out), color var(--dur-fast) ease;
 }
+.library .lib-cat-end svg { opacity: 0; transform: translateX(-3px); transition: opacity var(--dur-fast) ease, transform var(--dur-fast) var(--ease-out); }
+@media (hover: hover) and (pointer: fine) {
+  .library .lib-category:hover strong { color: var(--text-primary); }
+  .library .lib-category:hover .lib-cat-mark { color: var(--text-primary); }
+  .library .lib-category:hover .lib-cat-end svg { opacity: 1; transform: none; }
+}
+.library .lib-category:focus-visible .lib-cat-end svg { opacity: 1; transform: none; }
+
+/* Secciones y tarjetas: miniatura sobre una baldosa común, nombre discreto debajo. */
+.library .lib-section h3 { margin: 0 var(--space-1) var(--space-2); font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-tertiary); }
+.library .lib-section h3 .lib-count { margin-left: auto; font-variant-numeric: tabular-nums; }
+.library .lib-section + .lib-section { margin-top: var(--space-5); }
+.library .cards { gap: var(--space-1); }
+.library .card-main { padding: var(--space-1) var(--space-1) var(--space-2); gap: var(--space-2); }
+.library .thumb {
+  height: 64px; padding: var(--space-2); border-radius: var(--radius-md);
+  background: radial-gradient(120% 90% at 50% 0%, var(--wa-3), transparent 70%), var(--wa-1);
+  box-shadow: inset 0 0 0 1px var(--wa-3);
+}
+.library .card-meta { gap: var(--space-0-5); padding: 0 var(--space-1); }
+.library .card-name { font-size: var(--fs-sm); font-weight: var(--fw-medium); letter-spacing: var(--tracking-sm); line-height: var(--lh-snug); color: var(--text-secondary); transition: color var(--dur-fast) ease; }
+.library .card-detail { font-size: var(--fs-2xs); color: var(--text-tertiary); -webkit-line-clamp: 1; }
+.library .card.armed .card-name { color: var(--text-primary); }
+@media (hover: hover) and (pointer: fine) { .library .card:hover .card-name { color: var(--text-primary); } }
 .library .search, .library input[type='search'] {
   transition: box-shadow var(--t-fast) ease, background var(--t-fast) ease;
 }

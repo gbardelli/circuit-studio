@@ -3,9 +3,6 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 import { Startup, useStartupTask } from './Startup';
 
 let renderer: ReactTestRenderer | undefined;
-let browser: EventTarget;
-let reduced = false;
-let seen = false;
 
 function Tasks({ session, project }: { session: boolean; project: boolean }) {
   useStartupTask('session', session);
@@ -17,17 +14,7 @@ const advance = (ms: number) => act(() => { vi.advanceTimersByTime(ms); });
 
 beforeEach(() => {
   vi.useFakeTimers();
-  reduced = false;
-  seen = false;
-  browser = new EventTarget();
-  const storage = { getItem: () => seen ? '1' : null, setItem: () => { seen = true; } };
-  const media = new EventTarget();
-  vi.stubGlobal('sessionStorage', storage);
-  vi.stubGlobal('window', Object.assign(browser, {
-    sessionStorage: storage,
-    setTimeout,
-    matchMedia: () => Object.assign(media, { matches: reduced }),
-  }));
+  vi.stubGlobal('window', Object.assign(new EventTarget(), { setTimeout, clearTimeout }));
 });
 
 afterEach(() => {
@@ -38,45 +25,39 @@ afterEach(() => {
 });
 
 describe('startup lifecycle', () => {
-  it('renders the application immediately and removes the first-session introduction', () => {
+  it('renders the application at once and leaves without a decorative wait', () => {
     act(() => { renderer = create(<Startup cloud={false}><main>Editor ready</main></Startup>); });
     expect(renderer!.root.findByType('main').children).toContain('Editor ready');
-    expect(screen()).toHaveLength(1);
-    advance(520);
+    // Nada que esperar: la pantalla del documento de arranque se va con su fundido de salida.
     expect(screen()[0].props.className).toContain('leaving');
-    advance(140);
-    expect(screen()).toHaveLength(0);
-    expect(seen).toBe(true);
-  });
-
-  it.each(['keydown', 'pointerdown'])('lets %s skip the introduction', (event) => {
-    act(() => { renderer = create(<Startup cloud={false}><main /></Startup>); });
-    act(() => { browser.dispatchEvent(new Event(event)); });
-    advance(140);
+    advance(220);
     expect(screen()).toHaveLength(0);
   });
 
-  it('waits for both session and project data without letting input dismiss actual loading', () => {
+  it('stays exactly as long as session and project data take, and input cannot dismiss it', () => {
     const app = (session: boolean, project: boolean) => <Startup cloud><Tasks session={session} project={project} /></Startup>;
     act(() => { renderer = create(app(true, true)); });
     advance(2000);
-    act(() => { browser.dispatchEvent(new Event('keydown')); });
+    act(() => { window.dispatchEvent(new Event('keydown')); });
     expect(screen()[0].props.className).not.toContain('leaving');
     act(() => { renderer!.update(app(false, true)); });
     expect(screen()[0].props['aria-label']).toBe('Cargando CircuitStudio');
     act(() => { renderer!.update(app(false, false)); });
-    advance(140);
+    expect(screen()[0].props.className).toContain('leaving');
+    advance(220);
     expect(screen()).toHaveLength(0);
   });
 
-  it.each(['returning', 'reduced motion'])('has no decorative overlay for %s visitors', (mode) => {
-    seen = mode === 'returning';
-    reduced = mode === 'reduced motion';
-    act(() => { renderer = create(<Startup cloud={false}><main /></Startup>); });
-    expect(screen()).toHaveLength(0);
+  it('comes back if a new task starts while it is leaving', () => {
+    const app = (project: boolean) => <Startup cloud={false}><Tasks session={false} project={project} /></Startup>;
+    act(() => { renderer = create(app(false)); });
+    act(() => { renderer!.update(app(true)); });
+    advance(400);
+    expect(screen()).toHaveLength(1);
+    expect(screen()[0].props.className).not.toContain('leaving');
   });
 
-  it('clears animation and exit timers when unmounted', () => {
+  it('clears its exit timer when unmounted', () => {
     act(() => { renderer = create(<Startup cloud={false}><main /></Startup>); });
     act(() => renderer!.unmount());
     expect(vi.getTimerCount()).toBe(0);

@@ -9,37 +9,18 @@ import {
   type ReactNode,
 } from "react";
 
-const INTRO_KEY = "cs-brand-seen-v2";
-const INTRO_MS = 520;
+/**
+ * Pantalla de arranque. Sin esperas decorativas: se queda exactamente lo que tardan la sesión,
+ * el proyecto y el código de la vista, y se va en cuanto están. Continúa la del documento de
+ * arranque (index.html) en vez de repetirla, y si la carga es rápida ni siquiera llega a verse:
+ * su contenido entra con un pequeño retraso (brand.css).
+ */
 type Task = "session" | "project" | "code";
 const LoadingContext = createContext<(task: Task, loading: boolean) => void>(
   () => {},
 );
+const LEAVE_MS = 220;
 
-export function shouldPlayIntro(
-  storage: Pick<Storage, "getItem"> | null,
-  reducedMotion: boolean,
-) {
-  if (reducedMotion) return false;
-  try {
-    return storage?.getItem(INTRO_KEY) !== "1";
-  } catch {
-    return true;
-  }
-}
-
-function initialIntro() {
-  try {
-    return shouldPlayIntro(
-      window.sessionStorage,
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches,
-    );
-  } catch {
-    return false;
-  }
-}
-
-/** Ready signals come from real authentication and project requests. No fake progress. */
 export function Startup({
   children,
   cloud,
@@ -50,12 +31,10 @@ export function Startup({
   const [tasks, setTasks] = useState<Partial<Record<Task, boolean>>>({
     session: cloud,
   });
-  const [intro, setIntro] = useState(initialIntro);
-  const [visible, setVisible] = useState(() => intro || cloud);
-  // Continue the boot document's entrance rather than replaying it when React mounts.
+  const [visible, setVisible] = useState(true);
+  // Continúa la entrada del documento de arranque en vez de repetirla al montar React.
   const [arrivalDelay] = useState(() => `${-performance.now()}ms`);
   const loading = Object.values(tasks).some(Boolean);
-  const leaving = !loading && !intro;
   const setLoading = useCallback((task: Task, pending: boolean) => {
     setTasks((previous) =>
       previous[task] === pending ? previous : { ...previous, [task]: pending },
@@ -63,50 +42,20 @@ export function Startup({
   }, []);
 
   useEffect(() => {
-    if (!intro) return;
-    try {
-      sessionStorage.setItem(INTRO_KEY, "1");
-    } catch {
-      /* Animation still works without storage. */
-    }
-    const timer = window.setTimeout(() => setIntro(false), INTRO_MS);
-    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const reduce = () => {
-      if (media.matches) setIntro(false);
-    };
-    media.addEventListener("change", reduce);
-    return () => {
-      clearTimeout(timer);
-      media.removeEventListener("change", reduce);
-    };
-  }, [intro]);
-
-  useEffect(() => {
     if (loading) {
       setVisible(true);
       return;
     }
-    const skip = () => setIntro(false);
-    window.addEventListener("pointerdown", skip, { once: true });
-    window.addEventListener("keydown", skip, { once: true });
-    return () => {
-      window.removeEventListener("pointerdown", skip);
-      window.removeEventListener("keydown", skip);
-    };
-  }, [loading]);
-
-  useEffect(() => {
-    if (!leaving) return;
-    const timer = window.setTimeout(() => setVisible(false), 140);
+    const timer = window.setTimeout(() => setVisible(false), LEAVE_MS);
     return () => clearTimeout(timer);
-  }, [leaving]);
+  }, [loading]);
 
   return (
     <LoadingContext.Provider value={setLoading}>
       {children}
-      {(visible || loading) && (
+      {visible && (
         <div
-          className={`brand-screen${leaving ? " brand-screen-leaving" : ""}`}
+          className={`brand-screen${loading ? "" : " brand-screen-leaving"}`}
           style={{ "--brand-arrival-delay": arrivalDelay } as CSSProperties}
           role="status"
           aria-label={loading ? "Cargando CircuitStudio" : "CircuitStudio"}
@@ -126,12 +75,12 @@ export function useStartupTask(task: Task, loading: boolean) {
   }, [task, loading, setLoading]);
 }
 
+/** Misma composición que el documento de arranque de index.html: cámbialas juntas. */
 export function BrandScene({ loading }: { loading: boolean }) {
   return (
-    <>
-      <div className="brand-grain" aria-hidden="true" />
-      <div className="brand-content" aria-hidden="true">
-        <div className="brand-lockup">
+    <div className="brand-content" aria-hidden="true">
+      <div className="brand-lockup">
+        <span className="brand-mark">
           <svg className="brand-signal" viewBox="2 8 38 24" fill="none">
             <path
               d="M5 27h8V13h8v14h8V13h6"
@@ -139,18 +88,16 @@ export function BrandScene({ loading }: { loading: boolean }) {
               strokeWidth="3.2"
               strokeLinecap="round"
               strokeLinejoin="round"
+              pathLength={1}
             />
           </svg>
-          <span className="brand-name">
-            circuit<b>studio</b>
-          </span>
-        </div>
-        <div className="brand-loading" data-loading={loading || undefined}>
-          <span className="brand-indicator" />
-          <span>Cargando</span>
-        </div>
+        </span>
+        <span className="brand-name">
+          circuit<b>studio</b>
+        </span>
       </div>
-    </>
+      <span className="brand-indicator" data-loading={loading || undefined} />
+    </div>
   );
 }
 
