@@ -1,3 +1,4 @@
+import { spiceVerifier } from '../spice/verifier';
 import type { SimStatus } from "./engine";
 import type { CircuitSnapshot } from "../core/types";
 import type { Visual } from "../parts/types";
@@ -76,6 +77,7 @@ export class SimClient {
       }
       const frame = event.data.frame as SimulationFrame;
       if (!frame) return;
+      if (frame.spice) spiceVerifier.submit(frame.spice);
       const previous = this.partCache;
       this.partCache = frame.visuals;
       this.voltages = frame.readings;

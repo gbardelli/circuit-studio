@@ -9,6 +9,10 @@ export default defineConfig({
   plugins: [react({ exclude: /src[\\/]parts[\\/]/ })],
   // La integración de Clerk en Vercel publica la clave como NEXT_PUBLIC_*.
   envPrefix: ['VITE_', 'NEXT_PUBLIC_'],
+  // El worker de ngspice carga el motor WASM con import() dinámico: necesita formato ES.
+  worker: { format: 'es' },
+  // ngspice (20 MB) se preoptimiza al arrancar, no a mitad de sesión (evita una recarga).
+  optimizeDeps: { include: ['eecircuit-engine'] },
   server: {
     port: 5173,
     proxy: {

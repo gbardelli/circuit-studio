@@ -40,9 +40,19 @@ export class Stamper {
   }
 }
 
+/** Nombre SPICE de un nodo del motor: -1 (referencia de la isla) es la tierra «0». */
+export type SpiceNode = (node: number) => string;
+const sci = (x: number) => (Number.isFinite(x) ? x.toPrecision(9) : '0');
+
 export interface Element {
   nonlinear?: boolean;
   stamp(s: Stamper): void;
+  /**
+   * Tarjetas SPICE del dispositivo con sus parámetros físicos reales (ngspice las resuelve con
+   * sus propios modelos). Sin este método, el exportador usa el equivalente lineal del estampado
+   * en el punto de operación (válido para elementos de comportamiento).
+   */
+  spice?(name: string, node: SpiceNode): string[];
   /** Tras converger un paso transitorio (historia de condensadores). */
   accept?(v: Float64Array): void;
   reset?(): void;
@@ -57,6 +67,9 @@ export class Resistor implements Element {
   }
   currentOf(v: Float64Array) {
     return (volt(v, this.a) - volt(v, this.b)) / Math.max(this.r(), 1e-6);
+  }
+  spice(name: string, node: SpiceNode) {
+    return [`R${name} ${node(this.a)} ${node(this.b)} ${sci(Math.max(this.r(), 1e-6))}`];
   }
 }
 
@@ -77,6 +90,11 @@ export class VSource implements Element {
     s.rhs(this.p, i);
     s.rhs(this.n, -i);
   }
+  /** Fuente ideal en serie con su resistencia interna: el mismo equivalente de Norton. */
+  spice(name: string, node: SpiceNode) {
+    const mid = `v${name}`;
+    return [`V${name} ${mid} ${node(this.n)} DC ${sci(this.volts())}`, `R${name} ${node(this.p)} ${mid} ${sci(Math.max(this.rint(), 1e-4))}`];
+  }
   /** Corriente entregada por el terminal positivo. */
   currentOf(v: Float64Array) {
     const r = this.stampedVolts === null ? Math.max(this.rint(), 1e-4) : this.stampedR;
@@ -88,6 +106,9 @@ export class VSource implements Element {
 export class Capacitor implements Element {
   private vPrev = 0;
   constructor(public a: number, public b: number, public c: () => number) {}
+  spice(name: string, node: SpiceNode) {
+    return [`C${name} ${node(this.a)} ${node(this.b)} ${sci(this.c())}`];
+  }
   stamp(s: Stamper) {
     if (!(s.dt > 0)) return; // punto de operación: circuito abierto
     const g = this.c() / s.dt;
@@ -122,6 +143,9 @@ export class Diode implements Element {
   nonlinear = true;
   private vd = 0;
   constructor(public a: number, public k: number, public is: number, public n: number) {}
+  spice(name: string, node: SpiceNode) {
+    return [`D${name} ${node(this.a)} ${node(this.k)} DM${name}`, `.model DM${name} D(IS=${sci(this.is)} N=${sci(this.n)})`];
+  }
   private get nvt() {
     return this.n * VT;
   }
@@ -153,6 +177,10 @@ export class NPN implements Element {
   private vbe = 0;
   private vbc = 0;
   constructor(public c: number, public b: number, public e: number, public is = 1e-14, public bf = 150, public br = 5) {}
+  /** Ebers-Moll de transporte = Gummel-Poon sin Early ni resistencias parásitas. */
+  spice(name: string, node: SpiceNode) {
+    return [`Q${name} ${node(this.c)} ${node(this.b)} ${node(this.e)} QM${name}`, `.model QM${name} NPN(IS=${sci(this.is)} BF=${sci(this.bf)} BR=${sci(this.br)})`];
+  }
   stamp(s: Stamper) {
     const vcrit = VT * Math.log(VT / (Math.SQRT2 * this.is));
     const rawBe = s.volt(this.b) - s.volt(this.e);
@@ -214,6 +242,10 @@ export class NPN implements Element {
 export class NMOS implements Element {
   nonlinear = true;
   constructor(public d: number, public g: number, public s: number, public vth = 1.6, public k = 12) {}
+  /** Shichman-Hodges = MOSFET LEVEL 1 de SPICE con W = L (KP = k) y sin modulación de canal. */
+  spice(name: string, node: SpiceNode) {
+    return [`M${name} ${node(this.d)} ${node(this.g)} ${node(this.s)} ${node(this.s)} MM${name} W=1 L=1`, `.model MM${name} NMOS(LEVEL=1 VTO=${sci(this.vth)} KP=${sci(this.k)})`];
+  }
   private characteristic(vgs: number, vds: number) {
     const vov = vgs - this.vth;
     if (vov <= 0) return { id: 0, gm: 0, gds: 1e-9 };
@@ -383,21 +415,28 @@ export class Circuit {
         }
       }
       if (same) return luSolve(lu, b, n);
-      let scale = 0;
-      for (let i = 0; i < n; i++) scale = Math.max(scale, Math.abs(b[i]));
-      const tol = 1e-12 + 1e-10 * scale;
       const x = luSolve(lu, b, n);
       const r = new Float64Array(n);
       for (let pass = 0; pass < 6; pass++) {
-        let worst = 0;
+        // Tolerancia por fila, relativa a las corrientes que se cruzan en ese nodo. Una tolerancia
+        // global (escalada por la mayor corriente, p. ej. el Norton de una fuente) dejaba pasar
+        // errores de nanoamperios en nodos de alta impedancia: ngspice lo detectó.
+        let ok = true;
+        let finite = true;
         for (let i = 0; i < n; i++) {
           let sum = b[i];
-          for (let k = 0; k < n; k++) sum -= G[i * n + k] * x[k];
+          let scale = Math.abs(b[i]);
+          for (let k = 0; k < n; k++) {
+            const t = G[i * n + k] * x[k];
+            sum -= t;
+            scale += Math.abs(t);
+          }
           r[i] = sum;
-          worst = Math.max(worst, Math.abs(sum));
+          if (!Number.isFinite(sum)) finite = false;
+          else if (Math.abs(sum) > 1e-15 + 1e-11 * scale) ok = false;
         }
-        if (!Number.isFinite(worst)) break;
-        if (worst <= tol) return x;
+        if (!finite) break;
+        if (ok) return x;
         const dx = luSolve(lu, r, n);
         for (let i = 0; i < n; i++) x[i] += dx[i];
       }

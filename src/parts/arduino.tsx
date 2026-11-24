@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Stamper, VSource, type Element } from '../core/solver';
+import { Stamper, VSource, type Element, type SpiceNode } from '../core/solver';
 import type { PinDef } from '../core/types';
 import type { McuBridge, McuSpec, PartDef, PartSim, RenderProps, SimContext } from './types';
 import { Glow, Smd } from './common';
@@ -75,6 +75,13 @@ const PINS: PinDef[] = [
 /** Driver de un pin del ATmega328P según DDR/PORT. Resistencias aproximadas del datasheet. */
 export class McuPin implements Element {
   constructor(private node: number, private index: number, private mcu: McuBridge, private vio = 5) {}
+  /** El pin según su modo actual: fuente de vio con 25 Ω, 25 Ω a tierra, pull-up de 35 kΩ o alta impedancia. */
+  spice(name: string, node: SpiceNode) {
+    const mode = this.mcu.running ? this.mcu.pinMode(this.index) : 'input';
+    const n = node(this.node);
+    if (mode === 'high' || mode === 'pullup') return [`V${name} v${name} 0 DC ${this.vio}`, `R${name} ${n} v${name} ${mode === 'high' ? 25 : 35000}`];
+    return [`R${name} ${n} 0 ${mode === 'low' ? 25 : 1e9}`];
+  }
   stamp(s: Stamper) {
     const mode = this.mcu.running ? this.mcu.pinMode(this.index) : 'input';
     if (mode === 'high') {

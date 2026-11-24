@@ -1,3 +1,4 @@
+import { SpiceCard } from "./SpiceStatus";
 import { HintButton } from "./Overlays";
 import { useMemo, useState } from "react";
 import { Check, ChevronRight, Crosshair, Search, TriangleAlert } from "lucide-react";
@@ -106,6 +107,7 @@ export function Diagnostics() {
               <span className={warnings ? "is-warn" : ""}><strong>{warnings}</strong> avisos</span>
             </div>
           </header>
+          <SpiceCard />
           {!findings.length ? (
             <div className="lab-empty diag-empty">
               <Check size={18} />

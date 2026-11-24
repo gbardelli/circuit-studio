@@ -1,6 +1,7 @@
 // Orquesta la co-simulación: CPU AVR por segmentos que terminan en cada cambio de pin
 // (o a 1 ms como máximo), resolución del circuito en cada frontera y promedios temporales
 // para lo que se dibuja (brillo de LEDs con PWM, ángulo de servos, frecuencias).
+import { toSpice, type SpiceDeck } from '../spice/netlist';
 import { buildNetlist, pinKey, type Netlist } from '../core/netlist';
 import { Capacitor, Circuit, type Element } from '../core/solver';
 import type { CircuitSnapshot, PartData, Props } from '../core/types';
@@ -60,6 +61,9 @@ export class SimEngine {
   private snapshot: CircuitSnapshot = { parts: [], wires: [] };
   private topo = '';
   private netlist: Netlist | null = null;
+  /** Último punto de operación exportado a SPICE (se manda una vez por reconstrucción). */
+  spice: SpiceDeck | null = null;
+  private spiceSeq = 0;
   private netNode = new Map<number, number>();
   private circuit: Circuit | null = null;
   private parts = new Map<string, PartRuntime>();
@@ -329,6 +333,8 @@ export class SimEngine {
     this.hasCapacitors = elements.some((e) => e instanceof Capacitor);
     this.circuit = new Circuit(count, elements);
     const r = this.circuit.solve(0);
+    // Punto de operación exportado a SPICE para verificarlo con ngspice (fuera del bucle en vivo).
+    this.spice = toSpice(this.circuit, ++this.spiceSeq, this.nodeLabels(count));
     for (const mcu of mcus) {
       if (!mcu.runner) continue;
       const [sdaIndex, sclIndex] = mcu.runner.board.i2cPins;
@@ -355,6 +361,22 @@ export class SimEngine {
     this.status = { ...this.status, running: true, nodes: count, converged: r.converged, message: r.converged ? null : 'El circuito no converge en el punto de operación.' };
     this.syncMcuInputs();
     this.dirty = false;
+  }
+
+  /** Una patilla legible por nodo (la primera de su red), para señalar dónde discrepa SPICE. */
+  private nodeLabels(count: number) {
+    const labels: string[] = new Array(count).fill('');
+    if (!this.netlist) return labels;
+    // Primero patillas de piezas que simulan (una resistencia, un LED), no huecos de protoboard.
+    for (const pass of [0, 1]) {
+      for (const [key, net] of this.netlist.netOf) {
+        const node = this.netNode.get(net);
+        if (node === undefined || node < 0 || labels[node]) continue;
+        if (pass === 0 && !this.parts.has(key.slice(0, key.lastIndexOf(':')))) continue;
+        labels[node] = key;
+      }
+    }
+    return labels.map((l, i) => l || `nodo ${i}`);
   }
 
   /** Cada shield funciona solo montada sobre su placa (ver parts/stack.ts), como en el banco. */

@@ -28,6 +28,7 @@
     "@vercel/sandbox": "^3.9.1",
     "avr8js": "^0.21.1",
     "codemirror": "^6.0.2",
+    "eecircuit-engine": "^1.9.0",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.9",
     "lib0": "^0.2.109",

@@ -31,6 +31,8 @@ export interface SimulationFrame {
   lab: LabState;
   serial: [string, string][];
   scene: CircuitSnapshot | null;
+  /** Punto de operación en SPICE, solo cuando cambió desde el último fotograma. */
+  spice?: import('../spice/netlist').SpiceDeck;
 }
 type Event =
   | {
@@ -279,7 +281,15 @@ export class SimulationSession {
       traceDelta,
       serial,
       scene,
+      spice: this.nextSpice(),
     };
+  }
+  private sentSpice = 0;
+  private nextSpice() {
+    const deck = this.engine.spice;
+    if (!deck || deck.id === this.sentSpice) return undefined;
+    this.sentSpice = deck.id;
+    return deck;
   }
   async seek(
     time: number,

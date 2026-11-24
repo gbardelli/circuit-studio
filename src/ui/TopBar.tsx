@@ -1,3 +1,4 @@
+import { SpiceChip } from './SpiceStatus';
 import { HintButton, PopoverPanel } from './Overlays';
 import { useEffect, useState } from 'react';
 import { UserButton } from '@clerk/react';
@@ -294,6 +295,7 @@ export function StatusBar() {
           {status.message ?? `${status.nodes} nodos · estable`}
         </span>
       )}
+      {simRunning && <SpiceChip />}
       <span className="grow" />
       <CanvasReadout />
       <PopoverPanel label="Atajos de teclado" className="ui-shortcuts" side="top" open={keys} onOpenChange={setKeys} trigger={<button className="btn ghost sm"><Keyboard size={13}/>Atajos</button>}>
