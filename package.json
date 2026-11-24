@@ -1,7 +1,7 @@
 {
   "name": "circuit-studio",
   "private": true,
-  "version": "0.1.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n web,server -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",

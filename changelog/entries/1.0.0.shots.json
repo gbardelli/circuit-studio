@@ -1,0 +1,9 @@
+[
+  {
+    "name": "esquema",
+    "url": "/?p=ab43fbed64865823",
+    "selector": ".workspace",
+    "steps": [{ "waitFor": ".topbar" }, { "text": "Esquema" }, { "wait": 1500 }],
+    "settle": 800
+  }
+]
