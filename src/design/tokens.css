@@ -1,0 +1,272 @@
+/* ════════════════════════════════════════════════════════════════════════════════
+   CircuitStudio · tokens
+   La única fuente de valores de diseño. Tres capas:
+     1. Primitivos   — la paleta y las escalas crudas. No se usan directamente en componentes.
+     2. Semánticos   — qué significa cada valor (superficie, texto, borde, estado, material).
+     3. Alias        — nombres antiguos que apuntan a los semánticos, para migrar sin romper.
+   Regla: un componente nuevo solo usa semánticos y escalas (--space-*, --fs-*, --radius-*,
+   --dur-*, --z-*). Si necesitas un valor que no existe, se añade aquí, no en el componente.
+   Guía viva: /?design=1 · Documento: DESIGN.md
+   ════════════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* ── 1 · Primitivos ──────────────────────────────────────────────────────────── */
+
+  /* Grises fríos: escalones de 3–4 % de luminancia (estilo Linear). */
+  --gray-0: #08090a;
+  --gray-1: #0b0c0e;
+  --gray-2: #0e0f11;
+  --gray-3: #111214;
+  --gray-4: #141619;
+  --gray-5: #17191c;
+  --gray-6: #1b1c20;
+  --gray-7: #202226;
+  --gray-8: #2b2d32;
+  --gray-9: #3a3d43;
+  --gray-10: #7b8089;
+  --gray-11: #a2a6ad;
+  --gray-12: #f5f6f7;
+
+  /* Blanco translúcido: luz sobre materiales oscuros (filos, bordes, estados). */
+  --wa-1: #ffffff03;
+  --wa-2: #ffffff05;
+  --wa-3: #ffffff07;
+  --wa-4: #ffffff09;
+  --wa-5: #ffffff0b;
+  --wa-6: #ffffff0d;
+  --wa-7: #ffffff10;
+  --wa-8: #ffffff13;
+  --wa-9: #ffffff17;
+  --wa-10: #ffffff1c;
+  --wa-11: #ffffff22;
+  --wa-12: #ffffff2b;
+
+  /* Negro translúcido: sombras y hundidos. */
+  --ba-1: #0000001a;
+  --ba-2: #00000033;
+  --ba-3: #00000044;
+  --ba-4: #00000055;
+  --ba-5: #00000066;
+  --ba-6: #00000088;
+  --ba-7: #00000099;
+  --ba-8: #000000aa;
+  --ba-9: #000000cc;
+
+  /* Color: colores de sistema de Apple para acción y estado, menta para medidas en vivo. */
+  --blue-9: #3b9eff;
+  --blue-10: #6cb6ff;
+  --blue-11: #9fc8ff;
+  --green-9: #30d158;
+  --red-9: #ff453a;
+  --amber-9: #ff9f0a;
+  --mint-9: #70dfb0;
+
+  /* ── 2 · Semánticos ──────────────────────────────────────────────────────────── */
+
+  /* Superficies, de la más profunda a la más elevada. */
+  --surface-app: var(--gray-0);
+  --surface-canvas: var(--gray-1);
+  --surface-panel: var(--gray-2);
+  --surface-raised: #151619;
+  --surface-raised-2: var(--gray-6);
+  --surface-overlay: var(--gray-7);
+  --surface-hover: rgba(255, 255, 255, 0.045);
+  --surface-press: rgba(255, 255, 255, 0.075);
+
+  /* Texto: tres niveles; nunca bajar de --text-tertiary sobre --surface-panel (AA). */
+  --text-primary: var(--gray-12);
+  --text-secondary: var(--gray-11);
+  --text-tertiary: var(--gray-10);
+  --text-on-accent: #ffffff;
+
+  /* Bordes y anillos. */
+  --border-subtle: rgba(255, 255, 255, 0.065);
+  --border-default: rgba(255, 255, 255, 0.1);
+  --border-strong: rgba(255, 255, 255, 0.13);
+  --focus-ring: #8eb8e9;
+
+  /* Acción y estado. Cada uno con su versión suave (fondo) y su línea. */
+  --accent: var(--blue-9);
+  --accent-hover: var(--blue-10);
+  --accent-subtle: rgba(59, 158, 255, 0.14);
+  --accent-border: rgba(59, 158, 255, 0.45);
+  --success: var(--green-9);
+  --success-subtle: rgba(48, 209, 88, 0.14);
+  --danger: var(--red-9);
+  --danger-subtle: rgba(255, 69, 58, 0.13);
+  --warning: var(--amber-9);
+  --warning-subtle: rgba(255, 159, 10, 0.14);
+  --live: var(--mint-9);
+  --live-subtle: #70dfb012;
+
+  /* Materiales: estructura pesada, controles en relieve, cristal sobre el lienzo. */
+  --mat-chrome: linear-gradient(180deg, #141518 0%, #0f1012 100%);
+  --mat-chrome-edge: inset 0 1px 0 var(--wa-6), 0 0 0 1px var(--wa-5);
+  --mat-panel: linear-gradient(180deg, #16171a 0%, #111214 38%, #0f1012 100%);
+  --mat-panel-shadow: inset 0 1px 0 var(--wa-7), inset 0 0 0 1px var(--wa-4), 0 1px 1px var(--ba-5), 0 12px 28px -14px var(--ba-9);
+  --glass: linear-gradient(180deg, rgba(36, 38, 43, 0.78) 0%, rgba(22, 23, 27, 0.82) 100%);
+  --glass-blur: blur(18px) saturate(1.6);
+  --glass-shadow: inset 0 1px 0 var(--wa-10), inset 0 0 0 1px var(--wa-7), 0 1px 2px #0007, 0 10px 24px -10px #000d, 0 24px 48px -24px #000a;
+  --relief: linear-gradient(180deg, var(--gray-8) 0%, #222428 100%);
+  --relief-hover: linear-gradient(180deg, #33363b 0%, #282a2f 100%);
+  --relief-shadow: inset 0 1px 0 var(--wa-9), inset 0 -1px 0 #00000059, 0 0 0 1px var(--wa-5), 0 1px 2px var(--ba-6), 0 2px 6px -2px var(--ba-5);
+  --sunken-shadow: inset 0 1px 3px var(--ba-8), inset 0 0 0 1px var(--wa-4), 0 1px 0 var(--wa-4);
+  --control-fill: linear-gradient(180deg, #232529, #1a1c20);
+  --control-shadow: inset 0 1px 0 #ffffff0b, 0 0 0 1px var(--wa-6), 0 1px 2px var(--ba-4);
+  --control-fill-raised: linear-gradient(180deg, #34363b, #2a2c31);
+  --control-shadow-raised: inset 0 1px 0 var(--wa-10), inset 0 -1px 0 var(--ba-2), 0 0 0 1px var(--wa-4), 0 1px 2px var(--ba-5);
+  --overlay-shadow: inset 0 1px 0 #ffffff16, 0 0 0 1px var(--wa-7), 0 2px 4px var(--ba-3), 0 12px 28px -6px var(--ba-6);
+
+  /* Elevación: de pegado al plano a flotante. */
+  --shadow-hair: 0 0 0 1px var(--border-subtle);
+  --shadow-card: 0 0 0 1px var(--border-subtle), 0 1px 2px rgba(0, 0, 0, 0.32);
+  --shadow-raised: inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 0 0 1px var(--border-default), 0 2px 2px rgba(0, 0, 0, 0.28), 0 8px 8px -8px rgba(0, 0, 0, 0.4);
+  --shadow-float: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 0 0 1px var(--border-strong), 0 4px 8px -4px rgba(0, 0, 0, 0.5), 0 16px 32px -8px rgba(0, 0, 0, 0.6);
+  --shadow-stage: 0 0 0 1px var(--border-subtle), 0 1px 1px rgba(0, 0, 0, 0.4), 0 12px 32px -12px rgba(0, 0, 0, 0.7);
+
+  /* ── Escalas ─────────────────────────────────────────────────────────────────── */
+
+  /* Espaciado: base 4 px. */
+  --space-0: 0;
+  --space-px: 1px;
+  --space-0-5: 2px;
+  --space-1: 4px;
+  --space-1-5: 6px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* Tipografía: 8 pasos. El tracking se estrecha al crecer (óptica de Geist). */
+  --font: 'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-brand: 'Instrument Sans', 'Geist', sans-serif;
+  --fs-2xs: 10px;
+  --fs-xs: 11px;
+  --fs-sm: 12px;
+  --fs-md: 13px;
+  --fs-lg: 14px;
+  --fs-xl: 16px;
+  --fs-2xl: 20px;
+  --fs-display: 34px;
+  --lh-tight: 1.2;
+  --lh-snug: 1.35;
+  --lh-normal: 1.45;
+  --tracking-2xs: 0.01em;
+  --tracking-sm: 0;
+  --tracking-md: -0.006em;
+  --tracking-lg: -0.011em;
+  --tracking-xl: -0.018em;
+  --tracking-display: -0.03em;
+  --fw-regular: 400;
+  --fw-medium: 500;
+  --fw-semibold: 600;
+  --fw-bold: 700;
+
+  /* Radios concéntricos: radio exterior = radio interior + padding. */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 16px;
+  --radius-full: 999px;
+
+  /* Movimiento (Emil Kowalski / Apple): todo < 250 ms, solo transform y opacity. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --dur-press: 100ms;
+  --dur-fast: 160ms;
+  --dur-mid: 220ms;
+  --dur-slow: 320ms;
+
+  /* Capas: el orden de apilado vive aquí, no en números sueltos. */
+  --z-base: 0;
+  --z-raised: 3;
+  --z-float: 20;
+  --z-panel: 40;
+  --z-overlay: 100;
+  --z-popover: 110;
+  --z-tooltip: 120;
+  --z-toast: 140;
+
+  /* Tamaños de objetivo táctil. */
+  --target-sm: 28px;
+  --target-md: 32px;
+  --target-lg: 36px;
+  --target-touch: 44px;
+
+  color-scheme: dark;
+
+  /* ── 3 · Alias (nombres anteriores al sistema; no usar en código nuevo) ────────── */
+  --bg: var(--surface-app);
+  --panel: var(--surface-panel);
+  --raised: var(--surface-raised);
+  --raised-2: var(--surface-raised-2);
+  --hover: var(--surface-hover);
+  --press: var(--surface-press);
+  --line: var(--border-subtle);
+  --line-2: var(--border-default);
+  --ring: var(--border-strong);
+  --text: var(--text-primary);
+  --text-2: var(--text-secondary);
+  --text-3: var(--text-tertiary);
+  --accent-hi: var(--accent-hover);
+  --accent-soft: var(--accent-subtle);
+  --accent-line: var(--accent-border);
+  --green: var(--success);
+  --green-soft: var(--success-subtle);
+  --red: var(--danger);
+  --red-soft: var(--danger-subtle);
+  --amber: var(--warning);
+  --amber-soft: var(--warning-subtle);
+  --canvas: var(--surface-canvas);
+  --grid-dot: #1d1f24;
+  --r-xs: var(--radius-xs);
+  --r-sm: var(--radius-sm);
+  --r-md: var(--radius-md);
+  --r-lg: var(--radius-lg);
+  --r-xl: var(--radius-2xl);
+  --sh-hair: var(--shadow-hair);
+  --sh-card: var(--shadow-card);
+  --sh-raised: var(--shadow-raised);
+  --sh-float: var(--shadow-float);
+  --sh-stage: var(--shadow-stage);
+  --mono: var(--font); /* sin monoespaciadas: cifras tabulares de Geist */
+  --brand: var(--font-brand);
+  --ease: var(--ease-standard);
+  --spring: var(--ease-standard);
+  --t-press: var(--dur-press);
+  --t-fast: var(--dur-fast);
+  --t-mid: var(--dur-mid);
+  --ui-surface: var(--gray-4);
+  --ui-elevated: var(--surface-overlay);
+  --ui-label: #b7bcc5;
+  --ui-muted: #979faa;
+  --ui-edge: #ffffff0f;
+  --ui-shadow: var(--overlay-shadow);
+  --ui-control-fill: var(--control-fill-raised);
+  --ui-control-shadow: var(--control-shadow-raised);
+  --ui-ease: var(--ease-out);
+  --lab-mint: var(--live);
+  --lab-mint-soft: var(--live-subtle);
+  --lab-ink: #e8edf0;
+  --lab-surface: #111417;
+  --lab-rule: var(--wa-6);
+  --lab-fast: 120ms cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Esquema (dibujo técnico): paleta propia, independiente de la interfaz. */
+  --sch-ink: #c9d1dc;
+  --sch-soft: #7b8594;
+  --sch-wire: #6fb4ff;
+  --sch-supply: #ff8f6b;
+  --sch-paper: rgba(255, 255, 255, 0.012);
+  --sch-frame: rgba(201, 209, 220, 0.22);
+  --sch-frame-ink: rgba(201, 209, 220, 0.5);
+  --sch-flag-fill: #111a26;
+  --sch-flag-ink: #cfe4ff;
+}

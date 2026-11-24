@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, Download, Loader2 } from 'lucide-react';
 import { spiceVerifier } from '../spice/verifier';
 import { useSnapshot } from './context';
 import { PARTS } from '../parts';
+import { IconButton } from '../design/components';
 
 const useSpice = () => useSyncExternalStore(spiceVerifier.subscribe, spiceVerifier.getState);
 
@@ -78,9 +79,9 @@ export function SpiceCard() {
         )}
       </div>
       {deck && (
-        <button className="icon-btn spice-export" title="Exportar la netlist SPICE (.cir) · ábrela en LTspice o ngspice" aria-label="Exportar netlist SPICE" onClick={() => download(deck.netlist)}>
+        <IconButton className="spice-export" label="Exportar la netlist SPICE (.cir) para LTspice o ngspice" onClick={() => download(deck.netlist)}>
           <Download size={14} />
-        </button>
+        </IconButton>
       )}
     </div>
   );

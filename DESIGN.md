@@ -4,6 +4,17 @@
 
 A quiet editing workspace surrounding tangible electronic hardware. Depth belongs to materials and controls. The interface uses a restrained dark palette, readable sans-serif text and shallow neutral bevels. Selection and live electrical states carry color.
 
+## System
+
+The design system has one source of truth and a living guide.
+
+- **Tokens:** `src/design/tokens.css`, loaded before any other stylesheet. Three layers: primitives (`--gray-0…12`, `--wa-1…12` white alpha, `--ba-1…9` black alpha, hues), semantic tokens (`--surface-*`, `--text-*`, `--border-*`, `--accent`, `--success`, `--warning`, `--danger`, `--live`, materials, shadows) and legacy aliases (`--line`, `--ui-*`, `--lab-*`…) kept only so older rules keep working.
+- **Scales:** spacing on a 4 px base (`--space-*`); eight type steps 10/11/12/13/14/16/20/34 px (`--fs-*`) with tracking that tightens as size grows; radii `--radius-xs…2xl`; motion curves `--ease-out`, `--ease-drawer`, `--ease-in-out`, `--ease-standard` with durations `--dur-press/fast/mid/slow`; stacking order `--z-*`; target sizes `--target-*`.
+- **Components:** `src/design/components.tsx`: `Button`, `IconButton`, `Segmented`, `Switch`, `Field`, `Input`, `Badge`, `Kbd`, `Panel`, plus `Hint` and `Popover`. New UI uses these, not raw class names. Their styles live in `src/design/components.css` and use tokens only.
+- **Guide:** `/?design=1` renders every token and component with the real stylesheet. It is lazy-loaded, so it adds nothing to the app bundle. Clicking a token copies it.
+
+Rules for new CSS: no raw hex values, pixel font sizes or ad-hoc curves. If a value is missing, add it to `tokens.css` first. New code does not use the legacy aliases. Half-pixel font sizes were normalised to the scale.
+
 ## Interface
 
 - Geist is the UI family. Instrument Sans is reserved for the approved PWM wordmark.
@@ -103,6 +114,6 @@ Verify hierarchy in actual browser screenshots, including laptop and narrow widt
 
 The assembly instruction uses an inline-size container query for its narrow layout. At 440 px or less, render each placement as a full-width row: a fixed pin-label column, flexible rail/row column, and fixed column-number column. Horizontal rules end at the same edge; never retain vertical separators from the wide layout after stacking. The value aligns with the coordinate column. In the fullscreen sidebar, keep the thumbnail beside the heading and give confirmation its own full-width row. Navigation and undo remain visually secondary.
 
-Comments use a quiet count/filter toolbar, component anchors, author/time metadata and a separate inset writing surface. Empty states describe the next useful action without slogans. Viewers see an access explanation instead of a disabled composer. Keep comment bodies at 14 px and supporting metadata at 12�13 px.
+Comments use a quiet count/filter toolbar, component anchors, author/time metadata and a separate inset writing surface. Empty states describe the next useful action without slogans. Viewers see an access explanation instead of a disabled composer. Keep comment bodies at 14 px and supporting metadata at 12–13 px.
 
 The pinned probe is a persistent contextual inspector, not a notification. Use a subtle neutral vertical gradient, brighter upper edge and layered contact/elevation shadows. Show component identity, structured terminal coordinates, voltage and actual state separately. Expose named Diagnostics and Signals actions. Do not show retained readings or an active status color after simulation stops. Anchor it on the right above the connection guide, with a bounded offset so a reduced canvas does not clip the header; keep zoom controls free.
