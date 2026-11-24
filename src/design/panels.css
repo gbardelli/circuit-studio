@@ -1,0 +1,284 @@
+/* ════════════════════════════════════════════════════════════════════════════════
+   Paneles de laboratorio: Diagnóstico y Señales.
+   Fuente con autoridad para estos dos paneles (se carga la última). Solo tokens.
+   Criterio: profundidad sobria (materiales en relieve y hundidos, luz arriba), el color solo
+   para estado y señal, una jerarquía por columna y movimiento corto con propósito.
+   ════════════════════════════════════════════════════════════════════════════════ */
+
+/* ── Diagnóstico ─────────────────────────────────────────────────────────────── */
+.workbench-panel .diagnostics-panel { background: var(--surface-panel); }
+.diagnostics-frame .diagnostics-layout { background: linear-gradient(180deg, var(--wa-1), transparent 120px); }
+.diagnostics-frame .diagnostics-layout > section { border-left: 1px solid var(--wa-4); }
+.diagnostics-frame .diagnostics-layout > section:first-child { border-left: 0; }
+.diagnostics-frame .diagnostics-layout > .electrical-measurements { border-left: 1px solid var(--wa-4); border-top: 0; padding: 0 0 var(--space-3); background: transparent; }
+
+/* Cabecera común de columna: título, dato secundario y, si aplica, una píldora de estado. */
+.diagnostics-frame .diag-head {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; justify-content: space-between; gap: var(--space-3);
+  min-height: 56px; margin: 0; padding: var(--space-3) var(--space-4);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-panel) 92%, transparent), color-mix(in srgb, var(--surface-panel) 82%, transparent));
+  backdrop-filter: blur(10px) saturate(1.3); -webkit-backdrop-filter: blur(10px) saturate(1.3);
+  box-shadow: inset 0 -1px 0 var(--wa-4);
+}
+.diagnostics-frame .diag-head h2 { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-lg); color: var(--text-primary); }
+.diagnostics-frame .diag-head > div > span { display: block; margin-top: 2px; font-size: var(--fs-sm); color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diagnostics-frame .diag-stats { display: flex; gap: var(--space-1-5); }
+.diag-pill {
+  display: inline-flex; align-items: center; gap: var(--space-1-5); height: 24px; padding: 0 var(--space-2-5, 10px);
+  border-radius: var(--radius-full); white-space: nowrap;
+  font-size: var(--fs-xs); font-weight: var(--fw-medium); font-variant-numeric: tabular-nums;
+  color: var(--text-secondary); background: var(--wa-4); box-shadow: inset 0 1px 0 var(--wa-4), 0 0 0 1px var(--wa-5);
+}
+.diag-pill::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+.diag-pill.is-measured { color: var(--success); background: var(--success-subtle); }
+.diag-pill.is-warning { color: var(--warning); background: var(--warning-subtle); }
+.diag-pill.is-error { color: var(--danger); background: var(--danger-subtle); }
+
+/* Estado sin hallazgos: una fila tranquila, no un cartel. */
+.diagnostics-frame .diag-ok { display: flex; align-items: flex-start; gap: var(--space-3); margin: var(--space-3) var(--space-4); }
+.diag-ok-mark { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: var(--radius-sm); color: var(--success); background: var(--success-subtle); box-shadow: inset 0 1px 0 var(--wa-4); }
+.diagnostics-frame .diag-ok p { margin: 2px 0 0; font-size: var(--fs-md); line-height: var(--lh-normal); color: var(--text-secondary); }
+.diagnostics-frame .spice-card { margin: var(--space-3) var(--space-4) 0; }
+
+/* Hallazgos. */
+.diagnostics-frame .diag-findings { display: grid; gap: var(--space-1-5); padding: var(--space-3) var(--space-3) 0; }
+.workbench-panel .diagnostics-frame .finding {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: var(--space-2-5, 10px);
+  padding: var(--space-3); border: 0; border-radius: var(--radius-lg); text-align: left;
+  background: linear-gradient(180deg, var(--wa-3), var(--wa-1)); box-shadow: inset 0 1px 0 var(--wa-5), 0 0 0 1px var(--wa-4);
+  transition: background var(--dur-fast) ease, transform var(--dur-press) var(--ease-out);
+}
+.workbench-panel .diagnostics-frame .finding.error > svg:first-child { color: var(--danger); }
+.workbench-panel .diagnostics-frame .finding.warning > svg:first-child { color: var(--warning); }
+.workbench-panel .diagnostics-frame .finding > svg:last-child { color: var(--text-tertiary); opacity: 0; transition: opacity var(--dur-fast) ease; }
+.workbench-panel .diagnostics-frame .finding strong { display: block; font-size: var(--fs-md); font-weight: var(--fw-semibold); line-height: var(--lh-snug); color: var(--text-primary); }
+.workbench-panel .diagnostics-frame .finding small { display: block; margin-top: var(--space-1); font-size: var(--fs-sm); line-height: var(--lh-normal); color: var(--text-secondary); }
+.workbench-panel .diagnostics-frame .finding:active { transform: scale(.99); }
+@media (hover: hover) and (pointer: fine) {
+  .workbench-panel .diagnostics-frame .finding:hover { background: linear-gradient(180deg, var(--wa-5), var(--wa-2)); }
+  .workbench-panel .diagnostics-frame .finding:hover > svg:last-child { opacity: 1; }
+}
+
+/* Señal: buscador hundido, lectura grande y cadena de origen como árbol conectado. */
+.diagnostics-frame .diag-search {
+  margin: var(--space-3) var(--space-4); height: 34px; padding: 0 var(--space-2-5, 10px); gap: var(--space-2);
+  border-radius: var(--radius-md); background: var(--surface-canvas); box-shadow: var(--sunken-shadow);
+  color: var(--text-tertiary); transition: box-shadow var(--dur-fast) ease;
+}
+.diagnostics-frame .diag-search:focus-within { box-shadow: var(--sunken-shadow), 0 0 0 1px var(--accent-border), 0 0 0 4px var(--accent-subtle); }
+.diagnostics-frame .diag-search input { font-size: var(--fs-md); color: var(--text-primary); }
+.diagnostics-frame .diag-search input::placeholder { color: var(--text-tertiary); }
+.diagnostics-frame .diag-results { margin: calc(var(--space-2) * -1) var(--space-4) var(--space-3); padding: var(--space-1); border: 0; border-radius: var(--radius-md); background: var(--surface-overlay); box-shadow: var(--overlay-shadow); }
+.diagnostics-frame .diag-results button { border-radius: var(--radius-sm); font-size: var(--fs-md); color: var(--text-secondary); }
+@media (hover: hover) { .diagnostics-frame .diag-results button:hover { background: var(--wa-5); color: var(--text-primary); } }
+
+.diagnostics-frame .diag-hero {
+  position: relative; display: grid; gap: var(--space-2); margin: 0 var(--space-4) var(--space-4); padding: var(--space-4);
+  border-radius: var(--radius-lg); overflow: hidden;
+  background: radial-gradient(120% 140% at 0% 0%, var(--wa-4), transparent 60%), linear-gradient(180deg, var(--wa-3), var(--wa-1));
+  box-shadow: inset 0 1px 0 var(--wa-6), 0 0 0 1px var(--wa-4), 0 8px 20px -14px var(--ba-9);
+  animation: diag-rise var(--dur-mid) var(--ease-out);
+}
+.diagnostics-frame .diag-hero::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--text-tertiary); }
+.diagnostics-frame .diag-hero.is-high::before { background: var(--live); box-shadow: 0 0 12px var(--live); }
+.diagnostics-frame .diag-hero.is-low::before { background: #8eb4e4; }
+.diagnostics-frame .diag-hero-read { display: flex; align-items: baseline; gap: var(--space-2); }
+.diagnostics-frame .diag-hero-read strong { font-size: 30px; line-height: 1; font-weight: var(--fw-semibold); letter-spacing: var(--tracking-display); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.diagnostics-frame .diag-hero-read span { font-size: var(--fs-sm); font-weight: var(--fw-medium); color: var(--text-secondary); }
+.diagnostics-frame .diag-hero.is-high .diag-hero-read span { color: var(--live); }
+.diagnostics-frame .diag-hero p { margin: 0; font-size: var(--fs-md); line-height: var(--lh-normal); color: var(--text-secondary); }
+.diagnostics-frame .diag-subhead { margin: 0 var(--space-4) var(--space-1); font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-tertiary); }
+
+.diagnostics-frame .diag-chain, .diagnostics-frame .diag-origin ul { list-style: none; margin: 0; padding: 0 var(--space-3) var(--space-3); }
+.diagnostics-frame .diag-node { position: relative; }
+/* Línea del árbol: une cada nodo con sus orígenes. */
+.diagnostics-frame .diag-origin { position: relative; margin: 0 0 var(--space-1) 15px; padding-left: var(--space-3); border-left: 1px solid var(--wa-6); }
+.diagnostics-frame .diag-origin ul { padding: 0; }
+.diagnostics-frame .diag-origin summary { cursor: pointer; width: fit-content; padding: var(--space-1) var(--space-2); margin: 0 0 var(--space-1) calc(var(--space-2) * -1); border-radius: var(--radius-sm); list-style: none; font-size: var(--fs-xs); color: var(--text-tertiary); }
+.diagnostics-frame .diag-origin summary::-webkit-details-marker { display: none; }
+.diagnostics-frame .diag-origin summary::before { content: '›'; display: inline-block; margin-right: var(--space-1-5); transition: transform var(--dur-fast) var(--ease-out); }
+.diagnostics-frame .diag-origin[open] > summary::before { transform: rotate(90deg); }
+@media (hover: hover) { .diagnostics-frame .diag-origin summary:hover { color: var(--text-primary); background: var(--wa-3); } }
+.diagnostics-frame .diag-node-main {
+  display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: var(--space-2-5, 10px); align-items: start;
+  width: 100%; padding: var(--space-2) var(--space-2); border: 0; border-radius: var(--radius-md); background: transparent; text-align: left; color: inherit;
+  transition: background var(--dur-fast) ease;
+}
+@media (hover: hover) { .diagnostics-frame .diag-node-main:hover { background: var(--wa-3); } }
+.diagnostics-frame .diag-mark { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: var(--text-tertiary); }
+.diagnostics-frame .diag-mark.is-high { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 18%, transparent); }
+.diagnostics-frame .diag-mark.is-low { background: #8eb4e4; }
+.diagnostics-frame .diag-node-copy strong { font-size: var(--fs-md); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.diagnostics-frame .diag-node-copy span { font-size: var(--fs-sm); line-height: var(--lh-normal); color: var(--text-tertiary); }
+.diag-read { display: inline-flex; align-items: baseline; gap: var(--space-1); height: 22px; padding: 0 var(--space-2); border-radius: var(--radius-full); white-space: nowrap; background: var(--wa-3); box-shadow: inset 0 0 0 1px var(--wa-4); }
+.diag-read b { font-size: var(--fs-sm); font-weight: var(--fw-semibold); font-variant-numeric: tabular-nums; color: var(--text-primary); line-height: 22px; }
+.diag-read small { font-size: var(--fs-2xs); color: var(--text-tertiary); }
+.diag-read.is-high { background: color-mix(in srgb, var(--live) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--live) 22%, transparent); }
+.diag-read.is-high small { color: var(--live); }
+.diagnostics-frame .diag-quiet { margin: var(--space-2) var(--space-4); }
+.diagnostics-frame .diag-quiet strong { display: block; font-size: var(--fs-lg); font-weight: var(--fw-semibold); color: var(--text-primary); }
+.diagnostics-frame .diag-quiet p, .diagnostics-frame p.diag-quiet { margin: var(--space-1) 0 0; font-size: var(--fs-md); line-height: var(--lh-normal); color: var(--text-tertiary); }
+
+/* Medidas: una tarjeta por pieza, medidor por lectura, criterio una sola vez. */
+.meas-list { list-style: none; margin: 0; padding: var(--space-3) var(--space-3) 0; display: grid; gap: var(--space-2); }
+.meas-group {
+  padding: var(--space-2-5, 10px) var(--space-3) var(--space-3); border-radius: var(--radius-lg);
+  background: linear-gradient(180deg, var(--wa-3), var(--wa-1)); box-shadow: inset 0 1px 0 var(--wa-5), 0 0 0 1px var(--wa-4);
+}
+.meas-part { display: block; margin: 0 0 var(--space-1-5); padding: 0; border: 0; background: none; color: var(--text-primary); font-size: var(--fs-md); font-weight: var(--fw-semibold); text-align: left; cursor: pointer; }
+@media (hover: hover) { .meas-part:hover { color: var(--accent-hover); } }
+.meas-row { display: grid; grid-template-columns: minmax(56px, auto) minmax(40px, 1fr) auto; align-items: center; gap: var(--space-3); min-height: 26px; }
+.meas-name { font-size: var(--fs-sm); color: var(--text-secondary); white-space: nowrap; }
+.meas-meter { position: relative; height: 4px; border-radius: var(--radius-full); background: var(--surface-canvas); box-shadow: inset 0 1px 1px var(--ba-5), 0 1px 0 var(--wa-3); overflow: hidden; }
+.meas-meter i { position: absolute; inset: 0; transform-origin: left; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--live) 55%, transparent), var(--live)); transition: transform var(--dur-slow) var(--ease-out); }
+.meas-row[data-state="warning"] .meas-meter i { background: linear-gradient(90deg, color-mix(in srgb, var(--warning) 55%, transparent), var(--warning)); }
+.meas-row[data-state="error"] .meas-meter i { background: linear-gradient(90deg, color-mix(in srgb, var(--danger) 55%, transparent), var(--danger)); }
+.meas-value { font-size: var(--fs-sm); white-space: nowrap; font-variant-numeric: tabular-nums; text-align: right; }
+.meas-value b { font-weight: var(--fw-semibold); color: var(--text-primary); }
+.meas-value small { font-size: var(--fs-xs); color: var(--text-tertiary); }
+.meas-row[data-state="warning"] .meas-value b { color: var(--warning); }
+.meas-row[data-state="error"] .meas-value b { color: var(--danger); }
+.meas-basis { margin: var(--space-2) 0 0; font-size: var(--fs-xs); line-height: var(--lh-normal); color: var(--text-tertiary); }
+.diagnostics-frame .electrical-pending { margin: var(--space-3) var(--space-4) 0; font-size: var(--fs-sm); color: var(--text-tertiary); }
+.diagnostics-frame .electrical-pending summary { cursor: pointer; width: fit-content; color: var(--text-secondary); }
+
+@keyframes diag-rise { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* ── Señales ─────────────────────────────────────────────────────────────────── */
+.workbench-panel .signals-panel { background: var(--surface-panel); }
+.workbench-panel .signals-panel .lab-controls {
+  gap: var(--space-2); min-height: 52px; padding: var(--space-2) var(--space-3);
+  background: linear-gradient(180deg, var(--wa-2), transparent); border-bottom: 0; box-shadow: inset 0 -1px 0 var(--wa-4);
+}
+.signals-panel .signal-transport-controls, .signals-panel .signal-view-controls { gap: var(--space-2); }
+/* Grupo segmentado en relieve: los controles relacionados viven juntos. */
+.sig-seg {
+  display: inline-flex; align-items: center; gap: 1px; padding: 2px; border-radius: var(--radius-md);
+  background: var(--surface-canvas); box-shadow: var(--sunken-shadow);
+}
+.workbench-panel .sig-seg .icon-btn { width: 30px; height: 30px; border-radius: var(--radius-sm); color: var(--text-secondary); }
+.sig-play {
+  display: grid; place-items: center; width: 34px; height: 30px; border: 0; border-radius: var(--radius-sm);
+  color: var(--text-primary); background: var(--relief); box-shadow: var(--relief-shadow);
+  transition: transform var(--dur-press) var(--ease-out), background var(--dur-fast) ease;
+}
+.sig-play:disabled { opacity: .45; }
+.sig-play:active:not(:disabled) { transform: scale(.94); box-shadow: var(--sunken-shadow); }
+@media (hover: hover) { .sig-play:hover:not(:disabled) { background: var(--relief-hover); } }
+.signals-panel .lab-time { margin: 0 var(--space-1); font-size: var(--fs-lg); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-lg); font-variant-numeric: tabular-nums; color: var(--text-primary); }
+.signals-panel .lab-time small { font-size: var(--fs-sm); font-weight: var(--fw-regular); color: var(--text-secondary); }
+.signals-panel .lab-time > span { font-size: var(--fs-sm); font-weight: var(--fw-regular); color: var(--text-tertiary); }
+.signals-panel .signal-status { height: 22px; padding: 0 var(--space-2); font-size: var(--fs-xs); color: var(--warning); background: var(--warning-subtle); box-shadow: none; }
+.sig-follow {
+  display: inline-flex; align-items: center; gap: var(--space-1-5); height: 30px; padding: 0 var(--space-3);
+  border: 0; border-radius: var(--radius-md); background: transparent; color: var(--text-secondary); font-size: var(--fs-md);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.sig-follow-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-tertiary); transition: background var(--dur-fast) ease, box-shadow var(--dur-fast) ease; }
+.sig-follow.is-on { color: var(--text-primary); background: var(--wa-4); box-shadow: inset 0 1px 0 var(--wa-5), 0 0 0 1px var(--wa-5); }
+.sig-follow.is-on .sig-follow-dot { background: var(--live); box-shadow: 0 0 0 3px color-mix(in srgb, var(--live) 20%, transparent); animation: sig-live 1600ms ease-in-out infinite; }
+@media (hover: hover) { .sig-follow:not(.is-on):hover { background: var(--wa-3); color: var(--text-primary); } }
+@keyframes sig-live { 50% { box-shadow: 0 0 0 5px color-mix(in srgb, var(--live) 6%, transparent); } }
+.workbench-panel .signals-panel .lab-controls .btn { height: 30px; font-size: var(--fs-md); }
+
+/* Regla de tiempo alineada con la rejilla de las ondas. */
+.signals-panel .wave-ruler {
+  min-height: 30px; background: transparent; border-bottom: 0; box-shadow: inset 0 -1px 0 var(--wa-4);
+  color: var(--text-tertiary); font-size: var(--fs-xs);
+}
+.signals-panel .wave-ruler > span { padding-left: var(--space-4); font-size: var(--fs-xs); font-weight: var(--fw-medium); color: var(--text-tertiary); }
+.signals-panel .wave-ruler small { margin-left: var(--space-1); font-size: var(--fs-2xs); color: var(--text-tertiary); opacity: .8; }
+.signals-panel .wave-ticks { position: relative; display: block; height: 100%; margin: 0 var(--space-3); }
+.signals-panel .wave-ticks > span { position: absolute; top: 50%; transform: translate(-50%, -50%); font-size: var(--fs-2xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.signals-panel .wave-ticks > span:first-child { transform: translate(0, -50%); }
+.signals-panel .wave-ticks > span:last-child { transform: translate(-100%, -50%); }
+
+/* Carriles: fondo hundido con rejilla, cada canal con su color y su nivel actual. */
+.signals-panel .wave-scroll { background: var(--surface-canvas); box-shadow: inset 0 8px 16px -12px var(--ba-9); }
+.signals-panel .wave-row { min-height: 52px; border-bottom: 1px solid var(--wa-3); background: transparent; transition: background var(--dur-fast) ease; animation: diag-rise var(--dur-mid) var(--ease-out); }
+.signals-panel .wave-row.selected { background: linear-gradient(90deg, var(--wa-4), var(--wa-1)); }
+@media (hover: hover) { .signals-panel .wave-row:hover { background: var(--wa-2); } }
+.signals-panel .wave-name { gap: var(--space-2); padding: 0 var(--space-2) 0 var(--space-4); border-right: 1px solid var(--wa-3); background: var(--surface-panel); }
+.signals-panel .signal-dot { width: 3px; height: 18px; border-radius: 2px; box-shadow: 0 0 10px -1px currentColor; }
+.signals-panel .wave-level { display: grid; place-items: center; width: 20px; height: 18px; border-radius: var(--radius-xs); font-size: var(--fs-2xs); font-weight: var(--fw-bold); background: var(--wa-3); color: var(--text-tertiary); }
+.signals-panel .wave-level.is-high { color: var(--live); background: color-mix(in srgb, var(--live) 12%, transparent); }
+.signals-panel .wave-level.is-low { color: #a9c4e6; background: color-mix(in srgb, #a9c4e6 10%, transparent); }
+.signals-panel .wave-name input { font-size: var(--fs-md); font-weight: var(--fw-medium); color: var(--text-primary); background: transparent; border-radius: var(--radius-xs); }
+.signals-panel .wave-name input:focus { outline: none; box-shadow: 0 0 0 1px var(--accent-border); background: var(--surface-canvas); }
+.signals-panel .wave-name .icon-btn { opacity: 0; width: 26px; height: 26px; transition: opacity var(--dur-fast) ease; }
+.signals-panel .wave-row:hover .wave-name .icon-btn, .signals-panel .wave-name .icon-btn:focus-visible { opacity: 1; }
+@media (hover: none) { .signals-panel .wave-name .icon-btn { opacity: 1; } }
+.signals-panel .wave-row svg { padding: 0 var(--space-3); cursor: crosshair; }
+.signals-panel .wave-grid { stroke: var(--wa-4); stroke-dasharray: 2 4; vector-effect: non-scaling-stroke; }
+.signals-panel .wave-cursor { stroke: var(--text-primary); stroke-opacity: .85; filter: drop-shadow(0 0 3px var(--wa-12)); }
+
+.signals-panel .sig-empty { padding: var(--space-6) var(--space-4); }
+.signals-panel .sig-empty > strong { font-size: var(--fs-xl); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-lg); color: var(--text-primary); }
+.signals-panel .sig-empty > p { margin: var(--space-1) 0 var(--space-3); font-size: var(--fs-md); color: var(--text-tertiary); }
+.signals-panel .signal-chip {
+  height: 28px; padding: 0 var(--space-3); border: 0; border-radius: var(--radius-full);
+  font-size: var(--fs-sm); color: var(--text-secondary);
+  background: linear-gradient(180deg, var(--wa-4), var(--wa-2)); box-shadow: inset 0 1px 0 var(--wa-5), 0 0 0 1px var(--wa-5);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease, transform var(--dur-press) var(--ease-out);
+}
+.signals-panel .signal-chip:active { transform: scale(.96); }
+@media (hover: hover) { .signals-panel .signal-chip:hover { color: var(--text-primary); background: linear-gradient(180deg, var(--wa-6), var(--wa-3)); } }
+
+/* Línea de tiempo: pista fina hundida y pulgar en relieve. */
+.workbench-panel .signals-panel .timeline-scrub {
+  gap: var(--space-3); min-height: 40px; padding: var(--space-2) var(--space-4);
+  background: linear-gradient(180deg, transparent, var(--wa-1)); border-top: 0; box-shadow: inset 0 1px 0 var(--wa-4);
+}
+.signals-panel .timeline-scrub label, .signals-panel .timeline-scrub > span { font-size: var(--fs-xs); color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.signals-panel .timeline-scrub input[type=range] {
+  -webkit-appearance: none; appearance: none; height: 4px; border-radius: var(--radius-full); cursor: pointer;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--live) 50%, transparent) 0, var(--live) var(--fill, 0%), var(--surface-canvas) var(--fill, 0%));
+  box-shadow: inset 0 1px 1px var(--ba-5), 0 1px 0 var(--wa-3);
+}
+.signals-panel .timeline-scrub input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: linear-gradient(180deg, #ffffff, #d9dde3); box-shadow: 0 1px 2px var(--ba-6), 0 0 0 1px var(--ba-3);
+  transition: transform var(--dur-press) var(--ease-out);
+}
+.signals-panel .timeline-scrub input[type=range]:active::-webkit-slider-thumb { transform: scale(1.15); }
+.signals-panel .timeline-scrub input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #eef0f3; box-shadow: 0 1px 2px var(--ba-6); }
+.signals-panel .timeline-scrub input[type=range]:disabled { opacity: .5; cursor: default; }
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnostics-frame .diag-hero, .signals-panel .wave-row { animation: none; }
+  .sig-follow.is-on .sig-follow-dot { animation: none; }
+}
+
+/* ── Ajustes tras la segunda revisión ──────────────────────────────────────────── */
+/* La regla antigua `.diag-head span { display: block }` no debe tocar las píldoras. */
+.diagnostics-frame .diag-head .diag-pill { display: inline-flex; margin: 0; font-size: var(--fs-xs); }
+.diagnostics-frame .diag-head .diag-pill.is-measured { color: var(--success); }
+.diagnostics-frame .diag-head .diag-pill.is-warning { color: var(--warning); }
+.diagnostics-frame .diag-head .diag-pill.is-error { color: var(--danger); }
+
+/* Señales: columna de nombres contenida y área de ondas que se lee como un osciloscopio
+   aunque haya un solo canal (rejilla de cuartos que continúa hasta el fondo). */
+.signals-panel { --sig-name-w: 248px; }
+.signals-panel .wave-ruler, .signals-panel .wave-row { grid-template-columns: var(--sig-name-w) minmax(0, 1fr); }
+.signals-panel .wave-scroll { position: relative; }
+.signals-panel .wave-scroll::before {
+  content: ''; position: absolute; pointer-events: none; z-index: 0;
+  top: 30px; bottom: 0; left: calc(var(--sig-name-w) + var(--space-3)); right: var(--space-3);
+  background-image:
+    linear-gradient(90deg, var(--wa-3) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wa-3) 1px, transparent 1px),
+    linear-gradient(90deg, var(--wa-3) 1px, transparent 1px);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+  background-position: 25% 0, 50% 0, 75% 0;
+}
+.signals-panel .wave-scroll::after {
+  content: ''; position: absolute; pointer-events: none; z-index: 0;
+  top: 30px; bottom: 0; left: 0; width: var(--sig-name-w);
+  background: var(--surface-panel); box-shadow: inset -1px 0 0 var(--wa-3);
+}
+.signals-panel .wave-ruler, .signals-panel .wave-row, .signals-panel .lab-empty { position: relative; z-index: 1; }
+.signals-panel .wave-row svg path[fill-opacity] { fill-opacity: .16; }
+.signals-panel .wave-name { background: transparent; border-right: 0; }
+.signals-panel .sig-empty { margin-left: 0; }

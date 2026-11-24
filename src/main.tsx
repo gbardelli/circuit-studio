@@ -12,6 +12,7 @@ import './workbench.css';
 import './chrome.css';
 import './depth.css';
 import './design/components.css';
+import './design/panels.css';
 
 const params = new URLSearchParams(location.search);
 const AssemblyConcept = lazy(() => import('./previews/AssemblyConcept'));

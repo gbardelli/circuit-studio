@@ -39,6 +39,8 @@ export function wavePath(
   start: number,
   end: number,
   width = 800,
+  /** Último instante simulado: la onda no se dibuja más allá (no hay futuro que mostrar). */
+  until = Infinity,
 ) {
   if (end <= start || !edges.length) return "";
   if (end < edges[0].t) return "";
@@ -50,7 +52,13 @@ export function wavePath(
     const x = ((e.t - start) / (end - start)) * width;
     path += `H${x}V${e.v > 2.5 ? 6 : 26}`;
   }
-  return path + `H${width}`;
+  const last = Math.min(width, Math.max(0, ((until - start) / (end - start)) * width));
+  return path + `H${last}`;
+}
+/** Área bajo los niveles altos: la misma onda cerrada contra la línea de nivel bajo. */
+export function waveFill(path: string) {
+  const first = path.match(/^M([\d.]+)/);
+  return first ? `${path}V26H${first[1]}Z` : "";
 }
 export function Signals() {
   const { engine } = useEditor(),
@@ -123,13 +131,14 @@ export function Signals() {
           role="group"
           aria-label="Reproducción"
         >
+          <span className="sig-seg">
           <HintButton
-            className="btn sm transport-control"
+            className="sig-play"
+            aria-label={lab.seeking ? "Actualizando" : lab.paused ? "Reanudar" : "Pausar"}
             disabled={!engine.running || lab.seeking}
             onClick={() => engine.pause(!lab.paused)}
           >
-            {lab.paused ? <Play size={13} /> : <Pause size={13} />}
-            {lab.seeking ? "Actualizando" : lab.paused ? "Reanudar" : "Pausar"}
+            {lab.paused ? <Play size={14} fill="currentColor" /> : <Pause size={14} fill="currentColor" />}
           </HintButton>
           <HintButton
             className="icon-btn panel-control"
@@ -147,8 +156,9 @@ export function Signals() {
           >
             <SkipForward size={14} />
           </HintButton>
+          </span>
           <span className="lab-time">
-            {lab.cursor.toFixed(4)} s <span>/ {lab.duration.toFixed(2)} s</span>
+            {lab.cursor.toFixed(4)}<small> s</small> <span>/ {lab.duration.toFixed(2)} s</span>
           </span>
           {lab.paused && <span className="signal-status">Pausado</span>}
         </div>
@@ -157,13 +167,7 @@ export function Signals() {
           role="group"
           aria-label="Vista y exportación"
         >
-          <HintButton
-            className="icon-btn panel-control"
-            aria-label="Ampliar tiempo"
-            onClick={() => setSpan((s) => Math.max(0.001, s / 2))}
-          >
-            <ZoomIn size={14} />
-          </HintButton>
+          <span className="sig-seg">
           <HintButton
             className="icon-btn panel-control"
             aria-label="Reducir tiempo"
@@ -172,10 +176,20 @@ export function Signals() {
             <ZoomOut size={14} />
           </HintButton>
           <HintButton
-            className={`btn ghost sm ${offset === null ? "is-on" : ""}`}
+            className="icon-btn panel-control"
+            aria-label="Ampliar tiempo"
+            onClick={() => setSpan((s) => Math.max(0.001, s / 2))}
+          >
+            <ZoomIn size={14} />
+          </HintButton>
+          </span>
+          <HintButton
+            className={`sig-follow ${offset === null ? "is-on" : ""}`}
+            aria-pressed={offset === null}
+            hint="Seguir el instante actual"
             onClick={() => setOffset(null)}
           >
-            Seguir
+            <span className="sig-follow-dot" aria-hidden /> Seguir
           </HintButton>
           <HintButton
             className="btn ghost sm"
@@ -241,20 +255,20 @@ export function Signals() {
       <div className="wave-scroll">
         <div className="wave-ruler">
           <span>
-            Canal <small>{lab.probes.length}/12</small>
+            Canales <small>{lab.probes.length}/12</small>
           </span>
-          <div>
+          <div className="wave-ticks">
             {[0, 1, 2, 3, 4].map((i) => (
-              <span key={i}>
+              <span key={i} style={{ left: `${i * 25}%` }}>
                 {(start + (span * i) / 4).toFixed(span < 0.1 ? 4 : 2)} s
               </span>
             ))}
           </div>
         </div>
         {!lab.probes.length ? (
-          <div className="lab-empty">
-            <strong>Ninguna señal</strong>
-            <p>Fija un pin en el lienzo o elige una salida.</p>
+          <div className="lab-empty sig-empty">
+            <strong>Ninguna señal todavía</strong>
+            <p>Fija un pin en el lienzo o empieza por una de estas salidas.</p>
             <HintButton className="btn sm" onClick={() => setAdding(true)}>
               <Plus size={14} /> Añadir señal
             </HintButton>
@@ -277,7 +291,7 @@ export function Signals() {
               <div className="wave-name">
                 <span
                   className="signal-dot"
-                  style={{ background: probe.color }}
+                  style={{ background: probe.color, color: probe.color }}
                 />
                 <span className={`wave-level ${levelAt(lab.traces[probe.key], lab.cursor) === "H" ? "is-high" : levelAt(lab.traces[probe.key], lab.cursor) === "L" ? "is-low" : ""}`}>
                   {levelAt(lab.traces[probe.key], lab.cursor) ?? "–"}
@@ -336,18 +350,19 @@ export function Signals() {
                 {[0, 200, 400, 600, 800].map((x) => (
                   <path key={x} d={`M${x} 0V32`} className="wave-grid" />
                 ))}
-                <path
-                  d={wavePath(lab.traces[probe.key] ?? [], start, end)}
-                  fill="none"
-                  stroke={probe.color}
-                  strokeWidth={1.5}
-                  vectorEffect="non-scaling-stroke"
-                />
+                {(() => {
+                  const d = wavePath(lab.traces[probe.key] ?? [], start, end, 800, lab.duration);
+                  return (
+                    <>
+                      <path d={waveFill(d)} fill={probe.color} fillOpacity={0.1} stroke="none" />
+                      <path d={d} fill="none" stroke={probe.color} strokeWidth={1.75} strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+                    </>
+                  );
+                })()}
                 {lab.cursor >= start && lab.cursor <= end && (
                   <path
+                    className="wave-cursor"
                     d={`M${((lab.cursor - start) / span) * 800} 0V32`}
-                    stroke="white"
-                    strokeOpacity={0.6}
                     vectorEffect="non-scaling-stroke"
                   />
                 )}

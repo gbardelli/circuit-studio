@@ -17,14 +17,14 @@ afterEach(() => { act(() => view?.unmount()); fixture.running = true; vi.clearAl
 describe('electrical measurement panel', () => {
   it('marks excessive power and selects its physical component', () => {
     act(() => { view = create(<ElectricalMeasurements />); });
-    expect(view.root.findAllByType('tr').some(r => r.props['data-state'] === 'error')).toBe(true);
+    expect(view.root.findAll(n => n.props['data-state'] === 'error').length).toBeGreaterThan(0);
     act(() => view.root.findByType('button').props.onClick());
     expect(useUi.getState().selection).toEqual(['r']);
   });
   it('does not display retained readings after simulation stops', () => {
     fixture.running = false;
     act(() => { view = create(<ElectricalMeasurements />); });
-    expect(view.root.findAllByType('table')).toHaveLength(0);
+    expect(view.root.findAll(n => n.props.className === 'meas-row')).toHaveLength(0);
     expect(fixture.engine.readings).not.toHaveBeenCalled();
   });
 });

@@ -32,7 +32,7 @@ function EvidenceNode({ node, depth = 0 }: { node: Evidence; depth?: number }) {
           <strong>{node.label}</strong>
           <span>{node.explanation}</span>
         </span>
-        <span className="diag-node-read">
+        <span className={`diag-read is-${node.state.toLowerCase().replace(/\s+/g, "-")}`}>
           <b>{volts}</b>
           <small>{stateName(node.state)}</small>
         </span>
@@ -103,16 +103,16 @@ export function Diagnostics() {
               <span>{status.running ? "En vivo" : "Simulación detenida"}</span>
             </div>
             <div className="diag-stats">
-              <span className={errors ? "is-bad" : "is-ok"}><strong>{errors}</strong> errores</span>
-              <span className={warnings ? "is-warn" : ""}><strong>{warnings}</strong> avisos</span>
+              {errors > 0 && <span className="diag-pill is-error">{errors} {errors === 1 ? "error" : "errores"}</span>}
+              {warnings > 0 && <span className="diag-pill is-warning">{warnings} {warnings === 1 ? "aviso" : "avisos"}</span>}
+              {!errors && !warnings && <span className="diag-pill is-measured">Sin avisos</span>}
             </div>
           </header>
           <SpiceCard />
           {!findings.length ? (
-            <div className="lab-empty diag-empty">
-              <Check size={18} />
-              <strong>Sin avisos</strong>
-              <p>{status.running ? "Conexiones, niveles y corriente dentro de lo esperado." : "Simula para incluir tensión y corriente."}</p>
+            <div className="diag-ok">
+              <span className="diag-ok-mark"><Check size={14} /></span>
+              <p>{status.running ? "Conexiones, niveles y corriente dentro de lo esperado." : "Simula para incluir tensión y corriente en la revisión."}</p>
             </div>
           ) : (
             <div className="diag-findings">
@@ -172,13 +172,14 @@ export function Diagnostics() {
           )}
           {evidence ? (
             <>
-              <div className="diag-hero">
-                <div>
-                  <span>{stateName(evidence.state)}</span>
+              <div className={`diag-hero is-${evidence.state.toLowerCase().replace(/\s+/g, "-")}`}>
+                <div className="diag-hero-read">
                   <strong>{evidence.voltage === null ? "Sin lectura" : `${evidence.voltage.toFixed(2)} V`}</strong>
+                  <span>{stateName(evidence.state)}</span>
                 </div>
                 <p>{evidence.explanation}</p>
               </div>
+              {evidence.children.length > 0 && <h3 className="diag-subhead">De dónde viene</h3>}
               {evidence.children.length > 0 && (
                 <ul className="diag-chain">
                   {evidence.children.map((child) => (
@@ -188,9 +189,9 @@ export function Diagnostics() {
               )}
             </>
           ) : (
-            <div className="lab-empty diag-empty">
+            <div className="diag-quiet">
               <strong>Elige una señal</strong>
-              <p>Busca un pin o selecciónalo en el lienzo.</p>
+              <p>Busca un pin o selecciónalo en el lienzo y verás su tensión y de dónde viene.</p>
             </div>
           )}
         </section>
