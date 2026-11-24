@@ -10,7 +10,7 @@ const fixture = vi.hoisted(() => ({
 }));
 vi.mock('./context', () => ({
   useEditor: () => ({ engine: fixture.engine }), useSnapshot: () => fixture.snapshot,
-  useSimStatus: () => ({ running: fixture.running }),
+  useSimStatus: () => ({ running: fixture.running }), useSimRunning: () => fixture.running, useSampleTick: () => 0,
 }));
 let view: ReactTestRenderer;
 afterEach(() => { act(() => view?.unmount()); fixture.running = true; vi.clearAllMocks(); useUi.getState().select([]); });

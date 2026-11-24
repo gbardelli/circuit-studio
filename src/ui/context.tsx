@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useSyncExternalStore } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { Presence, Project } from '../collab/project';
 import type { SimStatus } from '../sim/engine';
 import type { SimClient } from '../sim/client';
@@ -74,4 +74,28 @@ export function useSimStatus(): SimStatus {
 export function useLab() {
   const {engine}=useEditor();
   return useSyncExternalStore(useCallback(fn=>engine.subscribeStatus(fn),[engine]),()=>engine.lab);
+}
+
+/** Solo si la simulación corre: no vuelve a renderizar en cada fotograma como useSimStatus. */
+export function useSimRunning(): boolean {
+  const { engine } = useEditor();
+  return useSyncExternalStore(
+    useCallback((fn) => engine.subscribeStatus(fn), [engine]),
+    () => engine.status.running,
+  );
+}
+
+/**
+ * Pulso de muestreo para paneles de lectura: mientras simula, cambia cada `ms`. Las lecturas
+ * que dependen de él se recalculan a ritmo legible, no a 60 fps (las cifras no bailan).
+ */
+export function useSampleTick(running: boolean, ms = 1000): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    setTick((t) => t + 1);
+    const id = setInterval(() => setTick((t) => t + 1), ms);
+    return () => clearInterval(id);
+  }, [running, ms]);
+  return tick;
 }

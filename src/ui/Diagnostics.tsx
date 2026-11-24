@@ -1,15 +1,19 @@
 import { SpiceCard } from "./SpiceStatus";
 import { HintButton } from "./Overlays";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Check, ChevronRight, Crosshair, Search, TriangleAlert } from "lucide-react";
-import { useEditor, useSimStatus, useSnapshot } from "./context";
+import { useEditor, useSampleTick, useSimRunning, useSnapshot } from "./context";
 import {
   electricalChecks,
   explainSignal,
   diagnosticQuery,
   pinLabel,
   type Evidence,
+  type Finding,
 } from "../sim/diagnostics";
+
+/** Un aviso sigue en pantalla este número de muestras (segundos) tras la última vez que se cumplió. */
+const HOLD = 5;
 import { useUi } from "./store";
 import { PARTS } from "../parts";
 import { pinKey } from "../core/netlist";
@@ -56,17 +60,30 @@ function EvidenceNode({ node, depth = 0 }: { node: Evidence; depth?: number }) {
 export function Diagnostics() {
   const { engine } = useEditor(),
     snapshot = useSnapshot(),
-    status = useSimStatus();
+    running = useSimRunning(),
+    // Lecturas a ritmo legible: una vez por segundo, no en cada fotograma.
+    tick = useSampleTick(running);
   const pinned = useUi((s) => s.pinnedSignal),
     selection = useUi((s) => s.selection),
     pinSignal = useUi((s) => s.pinSignal),
     select = useUi((s) => s.select);
   const [query, setQuery] = useState("");
   const normalized = diagnosticQuery(query);
-  const findings = useMemo(
+  const live = useMemo(
     () => electricalChecks(snapshot, engine.readings(), engine.pinCurrents(), engine.pinModes()),
-    [snapshot, status, engine],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [snapshot, running, tick, engine],
   );
+  // Avisos sostenidos: un circuito que cambia (un contador, un multiplexado) no hace que la lista
+  // aparezca y desaparezca cada segundo. Orden fijo: el de la primera vez que se vio cada aviso.
+  const held = useRef(new Map<string, { finding: Finding; seen: number }>());
+  const findings = useMemo(() => {
+    const map = held.current;
+    if (!running) map.clear();
+    for (const f of live) map.set(f.id, { finding: f, seen: tick });
+    for (const [id, h] of map) if (tick - h.seen > HOLD) map.delete(id);
+    return [...map.values()].map((h) => h.finding);
+  }, [live, running, tick]);
   const errors = findings.filter((f) => f.severity === "error").length;
   const warnings = findings.length - errors;
   const candidates = snapshot.parts
@@ -89,9 +106,11 @@ export function Diagnostics() {
     (selected && preferred
       ? pinKey(selected.id, preferred)
       : candidates.find((c) => selection.includes(c.part))?.key);
-  const evidence = signal
-    ? explainSignal(snapshot, engine.readings(), signal, 0, new Set(), undefined, engine.pinModes())
-    : null;
+  const evidence = useMemo(
+    () => (signal ? explainSignal(snapshot, engine.readings(), signal, 0, new Set(), undefined, engine.pinModes()) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [signal, snapshot, running, tick, engine],
+  );
 
   return (
     <div className="diagnostics-frame">
@@ -100,19 +119,17 @@ export function Diagnostics() {
           <header className="diag-head">
             <div>
               <h2>Estado</h2>
-              <span>{status.running ? "En vivo" : "Simulación detenida"}</span>
+              <span>{running ? "En vivo · cada segundo" : "Simulación detenida"}</span>
             </div>
-            <div className="diag-stats">
-              {errors > 0 && <span className="diag-pill is-error">{errors} {errors === 1 ? "error" : "errores"}</span>}
-              {warnings > 0 && <span className="diag-pill is-warning">{warnings} {warnings === 1 ? "aviso" : "avisos"}</span>}
-              {!errors && !warnings && <span className="diag-pill is-measured">Sin avisos</span>}
-            </div>
+            <span className={`diag-status ${errors ? "is-error" : warnings ? "is-warning" : ""}`}>
+              {errors ? `${errors} ${errors === 1 ? "error" : "errores"}${warnings ? ` · ${warnings} ${warnings === 1 ? "aviso" : "avisos"}` : ""}` : warnings ? `${warnings} ${warnings === 1 ? "aviso" : "avisos"}` : "Sin avisos"}
+            </span>
           </header>
           <SpiceCard />
           {!findings.length ? (
             <div className="diag-ok">
               <span className="diag-ok-mark"><Check size={14} /></span>
-              <p>{status.running ? "Conexiones, niveles y corriente dentro de lo esperado." : "Simula para incluir tensión y corriente en la revisión."}</p>
+              <p>{running ? "Conexiones, niveles y corriente dentro de lo esperado." : "Simula para incluir tensión y corriente en la revisión."}</p>
             </div>
           ) : (
             <div className="diag-findings">
@@ -128,6 +145,10 @@ export function Diagnostics() {
                   <TriangleAlert size={15} />
                   <span>
                     <strong>{f.title}</strong>
+                    <em className="finding-where">{(() => {
+                      const part = snapshot.parts.find((p) => p.id === f.part);
+                      return part ? (f.pin ? pinLabel(part, f.pin) : pinLabel(part, "").trim()) : f.part;
+                    })()}</em>
                     <small>{f.detail}</small>
                   </span>
                   <Crosshair size={13} />
@@ -172,10 +193,10 @@ export function Diagnostics() {
           )}
           {evidence ? (
             <>
-              <div className={`diag-hero is-${evidence.state.toLowerCase().replace(/\s+/g, "-")}`}>
+              <div className="diag-hero">
                 <div className="diag-hero-read">
                   <strong>{evidence.voltage === null ? "Sin lectura" : `${evidence.voltage.toFixed(2)} V`}</strong>
-                  <span>{stateName(evidence.state)}</span>
+                  <span className={`diag-level is-${evidence.state.toLowerCase().replace(/\s+/g, "-")}`}>{stateName(evidence.state)}</span>
                 </div>
                 <p>{evidence.explanation}</p>
               </div>
