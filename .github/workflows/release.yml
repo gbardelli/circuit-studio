@@ -1,0 +1,38 @@
+# Al empujar una etiqueta vX.Y.Z crea la Release de GitHub con el texto de la entrada del changelog.
+# La entrada (changelog/entries/X.Y.Z.md) y sus capturas ya van en el commit etiquetado: el despliegue
+# de main publica la página /changelog/ y este flujo solo deja constancia en GitHub.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar la entrada del changelog
+        id: entry
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          file="changelog/entries/${version}.md"
+          if [ ! -f "$file" ]; then
+            echo "::error::Falta $file. Escribe la entrada antes de etiquetar (npm run changelog draft ${version})."
+            exit 1
+          fi
+          title=$(sed -n 's/^title: *//p' "$file" | head -1)
+          awk 'BEGIN{n=0} /^---$/{n++; next} n>=2' "$file" \
+            | sed "s#](\([a-z0-9-]*\.jpg\)#](https://circuit-studio-eight.vercel.app/changelog/img/${version}/\1#g" > notes.md
+          printf '\n\n[Todas las novedades](https://circuit-studio-eight.vercel.app/changelog/#v%s)\n' "$version" >> notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+      - name: Crear la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --title "${{ steps.entry.outputs.version }} · ${{ steps.entry.outputs.title }}" --notes-file notes.md --verify-tag

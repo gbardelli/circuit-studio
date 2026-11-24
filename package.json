@@ -5,14 +5,16 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently -k -n web,server -c cyan,magenta \"vite\" \"tsx watch server/index.ts\"",
-    "build": "tsc -b && vite build",
+    "build": "node scripts/changelog.mjs build && tsc -b && vite build",
     "start": "tsx server/index.ts",
     "test": "vitest run",
     "typecheck": "tsc -b",
     "predeploy": "tsx scripts/check-part-types.ts",
     "deploy": "vercel deploy --prod --yes",
     "setup:arduino": "node scripts/setup-arduino.mjs",
-    "prebuild:hex": "tsx scripts/prebuild-hex.ts"
+    "prebuild:hex": "tsx scripts/prebuild-hex.ts",
+    "predev": "node scripts/changelog.mjs build",
+    "changelog": "node scripts/changelog.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -55,6 +57,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "concurrently": "^9.1.0",
     "fake-indexeddb": "^6.2.6",
+    "playwright-core": "^1.65.1",
     "react-test-renderer": "^18.3.1",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",

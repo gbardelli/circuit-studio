@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { UserButton } from '@clerk/react';
 import { CLOUD, api, colorFor, type ProjectSummary } from '../cloud';
+import { NewsLink } from './NewsLink';
 import { Copy, ExternalLink, FolderClosed, House, LayoutTemplate, Link2, Loader2, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Users, X, Clock, CopyPlus, CircuitBoard } from 'lucide-react';
 import { TEMPLATES, type Template } from '../collab/templates';
 import { findTemplate, templateSnapshot } from '../collab/applyTemplate';
@@ -368,6 +369,7 @@ export function Home() {
         <button className="nav-item" aria-current={view === 'projects' ? 'page' : undefined} onClick={() => setView('projects')}>
           <FolderClosed size={16} /> Mis circuitos <span className="count">{recent.length}</span>
         </button>
+        <NewsLink />
         <div className="me-card">
           {CLOUD ? (
             <UserButton />

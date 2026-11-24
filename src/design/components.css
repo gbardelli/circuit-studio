@@ -28,3 +28,10 @@
 .ds-panel > header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
 .ds-panel > header h3 { margin: 0; font-size: var(--fs-lg); font-weight: var(--fw-semibold); letter-spacing: var(--tracking-lg); }
 .ds-panel-actions { display: flex; gap: var(--space-1); }
+
+/* «Novedades» en la portada: enlace con forma de elemento de navegación y punto de no leído. */
+.news-link { text-decoration: none; }
+.news-dot {
+  width: 6px; height: 6px; margin-left: auto; border-radius: var(--radius-full);
+  background: var(--live); box-shadow: 0 0 0 3px var(--live-subtle);
+}

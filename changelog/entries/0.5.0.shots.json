@@ -1,0 +1,15 @@
+[
+  {
+    "name": "3d",
+    "url": "/?p=ab43fbed64865823",
+    "selector": ".workspace",
+    "steps": [
+      { "waitFor": ".topbar" },
+      { "click": ".view-3d-btn" },
+      { "waitFor": ".board3d-host canvas" },
+      { "wait": 3500 },
+      { "wheel": 240, "times": 3, "wait": 1200 }
+    ],
+    "settle": 1200
+  }
+]

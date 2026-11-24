@@ -19,3 +19,9 @@ tools
 .trae/
 .windsurf/
 skills-lock.json
+
+# Changelog generado (las entradas y capturas sí se versionan)
+public/changelog/index.html
+public/changelog/feed.xml
+public/changelog/latest.json
+changelog/drafts/

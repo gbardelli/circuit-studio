@@ -1,0 +1,14 @@
+[
+  {
+    "name": "spice",
+    "url": "/?p=ab43fbed64865823",
+    "selector": ".workspace",
+    "steps": [
+      { "waitFor": ".topbar" },
+      { "text": "Simular" },
+      { "text": "Diagnóstico" },
+      { "waitFor": ".spice-card.is-ok" }
+    ],
+    "settle": 600
+  }
+]
