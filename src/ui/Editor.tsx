@@ -13,8 +13,7 @@ import { Inspector } from './Inspector';
 import { Library, LibDragFloat } from './Library';
 import { StatusBar, TopBar } from './TopBar';
 import { focusPartName, useUi } from './store';
-import { DesignCanvas } from './design/DesignCanvas';
-import { rememberProject } from './Home';
+import { rememberProject } from './recent';
 import { CLOUD, api, type ProjectDetail } from '../cloud';
 import { Logo } from './Logo';
 import { useStartupTask } from './Startup';
@@ -27,6 +26,8 @@ import { Loading3D } from './Loading3D';
 
 // CodeMirror pesa: se descarga al abrir el panel de código por primera vez.
 const BottomPanel = lazy(() => import('./CodePanel').then((m) => ({ default: m.BottomPanel })));
+// El modo Diseño solo se descarga al abrir su pestaña.
+const DesignCanvas = lazy(() => import('./design/DesignCanvas').then((m) => ({ default: m.DesignCanvas })));
 
 export function Editor({ room, template }: { room: string; template: string | null }) {
   const [ctx, setCtx] = useState<EditorCtx | null>(null);
@@ -309,7 +310,7 @@ export function EditorShell() {
       <LibDragFloat />
       <main className="workspace">
         <WorkbenchRail />
-        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <DesignCanvas /> : <Canvas/>}{view === 'board' && board3d && <Suspense fallback={<Loading3D />}><Board3D /></Suspense>}</div>
+        <div className={`editor-canvas-slot ${guiding?'is-hidden':''}`}>{view === 'design' ? <Suspense fallback={null}><DesignCanvas /></Suspense> : <Canvas/>}{view === 'board' && board3d && <Suspense fallback={<Loading3D />}><Board3D /></Suspense>}</div>
         {guiding&&!labFullscreen&&<AssemblyStage/>}
         <WorkbenchPanel />
         <Suspense fallback={null}>

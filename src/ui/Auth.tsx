@@ -95,6 +95,9 @@ function SignInScreen() {
       </section>
       <section className="auth-form">
         <SignIn routing="hash" />
+        <a className="auth-news" href="/changelog/">
+          Novedades <span aria-hidden>→</span>
+        </a>
       </section>
     </div>
   );

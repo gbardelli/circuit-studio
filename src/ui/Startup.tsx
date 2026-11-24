@@ -11,7 +11,7 @@ import {
 
 const INTRO_KEY = "cs-brand-seen-v2";
 const INTRO_MS = 520;
-type Task = "session" | "project";
+type Task = "session" | "project" | "code";
 const LoadingContext = createContext<(task: Task, loading: boolean) => void>(
   () => {},
 );
@@ -152,4 +152,10 @@ export function BrandScene({ loading }: { loading: boolean }) {
       </div>
     </>
   );
+}
+
+/** Fallback de Suspense: mantiene la pantalla de marca mientras llega el código de la vista. */
+export function PendingCode() {
+  useStartupTask("code", true);
+  return null;
 }

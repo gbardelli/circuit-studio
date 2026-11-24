@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react';
 import { Code2, Copy, Flame, TriangleAlert, MousePointer2, RotateCw, Spline, Terminal, Trash2, Users } from 'lucide-react';
 import { formatSI, parseSI } from '../core/units';
 import { PARTS, isNote } from '../parts';
@@ -11,13 +11,14 @@ import { useEditor, usePeers, useSnapshot, useVisual } from './context';
 import { damageOf, type Damage } from '../sim/damage';
 import { WIRE_COLORS } from './geometry';
 import { Thumb } from './Library';
-import { DesignInspector } from './design/DesignInspector';
 import { useUi } from './store';
 import { ParticipantRow } from './Participants';
 import { configuredLegend, connectionLegend, renameLegendEntry, updateLegendLabel } from './wiring-legend';
 import { buildNetlist } from '../core/netlist';
 import { LegendItem } from './ConnectionGuide';
 import { DFPlayerFiles } from './dfplayerAudio';
+
+const DesignInspector = lazy(() => import('./design/DesignInspector').then((m) => ({ default: m.DesignInspector })));
 
 const METRICS: Record<string, { label: string; unit: string }> = {
   i: { label: 'Corriente', unit: 'A' },
@@ -40,7 +41,7 @@ const SWATCHES: Record<string, Record<string, string>> = {
 
 export function Inspector() {
   const view = useUi((s) => s.view);
-  return view === 'design' ? <DesignInspector /> : <CircuitInspector />;
+  return view === 'design' ? <Suspense fallback={null}><DesignInspector /></Suspense> : <CircuitInspector />;
 }
 
 function CircuitInspector() {

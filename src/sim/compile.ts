@@ -1,5 +1,4 @@
 import { sessionToken } from '../cloud';
-import { PREBUILT } from './prebuilt';
 
 export interface CompileResult {
   ok: boolean;
@@ -55,7 +54,8 @@ export function compileSketch(source: string, fqbn = 'arduino:avr:uno', publishe
   if (hit) return hit;
   const job = (async (): Promise<CompileResult> => {
     const key = await sketchKey(source, fqbn);
-    const prebuilt = PREBUILT[key];
+    // Los .hex de las plantillas (≈90 KB) solo se descargan la primera vez que se compila algo.
+    const prebuilt = (await import('./prebuilt')).PREBUILT[key];
     if (prebuilt) return { ok: true, hex: prebuilt, stdout: '', stderr: '' };
     const local = stored(key);
     if (local) return local;

@@ -5,50 +5,12 @@ import { NewsLink } from './NewsLink';
 import { Copy, ExternalLink, FolderClosed, House, LayoutTemplate, Link2, Loader2, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, Users, X, Clock, CopyPlus, CircuitBoard } from 'lucide-react';
 import { TEMPLATES, type Template } from '../collab/templates';
 import { findTemplate, templateSnapshot } from '../collab/applyTemplate';
-import { localUser } from '../collab/project';
-import type { CircuitSnapshot } from '../core/types';
+import { localUser } from '../collab/user';
+
 import { Logo, Wordmark } from './Logo';
 import { CircuitPreview } from './Preview';
 import { ImportProjectButton } from './ProjectFiles';
-
-interface Person {
-  id: string;
-  name: string | null;
-  image: string | null;
-}
-
-interface Recent {
-  room: string;
-  name: string;
-  at: number;
-  snapshot?: CircuitSnapshot;
-  role?: ProjectSummary['role'];
-  members?: number;
-  people?: Person[];
-}
-
-function readRecent(): Recent[] {
-  try {
-    return JSON.parse(localStorage.getItem('cs-projects') ?? '[]') as Recent[];
-  } catch {
-    return [];
-  }
-}
-
-function writeRecent(list: Recent[]) {
-  try {
-    localStorage.setItem('cs-projects', JSON.stringify(list.slice(0, 24)));
-  } catch {
-    /* sin persistencia */
-  }
-}
-
-export function rememberProject(room: string, name: string, snapshot?: CircuitSnapshot) {
-  const list = readRecent().filter((r) => r.room !== room);
-  const json = snapshot ? JSON.stringify(snapshot) : '';
-  list.unshift({ room, name, at: Date.now(), snapshot: json.length < 150_000 ? snapshot : undefined });
-  writeRecent(list);
-}
+import { readRecent, writeRecent, type Person, type Recent } from './recent';
 
 const newRoom = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 const rtf = new Intl.RelativeTimeFormat('es', { numeric: 'auto' });

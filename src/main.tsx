@@ -3,10 +3,8 @@ import { createRoot } from 'react-dom/client';
 import { SvgDefs } from './parts/common';
 import { CLOUD } from './cloud';
 import { CloudShell } from './ui/Auth';
-import { Editor } from './ui/Editor';
 import { ErrorBoundary } from './ui/ErrorBoundary';
-import { Home } from './ui/Home';
-import { Startup } from './ui/Startup';
+import { PendingCode, Startup } from './ui/Startup';
 import { UpdateNotice } from './ui/UpdateNotice';
 import './design/tokens.css';
 import './styles.css';
@@ -25,7 +23,12 @@ const valid = room && /^[A-Za-z0-9_-]{1,64}$/.test(room);
 // ?example=1 se mantiene por compatibilidad con enlaces antiguos.
 const template = params.get('template') ?? (params.get('example') === '1' ? 'pwm' : null);
 
-const app = valid ? <Editor room={room} template={template} /> : <Home />;
+// Editor y portada van en trozos separados: quien abre un circuito no descarga la portada y al revés.
+// El trozo que toca se precarga desde index.html (vite.config.ts, preloadView) en paralelo con este.
+const Editor = lazy(() => import('./ui/Editor').then((m) => ({ default: m.Editor })));
+const Home = lazy(() => import('./ui/Home').then((m) => ({ default: m.Home })));
+const view = valid ? <Editor room={room} template={template} /> : <Home />;
+const app = <Suspense fallback={<PendingCode />}>{view}</Suspense>;
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

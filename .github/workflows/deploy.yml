@@ -37,6 +37,11 @@ jobs:
         run: npm run setup:arduino
       - name: Pruebas
         run: npx vitest run --dir src
+      - name: Presupuesto de rendimiento
+        run: |
+          node scripts/changelog.mjs build
+          npx vite build
+          node scripts/perf-budget.mjs
       - name: No desplegar si algún proyecto usa piezas que esta versión no conoce
         run: |
           npx vercel env pull .env.production.local --environment=production --yes --token "$VERCEL_TOKEN"
